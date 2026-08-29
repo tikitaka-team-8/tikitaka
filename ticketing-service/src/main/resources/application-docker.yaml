@@ -1,0 +1,14 @@
+spring:
+  config:
+    activate:
+      on-profile: docker
+  datasource:
+    url: ${TICKETING_DB_URL:jdbc:postgresql://ticketing-postgres:5432/tikitaka_ticketing}
+    username: ${TICKETING_DB_USERNAME:ticketing}
+    password: ${TICKETING_DB_PASSWORD:ticketing_local_password}
+  data:
+    redis:
+      host: ${TICKETING_REDIS_HOST:ticketing-redis}
+      port: ${TICKETING_REDIS_PORT:6379}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:19092}

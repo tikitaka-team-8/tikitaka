@@ -1,0 +1,14 @@
+spring:
+  config:
+    activate:
+      on-profile: docker
+  datasource:
+    url: ${PLATFORM_DB_URL:jdbc:postgresql://platform-postgres:5432/tikitaka_platform}
+    username: ${PLATFORM_DB_USERNAME:platform}
+    password: ${PLATFORM_DB_PASSWORD:platform_local_password}
+  data:
+    redis:
+      host: ${PLATFORM_REDIS_HOST:platform-redis}
+      port: ${PLATFORM_REDIS_PORT:6379}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:19092}
