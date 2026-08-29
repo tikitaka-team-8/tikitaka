@@ -3,8 +3,8 @@ spring:
     activate:
       on-profile: docker
   datasource:
-    url: ${PAYMENT_DB_URL:jdbc:postgresql://payment-postgres:5432/tikitaka_payment}
-    username: ${PAYMENT_DB_USERNAME:payment}
-    password: ${PAYMENT_DB_PASSWORD:payment_local_password}
+    url: jdbc:postgresql://payment-postgres:5432/tikitaka_payment
+    username: payment
+    password: payment_local_password
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:19092}
+    bootstrap-servers: kafka:19092
