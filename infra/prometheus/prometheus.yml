@@ -1,0 +1,35 @@
+# 로컬에서 실행되는 각 Spring Boot 서비스의 Actuator 메트릭 수집
+
+# 메트릭 수집 및 규칙 평가 기본 주기
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # API Gateway 메트릭
+  - job_name: gateway
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - host.docker.internal:8000
+
+  # Platform Service 메트릭
+  - job_name: platform-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - host.docker.internal:8081
+
+  # Ticketing Service 메트릭
+  - job_name: ticketing-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - host.docker.internal:8082
+
+  # Payment & Notification Service 메트릭
+  - job_name: payment-notification-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - host.docker.internal:8083
