@@ -1,0 +1,14 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+  datasource:
+    url: ${PLATFORM_DB_URL:jdbc:postgresql://localhost:5433/tikitaka_platform}
+    username: ${PLATFORM_DB_USERNAME:platform}
+    password: ${PLATFORM_DB_PASSWORD:platform_local_password}
+  data:
+    redis:
+      host: ${PLATFORM_REDIS_HOST:localhost}
+      port: ${PLATFORM_REDIS_PORT:6380}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
