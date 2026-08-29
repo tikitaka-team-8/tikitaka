@@ -1,0 +1,6 @@
+rootProject.name = 'tikitaka'
+
+include 'gateway'
+include 'platform-service'
+include 'ticketing-service'
+include 'payment-notification-service'
