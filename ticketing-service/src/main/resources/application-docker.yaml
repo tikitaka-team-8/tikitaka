@@ -3,12 +3,12 @@ spring:
     activate:
       on-profile: docker
   datasource:
-    url: jdbc:postgresql://ticketing-postgres:5432/tikitaka_ticketing
-    username: ticketing
-    password: ticketing_local_password
+    url: jdbc:postgresql://${TICKETING_DB_HOST:ticketing-postgres}:${TICKETING_DB_PORT:5432}/${TICKETING_DB_NAME:tikitaka_ticketing}
+    username: ${TICKETING_DB_USERNAME:ticketing}
+    password: ${TICKETING_DB_PASSWORD}
   data:
     redis:
-      host: ticketing-redis
-      port: 6379
+      host: ${TICKETING_REDIS_HOST:ticketing-redis}
+      port: ${TICKETING_REDIS_PORT:6379}
   kafka:
-    bootstrap-servers: kafka:19092
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:19092}
