@@ -1,8 +1,11 @@
 package com.tikitaka.paymentnotification.global.response;
+
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.tikitaka.paymentnotification.global.exception.ErrorCode;
+
 import java.time.Instant;
 import java.util.Map;
+
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ApiErrorResponse(
         Instant timestamp,
@@ -14,6 +17,7 @@ public record ApiErrorResponse(
     public static ApiErrorResponse from(ErrorCode errorCode) {
         return from(errorCode, null);
     }
+
     public static ApiErrorResponse from(ErrorCode errorCode, Map<String, String> errors) {
         return new ApiErrorResponse(
                 Instant.now(),
