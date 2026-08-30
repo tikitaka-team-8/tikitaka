@@ -3,8 +3,8 @@ spring:
     activate:
       on-profile: local
   datasource:
-    url: jdbc:postgresql://localhost:5435/tikitaka_payment
-    username: payment
-    password: payment_local_password
+    url: jdbc:postgresql://${PAYMENT_DB_HOST:localhost}:${PAYMENT_DB_PORT:5435}/${PAYMENT_DB_NAME:tikitaka_payment}
+    username: ${PAYMENT_DB_USERNAME:payment}
+    password: ${PAYMENT_DB_PASSWORD}
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
