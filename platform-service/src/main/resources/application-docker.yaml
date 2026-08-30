@@ -3,12 +3,12 @@ spring:
     activate:
       on-profile: docker
   datasource:
-    url: jdbc:postgresql://platform-postgres:5432/tikitaka_platform
-    username: platform
-    password: platform_local_password
+    url: jdbc:postgresql://${PLATFORM_DB_HOST:platform-postgres}:${PLATFORM_DB_PORT:5432}/${PLATFORM_DB_NAME:tikitaka_platform}
+    username: ${PLATFORM_DB_USERNAME:platform}
+    password: ${PLATFORM_DB_PASSWORD}
   data:
     redis:
-      host: platform-redis
-      port: 6379
+      host: ${PLATFORM_REDIS_HOST:platform-redis}
+      port: ${PLATFORM_REDIS_PORT:6379}
   kafka:
-    bootstrap-servers: kafka:19092
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:19092}
