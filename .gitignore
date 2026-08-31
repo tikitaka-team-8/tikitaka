@@ -17,3 +17,5 @@ out/
 .env
 .env.*
 !.env.example
+/issueTemplate.md
+/AGENTS.md
