@@ -78,21 +78,26 @@ SPRING_PROFILES_ACTIVE=local
 --spring.profiles.active=local
 ```
 
-### 6. 컴파일 확인
+### 6. 테스트 실행
 
 Windows:
 
 ```cmd
-.\gradlew classes testClasses --no-daemon
+.\gradlew test --no-daemon
 ```
 
 macOS 또는 Linux:
 
 ```bash
-./gradlew classes testClasses --no-daemon
+./gradlew test --no-daemon
 ```
 
-현재 명령은 운영 코드와 테스트 소스의 컴파일을 확인하며 테스트를 실제로 실행하지는 않습니다.
+테스트는 `test` 프로파일과 PostgreSQL Testcontainers를 사용하므로 `local`, `docker`, `.env`에 의존하지 않습니다. Docker Desktop이 실행 중이어야 하며 서비스별 테스트 PostgreSQL은 자동으로 생성되고 종료됩니다.
+
+- 단위 테스트는 Spring Context와 외부 인프라 없이 작성합니다.
+- DB 통합 테스트는 각 서비스의 `@PostgresIntegrationTest`를 사용합니다.
+- 테스트에 DB URL, 계정, 비밀번호나 고정 포트를 작성하지 않습니다.
+- Redis와 Kafka 테스트 인프라는 실제 연동 테스트가 필요할 때 추가 예정입니다.
 
 ## 주요 로컬 주소
 
