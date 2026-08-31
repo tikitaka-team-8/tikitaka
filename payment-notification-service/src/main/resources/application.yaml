@@ -4,6 +4,15 @@ server:
 spring:
   application:
     name: payment-notification-service
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+    validate-on-migrate: true
+    out-of-order: false
+    clean-disabled: true
 
 management:
   endpoints:
