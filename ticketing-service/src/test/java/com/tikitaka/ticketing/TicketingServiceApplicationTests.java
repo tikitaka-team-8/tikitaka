@@ -1,9 +1,9 @@
 package com.tikitaka.ticketing;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
+import com.tikitaka.ticketing.testsupport.PostgresIntegrationTest;
 
-@SpringBootTest
+@PostgresIntegrationTest
 class TicketingServiceApplicationTests {
 
 	@Test

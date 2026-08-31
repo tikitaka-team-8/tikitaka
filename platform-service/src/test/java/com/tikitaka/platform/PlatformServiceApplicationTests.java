@@ -1,9 +1,9 @@
 package com.tikitaka.platform;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
+import com.tikitaka.platform.testsupport.PostgresIntegrationTest;
 
-@SpringBootTest
+@PostgresIntegrationTest
 class PlatformServiceApplicationTests {
 
 	@Test
