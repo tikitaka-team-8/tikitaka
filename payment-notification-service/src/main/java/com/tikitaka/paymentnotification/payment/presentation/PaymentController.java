@@ -5,6 +5,7 @@ import com.tikitaka.paymentnotification.payment.application.PaymentService;
 import com.tikitaka.paymentnotification.payment.application.command.PaymentCreateCommand;
 import com.tikitaka.paymentnotification.payment.application.result.PaymentCreateResult;
 import com.tikitaka.paymentnotification.payment.domain.payment.PaymentProvider;
+import com.tikitaka.paymentnotification.payment.presentation.dto.PaymentApproveRequest;
 import com.tikitaka.paymentnotification.payment.presentation.dto.PaymentCreateRequest;
 import com.tikitaka.paymentnotification.payment.presentation.dto.PaymentCreateResponse;
 import jakarta.validation.Valid;
@@ -12,6 +13,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.UUID;
 
 @RestController
 @RequiredArgsConstructor
@@ -40,5 +43,19 @@ public class PaymentController {
                 .status(HttpStatus.CREATED)
                 .body(PaymentCreateResponse.from(result));
     }
+
+    @PostMapping("/{paymentId}/approve")
+    public ResponseEntity<Void> approvePayment(
+            @PathVariable UUID paymentId,
+            @Valid @RequestBody PaymentApproveRequest request
+    ) {
+        paymentService.approvePayment(
+                paymentId,
+                request.paymentMethod()
+        );
+
+        return ResponseEntity.ok().build();
+    }
+
 
 }
