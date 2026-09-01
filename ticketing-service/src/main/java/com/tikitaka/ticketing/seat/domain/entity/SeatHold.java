@@ -1,7 +1,6 @@
 package com.tikitaka.ticketing.seat.domain.entity;
 
 import com.tikitaka.ticketing.global.exception.BusinessException;
-import com.tikitaka.ticketing.seat.domain.common.BaseEntity;
 import com.tikitaka.ticketing.seat.domain.enums.HoldStatus;
 import com.tikitaka.ticketing.seat.domain.enums.ReleaseReason;
 import com.tikitaka.ticketing.seat.exception.SeatErrorCode;
@@ -14,7 +13,7 @@ import java.util.UUID;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
 @Table(name = "p_seat_hold")
-public class SeatHold extends BaseEntity {
+public class SeatHold  {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
