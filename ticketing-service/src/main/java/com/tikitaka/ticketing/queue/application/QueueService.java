@@ -90,9 +90,9 @@ public class QueueService {
         OffsetDateTime salesCloseAt = salesStatus.salesCloseAt();
         boolean saleStarted = salesOpenAt != null && !salesOpenAt.toInstant().isAfter(now);
         boolean saleEnded = salesCloseAt == null || !salesCloseAt.toInstant().isAfter(now);
-        boolean openSession = "OPEN".equalsIgnoreCase(salesStatus.sessionStatus());
+        boolean onSale = "ON_SALE".equalsIgnoreCase(salesStatus.sessionStatus());
 
-        if (!salesStatus.queueEnabled() || !openSession || !saleStarted || saleEnded) {
+        if (!salesStatus.queueEnabled() || !onSale || !saleStarted || saleEnded) {
             throw new BusinessException(QueueErrorCode.QUEUE_SESSION_NOT_OPEN);
         }
         return salesStatus;

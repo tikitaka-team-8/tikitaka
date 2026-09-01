@@ -104,7 +104,7 @@ class QueueServiceTest {
         when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.empty());
         when(platformSalesStatusClient.getSalesStatus(SESSION_ID)).thenReturn(new PlatformSalesStatus(
                 SESSION_ID,
-                "OPEN",
+                "ON_SALE",
                 OffsetDateTime.parse("2026-09-01T11:00:00+09:00"),
                 OffsetDateTime.parse("2026-09-01T12:00:00+09:00"),
                 true
@@ -119,7 +119,7 @@ class QueueServiceTest {
         when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.empty());
         when(platformSalesStatusClient.getSalesStatus(SESSION_ID)).thenReturn(new PlatformSalesStatus(
                 SESSION_ID,
-                "OPEN",
+                "ON_SALE",
                 OffsetDateTime.parse("2026-09-01T09:00:00+09:00"),
                 OffsetDateTime.parse("2026-09-01T10:00:00+09:00"),
                 false
@@ -155,7 +155,7 @@ class QueueServiceTest {
     private PlatformSalesStatus openSalesStatus() {
         return new PlatformSalesStatus(
                 SESSION_ID,
-                "OPEN",
+                "ON_SALE",
                 OffsetDateTime.parse("2026-09-01T09:00:00+09:00"),
                 OffsetDateTime.parse("2026-09-01T11:00:00+09:00"),
                 true
