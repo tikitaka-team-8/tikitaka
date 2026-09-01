@@ -69,6 +69,43 @@ public class Reservation extends BaseEntity {
     @Column(nullable = false, length = 100, updatable = false)
     private String idempotencyKey;
 
+    private Reservation(Long userId) {
+        super(userId);
+    }
+
+    public static Reservation create(Long userId, UUID eventId, UUID eventSessionId, String reservationNumber, String eventTitle,
+            Instant sessionStartAt, Integer seatCount, Long totalAmount, String idempotencyKey, List<ReservationSeat> reservationSeats) {
+
+        validateCoreInvariants(reservationNumber, seatCount, totalAmount, idempotencyKey);
+
+        Reservation reservation = new Reservation(userId);
+        reservation.userId = userId;
+        reservation.eventId = eventId;
+        reservation.eventSessionId = eventSessionId;
+        reservation.reservationNumber = reservationNumber;
+        reservation.eventTitle = eventTitle;
+        reservation.sessionStartAt = sessionStartAt;
+        reservation.seatCount = seatCount;
+        reservation.totalAmount = totalAmount;
+        reservation.reservationStatus = ReservationStatus.PAYMENT_PENDING;
+        reservation.idempotencyKey = idempotencyKey;
+        reservation.addReservationSeats(reservationSeats);
+
+        return reservation;
+    }
+
+    private static void validateCoreInvariants(String reservationNumber, Integer seatCount, Long totalAmount, String idempotencyKey) {
+
+        if (reservationNumber == null || reservationNumber.isBlank() || seatCount == null || seatCount <= 0 || totalAmount == null
+                || totalAmount < 0 || idempotencyKey == null || idempotencyKey.isBlank()) {
+            throw new BusinessException(ReservationErrorCode.INVALID_INPUT);
+        }
+    }
+
+    public void addReservationSeats(List<ReservationSeat> reservationSeats) {
+        // TODO: 예매 생성 로직 구현 시 예매-예매좌석 관련된 필드 채우는 내용 작성 예정
+    }
+
     public void updateStatus(ReservationStatus nextStatus, Long userId) {
         if (reservationStatus == nextStatus) {
             return;
