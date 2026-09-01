@@ -24,15 +24,17 @@ public interface QueueRepository {
             Duration sessionTtl
     );
 
-    void saveEntry(QueueEntry entry, Duration ttl);
+    void saveEntry(QueueEntry entry);
 
     void removeWaitingUser(UUID sessionId, long userId);
 
-    void addActiveUser(UUID sessionId, long userId, Instant expiresAt, Duration ttl);
+    void addActiveUser(UUID sessionId, long userId, Instant expiresAt);
 
     void removeActiveUser(UUID sessionId, long userId);
 
-    void saveAdmissionToken(AdmissionToken admissionToken, Duration ttl);
+    void createAdmissionToken(AdmissionToken admissionToken, Duration ttl);
+
+    void updateAdmissionToken(AdmissionToken admissionToken);
 
     void saveAdmissionTokenReference(UUID sessionId, long userId, String token, Duration ttl);
 

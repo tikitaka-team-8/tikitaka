@@ -20,8 +20,8 @@ public record QueueEntry(
         return new QueueEntry(sessionId, userId, QueueStatus.ADMITTED, sequence, joinedAt, admittedAt, expiresAt);
     }
 
-    public QueueEntry enter(Instant enteredUntil) {
-        return new QueueEntry(sessionId, userId, QueueStatus.ENTERED, sequence, joinedAt, admittedAt, enteredUntil);
+    public QueueEntry enter() {
+        return new QueueEntry(sessionId, userId, QueueStatus.ENTERED, sequence, joinedAt, admittedAt, null);
     }
 
     public QueueEntry expire(Instant expiredAt) {

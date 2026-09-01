@@ -65,8 +65,10 @@ class RedisQueueRepositoryTest {
     @Test
     void addActiveUserExpiresTheSessionActiveIndex() {
         UUID sessionId = UUID.randomUUID();
+        queueRepository.createWaitingEntryIfAbsent(
+                sessionId, 100L, Instant.parse("2026-09-01T01:00:00Z"), ENTRY_TTL, SESSION_TTL);
 
-        queueRepository.addActiveUser(sessionId, 100L, Instant.parse("2026-09-01T01:10:00Z"), SESSION_TTL);
+        queueRepository.addActiveUser(sessionId, 100L, Instant.parse("2026-09-01T01:10:00Z"));
 
         assertThat(redisTemplate.getExpire("queue:active:{" + sessionId + "}")).isPositive();
     }

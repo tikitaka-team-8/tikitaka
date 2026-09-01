@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Repository
 public class RedisQueueRepository implements QueueRepository {
@@ -114,14 +115,13 @@ public class RedisQueueRepository implements QueueRepository {
     }
 
     @Override
-    public void saveEntry(QueueEntry entry, Duration ttl) {
+    public void saveEntry(QueueEntry entry) {
         String key = entryKey(entry.sessionId(), entry.userId());
         redisTemplate.opsForHash().put(key, STATUS_FIELD, entry.status().name());
         redisTemplate.opsForHash().put(key, SEQUENCE_FIELD, String.valueOf(entry.sequence()));
         redisTemplate.opsForHash().put(key, JOINED_AT_FIELD, entry.joinedAt().toString());
         putOptionalHashValue(key, ADMITTED_AT_FIELD, entry.admittedAt());
         putOptionalHashValue(key, EXPIRES_AT_FIELD, entry.expiresAt());
-        redisTemplate.expire(key, ttl);
     }
 
     @Override
@@ -130,10 +130,14 @@ public class RedisQueueRepository implements QueueRepository {
     }
 
     @Override
-    public void addActiveUser(UUID sessionId, long userId, Instant expiresAt, Duration ttl) {
+    public void addActiveUser(UUID sessionId, long userId, Instant expiresAt) {
+        Long entryTtlMillis = redisTemplate.getExpire(entryKey(sessionId, userId), TimeUnit.MILLISECONDS);
+        if (entryTtlMillis == null || entryTtlMillis <= 0) {
+            throw new IllegalStateException("Queue entry must exist with a positive TTL before activation");
+        }
         String key = activeKey(sessionId);
         redisTemplate.opsForZSet().add(key, String.valueOf(userId), expiresAt.toEpochMilli());
-        redisTemplate.expire(key, ttl);
+        redisTemplate.expire(key, Duration.ofMillis(entryTtlMillis));
     }
 
     @Override
@@ -142,13 +146,22 @@ public class RedisQueueRepository implements QueueRepository {
     }
 
     @Override
-    public void saveAdmissionToken(AdmissionToken admissionToken, Duration ttl) {
+    public void createAdmissionToken(AdmissionToken admissionToken, Duration ttl) {
         String key = admissionTokenKey(admissionToken.token());
+        saveAdmissionTokenFields(key, admissionToken);
+        redisTemplate.expire(key, ttl);
+    }
+
+    @Override
+    public void updateAdmissionToken(AdmissionToken admissionToken) {
+        saveAdmissionTokenFields(admissionTokenKey(admissionToken.token()), admissionToken);
+    }
+
+    private void saveAdmissionTokenFields(String key, AdmissionToken admissionToken) {
         redisTemplate.opsForHash().put(key, SESSION_ID_FIELD, admissionToken.sessionId().toString());
         redisTemplate.opsForHash().put(key, USER_ID_FIELD, String.valueOf(admissionToken.userId()));
         redisTemplate.opsForHash().put(key, EXPIRES_AT_FIELD, admissionToken.expiresAt().toString());
         redisTemplate.opsForHash().put(key, TOKEN_STATUS_FIELD, admissionToken.status().name());
-        redisTemplate.expire(key, ttl);
     }
 
     @Override

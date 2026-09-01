@@ -16,10 +16,7 @@ spring:
 
 queue:
   admission-token-ttl: PT10M
-  entered-entry-ttl: PT1H
-  waiting-fallback-ttl: PT6H
   retention-after-sales-close: PT1H
-  used-token-ttl: PT10M
 
 management:
   endpoints:
