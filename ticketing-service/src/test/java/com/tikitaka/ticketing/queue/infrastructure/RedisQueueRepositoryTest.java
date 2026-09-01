@@ -17,6 +17,7 @@ import org.testcontainers.utility.DockerImageName;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -71,5 +72,24 @@ class RedisQueueRepositoryTest {
         queueRepository.addActiveUser(sessionId, 100L, Instant.parse("2026-09-01T01:10:00Z"));
 
         assertThat(redisTemplate.getExpire("queue:active:{" + sessionId + "}")).isPositive();
+    }
+
+    @Test
+    void saveEntryPreservesTheExistingEntryTtl() {
+        UUID sessionId = UUID.randomUUID();
+        long userId = 100L;
+        QueueEntry waitingEntry = queueRepository.createWaitingEntryIfAbsent(
+                        sessionId, userId, Instant.parse("2026-09-01T01:00:00Z"), ENTRY_TTL, SESSION_TTL)
+                .orElseThrow();
+        String entryKey = "queue:entry:{" + sessionId + "}:" + userId;
+        long ttlBefore = redisTemplate.getExpire(entryKey, TimeUnit.MILLISECONDS);
+
+        queueRepository.saveEntry(waitingEntry.admit(
+                Instant.parse("2026-09-01T01:01:00Z"),
+                Instant.parse("2026-09-01T01:11:00Z")
+        ));
+
+        long ttlAfter = redisTemplate.getExpire(entryKey, TimeUnit.MILLISECONDS);
+        assertThat(ttlAfter).isPositive().isLessThanOrEqualTo(ttlBefore);
     }
 }
