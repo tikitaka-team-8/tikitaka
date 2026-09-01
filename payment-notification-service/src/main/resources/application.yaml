@@ -4,6 +4,8 @@ server:
 spring:
   application:
     name: payment-notification-service
+  profiles:
+    default: local
   jpa:
     hibernate:
       ddl-auto: validate

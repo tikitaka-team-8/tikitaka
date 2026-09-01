@@ -5,6 +5,6 @@ spring:
   datasource:
     url: jdbc:postgresql://${PAYMENT_DB_HOST:localhost}:${PAYMENT_DB_PORT:5435}/${PAYMENT_DB_NAME:tikitaka_payment}
     username: ${PAYMENT_DB_USERNAME:payment}
-    password: ${PAYMENT_DB_PASSWORD}
+    password: ${PAYMENT_DB_PASSWORD:payment_local_password}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
