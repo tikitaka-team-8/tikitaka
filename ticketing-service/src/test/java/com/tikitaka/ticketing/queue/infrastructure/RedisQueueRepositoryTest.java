@@ -66,7 +66,7 @@ class RedisQueueRepositoryTest {
     }
 
     @Test
-    void admitIfWaitingUpdatesQueueIndexesAndCreatesTokenAtomically() {
+    void admissionAndEntryTransitionsUpdateQueueIndexesAndTokenAtomically() {
         UUID sessionId = UUID.randomUUID();
         QueueEntry waitingEntry = queueRepository.createWaitingEntryIfAbsent(
                 sessionId, 100L, Instant.parse("2026-09-01T01:00:00Z"),
@@ -97,6 +97,20 @@ class RedisQueueRepositoryTest {
         assertThat(redisTemplate.getExpire("queue:active:{" + sessionId + "}")).isPositive();
         assertThat(queueRepository.findAdmissionToken(sessionId, admissionToken.token())).contains(admissionToken);
         assertThat(queueRepository.findAdmissionTokenReference(sessionId, 100L)).contains(admissionToken.token());
+
+        QueueEntry admittedEntry = queueRepository.findEntry(sessionId, 100L).orElseThrow();
+        boolean entered = queueRepository.enterIfAdmissionTokenActive(admittedEntry.enter(), admissionToken);
+
+        assertThat(entered).isTrue();
+        assertThat(queueRepository.findEntry(sessionId, 100L))
+                .get()
+                .extracting(QueueEntry::status)
+                .isEqualTo(QueueStatus.ENTERED);
+        assertThat(redisTemplate.opsForZSet().score("queue:active:{" + sessionId + "}", "100")).isNull();
+        assertThat(queueRepository.findAdmissionToken(sessionId, admissionToken.token()))
+                .get()
+                .extracting(AdmissionToken::status)
+                .isEqualTo(AdmissionTokenStatus.USED);
     }
 
     @Test
