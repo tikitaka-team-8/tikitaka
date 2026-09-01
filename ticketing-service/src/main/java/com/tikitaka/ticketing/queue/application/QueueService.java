@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -21,6 +22,7 @@ public class QueueService {
     private final QueueProperties queueProperties;
     private final Clock clock;
 
+    @Autowired
     public QueueService(
             QueueRepository queueRepository,
             PlatformSalesStatusClient platformSalesStatusClient,
