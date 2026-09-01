@@ -1,5 +1,6 @@
 # TIKITAKA 로컬 개발 환경 설정 가이드
 작성: 2026-08-31
+수정 버전: v1(2026-09-01)
 
 
 이 문서는 TIKITAKA 프로젝트의 현재 로컬 개발 환경을 구성하기 위한 상세 가이드입니다. 평소에는 공통 인프라만 Docker Compose로 실행하고, 개발할 Spring Boot 애플리케이션은 IntelliJ에서 `local` 프로파일로 실행합니다.
@@ -14,7 +15,7 @@ cd tikitaka
 git switch develop
 docker compose config --quiet
 docker compose up -d --wait --wait-timeout 120
-.\gradlew classes testClasses --no-daemon
+.\gradlew test --no-daemon
 ```
 
 명령 실행 전에 따로 공유된 `.env`를 저장소 루트에 저장해야 합니다. 그다음 IntelliJ Run Configuration에서 EnvFile로 `.env`를 주입하고 `local` 프로파일을 지정합니다.
@@ -187,21 +188,31 @@ Platform, Ticketing, Payment & Notification의 Run Configuration에는 각각 En
 
 컨테이너 안에서 `localhost`는 해당 컨테이너 자신을 의미합니다. Docker 내부 통신에는 반드시 Compose 서비스명과 컨테이너 포트를 사용합니다.
 
-## 8. 컴파일과 기본 확인
+## 8. 테스트와 기본 확인
 
 Windows:
 
 ```cmd
-.\gradlew classes testClasses --no-daemon
+.\gradlew test --no-daemon
 ```
 
 macOS 또는 Linux:
 
 ```bash
-./gradlew classes testClasses --no-daemon
+./gradlew test --no-daemon
 ```
 
-현재 CI와 같은 검증으로 운영 코드와 기존 테스트 소스가 컴파일되는지 확인합니다. 테스트를 실제로 실행하는 명령은 아닙니다.
+현재 CI와 같은 명령으로 전체 모듈을 컴파일하고 테스트를 실행합니다. 데이터 서비스의 DB 통합 테스트는 `test` 프로파일과 PostgreSQL Testcontainers를 사용하므로 로컬 Compose, `.env`, `local` 또는 `docker` 프로파일에 의존하지 않습니다. 테스트 실행 전 Docker Desktop이 실행 중이어야 합니다.
+
+### 테스트 작성 규칙
+
+- 단위 테스트는 JUnit과 필요한 경우 Mockito를 사용하며 Spring Context와 외부 인프라를 실행하지 않습니다.
+- 전체 Spring Context와 PostgreSQL이 필요한 통합 테스트는 서비스별 `@PostgresIntegrationTest`를 사용합니다.
+- Repository slice 테스트는 서비스별 PostgreSQL Testcontainers 설정을 명시적으로 가져와 실제 PostgreSQL에서 검증합니다.
+- 테스트에서 `local` 또는 `docker` 프로파일을 직접 활성화하지 않습니다.
+- JDBC URL, DB 계정, 비밀번호와 고정 포트를 테스트 코드나 `application-test.yaml`에 작성하지 않습니다.
+- Redis와 Kafka 테스트 인프라는 실제 연동 동작을 검증해야 할 때 서비스별 공통 설정으로 추가합니다.
+- Pull Request를 열기 전에 `.\gradlew test --no-daemon`을 실행합니다.
 
 서비스가 실행되면 Health 주소를 확인합니다.
 
@@ -210,14 +221,7 @@ macOS 또는 Linux:
 - Ticketing: <http://localhost:8082/actuator/health>
 - Payment & Notification: <http://localhost:8083/actuator/health>
 
-### 현재 제한사항
-
-- 데이터 서비스의 `contextLoads`는 테스트 DataSource가 없어 전체 테스트에서 실패할 수 있습니다.
-- Flyway 의존성은 있지만 초기 마이그레이션 SQL은 아직 없습니다.
-- `spring.jpa.hibernate.ddl-auto`도 아직 설정하지 않았습니다.
-- 현재 CI는 테스트 실행이 아니라 운영 코드와 테스트 소스 컴파일을 검증합니다.
-
-초기 Flyway, `ddl-auto: validate`와 테스트 데이터베이스 구성이 완료된 뒤 실제 테스트 실행 CI로 확장할 예정입니다.
+테스트 PostgreSQL에서는 서비스별 Flyway 마이그레이션을 적용하고 Hibernate `ddl-auto: validate`로 Entity와 스키마의 일치 여부를 검증합니다. 현재 Redis와 Kafka Testcontainers는 사용하지 않습니다.
 
 ## 9. 인프라 종료와 데이터 초기화
 
@@ -283,7 +287,7 @@ docker compose up -d --wait --wait-timeout 120
 작업 종료:
 
 ```cmd
-.\gradlew classes testClasses --no-daemon
+.\gradlew test --no-daemon
 git status
 docker compose down
 ```

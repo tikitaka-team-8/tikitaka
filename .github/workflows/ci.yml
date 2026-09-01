@@ -1,4 +1,4 @@
-name: PR 컴파일 검증
+name: PR 테스트 검증
 
 on:
   pull_request:
@@ -13,8 +13,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  compile:
-    name: 컴파일 검증
+  test:
+    name: 전체 테스트
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -33,5 +33,5 @@ jobs:
         with:
           cache-provider: basic
 
-      - name: 전체 모듈 소스 컴파일
-        run: ./gradlew classes testClasses --no-daemon
+      - name: 전체 모듈 테스트
+        run: ./gradlew test --no-daemon
