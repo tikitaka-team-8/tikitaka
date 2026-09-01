@@ -4,8 +4,6 @@ import com.tikitaka.platform.organizer.domain.Organizer;
 import com.tikitaka.platform.venue.domain.Venue;
 import org.junit.jupiter.api.Test;
 
-import java.util.UUID;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
