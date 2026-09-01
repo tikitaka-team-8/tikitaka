@@ -11,10 +11,18 @@ public record AdmissionToken(
         AdmissionTokenStatus status
 ) {
     public AdmissionToken use() {
+        ensureActive();
         return new AdmissionToken(token, sessionId, userId, expiresAt, AdmissionTokenStatus.USED);
     }
 
     public AdmissionToken expire() {
+        ensureActive();
         return new AdmissionToken(token, sessionId, userId, expiresAt, AdmissionTokenStatus.EXPIRED);
+    }
+
+    private void ensureActive() {
+        if (status != AdmissionTokenStatus.ACTIVE) {
+            throw new IllegalStateException("Only active admission tokens can transition");
+        }
     }
 }
