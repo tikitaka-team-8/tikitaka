@@ -13,6 +13,17 @@ public class MockPaymentGateway implements PaymentGateway {
 
     @Override
     public PaymentGatewayResult approve(PaymentGatewayRequest request) {
-        return PaymentGatewayResult.success("MOCK-"+ UUID.randomUUID());
+
+        if (request.orderId().contains("FAIL")) {
+            return PaymentGatewayResult.failed(
+                    "MOCK_FAILED",
+                    "Mock PG 결제 승인 실패"
+            );
+        }
+
+        if (request.orderId().contains("UNKNOWN")) {
+            return PaymentGatewayResult.unknown();}
+
+        return PaymentGatewayResult.success("MOCK-" + UUID.randomUUID());
     }
 }

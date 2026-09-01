@@ -75,4 +75,91 @@ public class PaymentTransaction {
 
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
+
+
+
+
+    public static PaymentTransaction createApproveSuccess(
+            Payment payment,
+            PaymentProvider provider,
+            String pgTransactionId,
+            Long amount,
+            int attemptNo,
+            OffsetDateTime requestedAt
+    ) {
+        OffsetDateTime now = OffsetDateTime.now();
+
+        PaymentTransaction transaction = new PaymentTransaction();
+        transaction.payment = payment;
+        transaction.transactionType = PaymentTransactionType.APPROVE;
+        transaction.provider = provider;
+        transaction.pgTransactionId = pgTransactionId;
+        transaction.amount = amount;
+        transaction.status = PaymentTransactionStatus.SUCCESS;
+        transaction.attemptNo = attemptNo;
+        transaction.failureCode = null;
+        transaction.failureReason = null;
+        transaction.requestedAt = requestedAt;
+        transaction.completedAt = now;
+        transaction.createdAt = now;
+        transaction.updatedAt = now;
+
+        return transaction;
+    }
+
+    public static PaymentTransaction createApproveFailed(
+            Payment payment,
+            PaymentProvider provider,
+            Long amount,
+            int attemptNo,
+            String failureCode,
+            String failureReason,
+            OffsetDateTime requestedAt
+    ) {
+        OffsetDateTime now = OffsetDateTime.now();
+
+        PaymentTransaction transaction = new PaymentTransaction();
+        transaction.payment = payment;
+        transaction.transactionType = PaymentTransactionType.APPROVE;
+        transaction.provider = provider;
+        transaction.amount = amount;
+        transaction.status = PaymentTransactionStatus.FAILED;
+        transaction.attemptNo = attemptNo;
+        transaction.failureCode = failureCode;
+        transaction.failureReason = failureReason;
+        transaction.requestedAt = requestedAt;
+        transaction.completedAt = now;
+        transaction.createdAt = now;
+        transaction.updatedAt = now;
+
+        return transaction;
+    }
+
+    public static PaymentTransaction createApproveUnknown(
+            Payment payment,
+            PaymentProvider provider,
+            Long amount,
+            int attemptNo,
+            OffsetDateTime requestedAt
+    ) {
+        OffsetDateTime now = OffsetDateTime.now();
+
+        PaymentTransaction transaction = new PaymentTransaction();
+        transaction.payment = payment;
+        transaction.transactionType = PaymentTransactionType.APPROVE;
+        transaction.provider = provider;
+        transaction.amount = amount;
+        transaction.status = PaymentTransactionStatus.UNKNOWN;
+        transaction.attemptNo = attemptNo;
+        transaction.requestedAt = requestedAt;
+        transaction.completedAt = now;
+        transaction.createdAt = now;
+        transaction.updatedAt = now;
+
+        return transaction;
+    }
+
+
+
+
 }

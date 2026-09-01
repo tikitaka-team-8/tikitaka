@@ -8,12 +8,15 @@ import com.tikitaka.paymentnotification.payment.application.result.PaymentCreate
 import com.tikitaka.paymentnotification.payment.domain.payment.Payment;
 import com.tikitaka.paymentnotification.payment.domain.payment.PaymentMethod;
 import com.tikitaka.paymentnotification.payment.domain.payment.PaymentRepository;
+import com.tikitaka.paymentnotification.payment.domain.transaction.PaymentTransaction;
+import com.tikitaka.paymentnotification.payment.domain.transaction.PaymentTransactionRepository;
 import com.tikitaka.paymentnotification.payment.exception.PaymentErrorCode;
 import com.tikitaka.paymentnotification.payment.exception.PaymentException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Service
@@ -23,6 +26,7 @@ public class PaymentService {
 
     private final PaymentRepository paymentRepository;
     private final PaymentGateway paymentGateway;
+    private final PaymentTransactionRepository paymentTransactionRepository;
 
 
     @Transactional
@@ -62,9 +66,6 @@ public class PaymentService {
         return PaymentCreateResult.from(savedPayment);
     }
 
-    private String createOrderId() {
-        return "PAY-" + UUID.randomUUID();
-    }
 
     @Transactional
     public void approvePayment(
@@ -75,8 +76,12 @@ public class PaymentService {
                 .orElseThrow(() -> new PaymentException(
                         PaymentErrorCode.PAYMENT_NOT_FOUND
                 ));
-
+        // READY - > PROCESSING
         payment.startProcessing();
+
+        // 실제 PG 요청을 보낸 시점
+        OffsetDateTime requestedAt = OffsetDateTime.now();
+
 
         PaymentGatewayRequest request = new PaymentGatewayRequest(
                 payment.getOrderId(),
@@ -84,21 +89,70 @@ public class PaymentService {
                 payment.getCurrency()
         );
 
+
         PaymentGatewayResult result = paymentGateway.approve(request);
 
         switch (result.status()) {
-            case SUCCESS -> payment.approve(
-                    paymentMethod,
-                    result.pgPaymentKey()
-            );
 
-            case FAILED -> payment.fail(
-                    result.failureCode(),
-                    result.failureReason()
-            );
+            case SUCCESS -> {
+                payment.approve(
+                        paymentMethod,
+                        result.pgPaymentKey()
+                );
 
-            case UNKNOWN -> payment.markUnknown();
+                PaymentTransaction transaction =
+                        PaymentTransaction.createApproveSuccess(
+                                payment,
+                                payment.getPaymentProvider(),
+                                result.pgPaymentKey(),
+                                payment.getAmount(),
+                                1,
+                                requestedAt
+                        );
+
+                paymentTransactionRepository.save(transaction);
+            }
+
+            case FAILED -> {
+                payment.fail(
+                        result.failureCode(),
+                        result.failureReason()
+                );
+
+                PaymentTransaction transaction =
+                        PaymentTransaction.createApproveFailed(
+                                payment,
+                                payment.getPaymentProvider(),
+                                payment.getAmount(),
+                                1,
+                                result.failureCode(),
+                                result.failureReason(),
+                                requestedAt
+                        );
+
+                paymentTransactionRepository.save(transaction);
+            }
+
+            case UNKNOWN -> {
+                payment.markUnknown();
+
+                PaymentTransaction transaction =
+                        PaymentTransaction.createApproveUnknown(
+                                payment,
+                                payment.getPaymentProvider(),
+                                payment.getAmount(),
+                                1,
+                                requestedAt
+                        );
+
+                paymentTransactionRepository.save(transaction);
+            }
         }
+    }
+
+
+    private String createOrderId() {
+        return "PAY-" + UUID.randomUUID();
     }
 
 }
