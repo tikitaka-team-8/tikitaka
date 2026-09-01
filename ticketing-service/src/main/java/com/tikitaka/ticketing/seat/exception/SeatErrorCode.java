@@ -15,7 +15,8 @@ public enum SeatErrorCode implements ErrorCode {
     INVALID_INPUT("S-009", HttpStatus.BAD_REQUEST, "입력값이 올바르지 않습니다."),
     SEAT_STATUS_CONFLICT("S-010", HttpStatus.CONFLICT, "요청을 처리할 수 없는 상태입니다. 잠시 후 다시 시도해 주세요."),
     SEAT_READ_PERMISSION_REQUIRED("S-011", HttpStatus.FORBIDDEN, "조회 권한이 없습니다."),
-    INTERNAL_SERVICE_AUTHENTICATION_FAILED("S-012", HttpStatus.UNAUTHORIZED, "내부 서비스 인증에 실패했습니다.");
+    INTERNAL_SERVICE_AUTHENTICATION_FAILED("S-012", HttpStatus.UNAUTHORIZED, "내부 서비스 인증에 실패했습니다."),
+    INVALID_STATUS_TRANSITION("S-013",HttpStatus.CONFLICT,"현재 상태에서는 해당 상태로 변경할 수 없습니다.");
 
     private final String code;
     private final HttpStatus status;
