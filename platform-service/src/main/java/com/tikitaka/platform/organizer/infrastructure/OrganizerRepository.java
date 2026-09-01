@@ -7,4 +7,5 @@ import java.util.UUID;
 
 public interface OrganizerRepository extends JpaRepository<Organizer, UUID> {
 
+  boolean existsByUserId(Long userId);
 }
