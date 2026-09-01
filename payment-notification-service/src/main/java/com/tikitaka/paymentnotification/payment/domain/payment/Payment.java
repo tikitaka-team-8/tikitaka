@@ -1,5 +1,7 @@
 package com.tikitaka.paymentnotification.payment.domain.payment;
 
+import com.tikitaka.paymentnotification.payment.exception.PaymentErrorCode;
+import com.tikitaka.paymentnotification.payment.exception.PaymentException;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -74,4 +76,138 @@ public class Payment {
     private OffsetDateTime updatedAt;
 
 
+
+    public static Payment create(
+            UUID reservationId,
+            Long userId,
+            String orderId,
+            String idempotencyKey,
+            Long amount,
+            String currency,
+            PaymentProvider paymentProvider
+    ) {
+        Payment payment = new Payment();
+
+        payment.reservationId = reservationId;
+        payment.userId = userId;
+        payment.orderId = orderId;
+        payment.idempotencyKey = idempotencyKey;
+        payment.amount = amount;
+        payment.currency = currency;
+        payment.paymentProvider = paymentProvider;
+        payment.status = PaymentStatus.READY;
+
+        OffsetDateTime now = OffsetDateTime.now();
+
+        payment.requestedAt = now;
+        payment.createdAt = now;
+        payment.updatedAt = now;
+
+        return payment;
+    }
+
+    private static void validateAmount(Long amount) {
+        if (amount == null || amount < 0) {
+            throw new PaymentException(PaymentErrorCode.INVALID_PAYMENT_REQUEST);
+        }
+    }
+
+    public void startProcessing() {
+        validateStatus(PaymentStatus.READY);
+
+        this.status = PaymentStatus.PROCESSING;
+        this.updatedAt = OffsetDateTime.now();
+    }
+
+    public void fail(
+            String failureCode,
+            String failureReason
+    ) {
+        validateStatus(PaymentStatus.PROCESSING);
+
+        this.status = PaymentStatus.FAILED;
+        this.failureCode = failureCode;
+        this.failureReason = failureReason;
+        this.updatedAt = OffsetDateTime.now();
+    }
+
+    public void markUnknown() {
+        validateStatus(PaymentStatus.PROCESSING);
+
+        this.status = PaymentStatus.UNKNOWN;
+        this.updatedAt = OffsetDateTime.now();
+    }
+
+    public void cancel() {
+        validateCancelable();
+
+        OffsetDateTime now = OffsetDateTime.now();
+
+        this.status = PaymentStatus.CANCELED;
+        this.canceledAt = now;
+        this.updatedAt = now;
+    }
+
+    public boolean isSameRequest(
+            UUID reservationId,
+            Long userId,
+            Long amount,
+            String currency,
+            PaymentProvider paymentProvider
+    ) {
+        return this.reservationId.equals(reservationId)
+                && this.userId.equals(userId)
+                && this.amount.equals(amount)
+                && this.currency.equals(currency)
+                && this.paymentProvider == paymentProvider;
+    }
+
+
+    public void approve(
+            PaymentMethod paymentMethod,
+            String pgPaymentKey
+    ) {
+        validateApprovable();
+
+        OffsetDateTime now = OffsetDateTime.now();
+
+        this.paymentMethod = paymentMethod;
+        this.pgPaymentKey = pgPaymentKey;
+        this.status = PaymentStatus.APPROVED;
+        this.approvedAt = now;
+        this.updatedAt = now;
+    }
+
+    private void validateCancelable() {
+        if (this.status == PaymentStatus.CANCELED) {
+            throw new PaymentException(
+                    PaymentErrorCode.PAYMENT_ALREADY_CANCELLED
+            );
+        }
+
+        if (this.status != PaymentStatus.APPROVED) {
+            throw new PaymentException(
+                    PaymentErrorCode.PAYMENT_CANCELLATION_NOT_ALLOWED
+            );
+        }
+    }
+
+    private void validateApprovable() {
+        if (this.status == PaymentStatus.APPROVED) {
+            throw new PaymentException(
+                    PaymentErrorCode.PAYMENT_ALREADY_COMPLETED
+            );
+        }
+
+        if (this.status != PaymentStatus.PROCESSING) {
+            throw new PaymentException(
+                    PaymentErrorCode.PAYMENT_NOT_ALLOWED
+            );
+        }
+    }
+    private void validateStatus(PaymentStatus expectedStatus) {
+        if (this.status != expectedStatus) {
+            throw new PaymentException(PaymentErrorCode.PAYMENT_NOT_ALLOWED);
+        }
+    }
 }
