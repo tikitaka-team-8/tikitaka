@@ -31,7 +31,7 @@ public class QueueController {
             @RequestHeader("X-User-Id") @Positive long userId
     ) {
         QueueCommandResult result = queueService.enterQueue(sessionId, userId);
-        return ApiResponse.success(HttpStatus.OK, "대기열에 진입했습니다.", QueueEntryResponse.from(result));
+        return ApiResponse.success(HttpStatus.OK, "대기열에 진입했습니다.", QueueEntryResponse.from(result.entry()));
     }
 
     @GetMapping("/queues/sessions/{sessionId}/entries/me")

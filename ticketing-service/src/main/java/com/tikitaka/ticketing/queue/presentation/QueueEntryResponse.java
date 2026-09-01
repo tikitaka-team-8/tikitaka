@@ -1,6 +1,5 @@
 package com.tikitaka.ticketing.queue.presentation;
 
-import com.tikitaka.ticketing.queue.application.QueueCommandResult;
 import com.tikitaka.ticketing.queue.domain.QueueEntry;
 import com.tikitaka.ticketing.queue.domain.QueueStatus;
 import java.time.Instant;
@@ -13,18 +12,9 @@ public record QueueEntryResponse(
         long sequence,
         Instant joinedAt,
         Instant admittedAt,
-        Instant expiresAt,
-        boolean existingEntry
+        Instant expiresAt
 ) {
-    public static QueueEntryResponse from(QueueCommandResult result) {
-        return from(result.entry(), result.existingEntry());
-    }
-
     public static QueueEntryResponse from(QueueEntry entry) {
-        return from(entry, true);
-    }
-
-    private static QueueEntryResponse from(QueueEntry entry, boolean existingEntry) {
         return new QueueEntryResponse(
                 entry.sessionId(),
                 entry.userId(),
@@ -32,8 +22,7 @@ public record QueueEntryResponse(
                 entry.sequence(),
                 entry.joinedAt(),
                 entry.admittedAt(),
-                entry.expiresAt(),
-                existingEntry
+                entry.expiresAt()
         );
     }
 }
