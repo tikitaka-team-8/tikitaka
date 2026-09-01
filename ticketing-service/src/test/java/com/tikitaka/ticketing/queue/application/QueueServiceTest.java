@@ -194,6 +194,15 @@ class QueueServiceTest {
     }
 
     @Test
+    void Platform에서_회차를_찾지_못하면_회차_없음_오류를_반환한다() {
+        when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.empty());
+        when(platformSalesStatusClient.getSalesStatus(SESSION_ID)).thenThrow(platformSessionNotFound());
+
+        assertQueueError(() -> queueService.enterQueue(SESSION_ID, USER_ID), QueueErrorCode.QUEUE_SESSION_NOT_FOUND);
+        verify(queueRepository, never()).createWaitingEntryIfAbsent(any(), anyLong(), any(), any(), any());
+    }
+
+    @Test
     void 내_대기열_상태를_조회한다() {
         QueueEntry entry = waitingEntry(5L);
         when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.of(entry));
@@ -218,6 +227,14 @@ class QueueServiceTest {
     }
 
     private FeignException platformUnavailable() {
+        return platformException(503, "Service Unavailable");
+    }
+
+    private FeignException platformSessionNotFound() {
+        return platformException(404, "Not Found");
+    }
+
+    private FeignException platformException(int status, String reason) {
         Request request = Request.create(
                 Request.HttpMethod.GET,
                 "http://localhost:8081/api/v1/internal/event-sessions/" + SESSION_ID + "/sales-status",
@@ -227,8 +244,8 @@ class QueueServiceTest {
                 null
         );
         Response response = Response.builder()
-                .status(503)
-                .reason("Service Unavailable")
+                .status(status)
+                .reason(reason)
                 .request(request)
                 .build();
         return FeignException.errorStatus("getSalesStatus", response);

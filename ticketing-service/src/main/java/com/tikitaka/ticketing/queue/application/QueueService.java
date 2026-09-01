@@ -84,6 +84,8 @@ public class QueueService {
         PlatformSalesStatus salesStatus;
         try {
             salesStatus = platformSalesStatusClient.getSalesStatus(sessionId);
+        } catch (FeignException.NotFound exception) {
+            throw new BusinessException(QueueErrorCode.QUEUE_SESSION_NOT_FOUND);
         } catch (FeignException exception) {
             throw new BusinessException(QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE);
         }
