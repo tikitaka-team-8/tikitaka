@@ -72,6 +72,69 @@ public class RedisQueueRepository implements QueueRepository {
                     """,
             Long.class
     );
+    private static final DefaultRedisScript<Long> ADMIT_IF_WAITING_SCRIPT = new DefaultRedisScript<>(
+            """
+                    if redis.call('EXISTS', KEYS[1]) == 0
+                        or redis.call('HGET', KEYS[1], 'status') ~= 'WAITING' then
+                        return 0
+                    end
+
+                    redis.call('HSET', KEYS[1],
+                        'status', 'ADMITTED',
+                        'sequence', ARGV[1],
+                        'joinedAt', ARGV[2],
+                        'admittedAt', ARGV[3],
+                        'expiresAt', ARGV[4])
+                    redis.call('ZREM', KEYS[2], ARGV[5])
+                    redis.call('ZADD', KEYS[3], ARGV[6], ARGV[5])
+                    redis.call('PEXPIRE', KEYS[3], ARGV[10])
+                    redis.call('HSET', KEYS[4],
+                        'sessionId', ARGV[7],
+                        'userId', ARGV[5],
+                        'expiresAt', ARGV[8],
+                        'status', 'ACTIVE')
+                    redis.call('PEXPIRE', KEYS[4], ARGV[9])
+                    redis.call('SET', KEYS[5], ARGV[11], 'PX', ARGV[9])
+                    return 1
+                    """,
+            Long.class
+    );
+    private static final DefaultRedisScript<Long> ENTER_IF_ADMISSION_TOKEN_ACTIVE_SCRIPT = new DefaultRedisScript<>(
+            """
+                    if redis.call('EXISTS', KEYS[1]) == 0
+                        or redis.call('EXISTS', KEYS[3]) == 0
+                        or redis.call('HGET', KEYS[1], 'status') ~= 'ADMITTED'
+                        or redis.call('HGET', KEYS[3], 'status') ~= 'ACTIVE' then
+                        return 0
+                    end
+
+                    redis.call('HSET', KEYS[1],
+                        'status', 'ENTERED',
+                        'sequence', ARGV[1],
+                        'joinedAt', ARGV[2],
+                        'admittedAt', ARGV[3],
+                        'expiresAt', ARGV[4])
+                    redis.call('ZREM', KEYS[2], ARGV[5])
+                    redis.call('HSET', KEYS[3], 'status', 'USED')
+                    return 1
+                    """,
+            Long.class
+    );
+    private static final DefaultRedisScript<Long> UPDATE_ADMISSION_TOKEN_IF_PRESENT_SCRIPT = new DefaultRedisScript<>(
+            """
+                    if redis.call('EXISTS', KEYS[1]) == 0 then
+                        return 0
+                    end
+
+                    redis.call('HSET', KEYS[1],
+                        'sessionId', ARGV[1],
+                        'userId', ARGV[2],
+                        'expiresAt', ARGV[3],
+                        'status', ARGV[4])
+                    return 1
+                    """,
+            Long.class
+    );
 
     private final StringRedisTemplate redisTemplate;
 
@@ -98,8 +161,8 @@ public class RedisQueueRepository implements QueueRepository {
     }
 
     @Override
-    public Optional<AdmissionToken> findAdmissionToken(String token) {
-        Map<Object, Object> values = redisTemplate.opsForHash().entries(admissionTokenKey(token));
+    public Optional<AdmissionToken> findAdmissionToken(UUID sessionId, String token) {
+        Map<Object, Object> values = redisTemplate.opsForHash().entries(admissionTokenKey(sessionId, token));
         if (values.isEmpty()) {
             return Optional.empty();
         }
@@ -155,15 +218,57 @@ public class RedisQueueRepository implements QueueRepository {
     }
 
     @Override
-    public void removeWaitingUser(UUID sessionId, long userId) {
-        redisTemplate.opsForZSet().remove(waitingKey(sessionId), String.valueOf(userId));
+    public boolean admitIfWaiting(
+            QueueEntry admittedEntry,
+            AdmissionToken admissionToken,
+            Duration sessionTtl,
+            Duration admissionTokenTtl
+    ) {
+        Long admitted = redisTemplate.execute(
+                ADMIT_IF_WAITING_SCRIPT,
+                List.of(
+                        entryKey(admittedEntry.sessionId(), admittedEntry.userId()),
+                        waitingKey(admittedEntry.sessionId()),
+                        activeKey(admittedEntry.sessionId()),
+                        admissionTokenKey(admittedEntry.sessionId(), admissionToken.token()),
+                        admissionTokenReferenceKey(admittedEntry.sessionId(), admittedEntry.userId())
+                ),
+                String.valueOf(admittedEntry.sequence()),
+                admittedEntry.joinedAt().toString(),
+                admittedEntry.admittedAt().toString(),
+                admittedEntry.expiresAt().toString(),
+                String.valueOf(admittedEntry.userId()),
+                String.valueOf(admissionToken.expiresAt().toEpochMilli()),
+                admittedEntry.sessionId().toString(),
+                admissionToken.expiresAt().toString(),
+                String.valueOf(admissionTokenTtl.toMillis()),
+                String.valueOf(sessionTtl.toMillis()),
+                admissionToken.token()
+        );
+        return admitted != null && admitted == 1L;
     }
 
     @Override
-    public void addActiveUser(UUID sessionId, long userId, Instant expiresAt, Duration sessionTtl) {
-        String key = activeKey(sessionId);
-        redisTemplate.opsForZSet().add(key, String.valueOf(userId), expiresAt.toEpochMilli());
-        redisTemplate.expire(key, sessionTtl);
+    public boolean enterIfAdmissionTokenActive(QueueEntry enteredEntry, AdmissionToken admissionToken) {
+        Long entered = redisTemplate.execute(
+                ENTER_IF_ADMISSION_TOKEN_ACTIVE_SCRIPT,
+                List.of(
+                        entryKey(enteredEntry.sessionId(), enteredEntry.userId()),
+                        activeKey(enteredEntry.sessionId()),
+                        admissionTokenKey(enteredEntry.sessionId(), admissionToken.token())
+                ),
+                String.valueOf(enteredEntry.sequence()),
+                enteredEntry.joinedAt().toString(),
+                optionalInstantValue(enteredEntry.admittedAt()),
+                optionalInstantValue(enteredEntry.expiresAt()),
+                String.valueOf(enteredEntry.userId())
+        );
+        return entered != null && entered == 1L;
+    }
+
+    @Override
+    public void removeWaitingUser(UUID sessionId, long userId) {
+        redisTemplate.opsForZSet().remove(waitingKey(sessionId), String.valueOf(userId));
     }
 
     @Override
@@ -172,33 +277,21 @@ public class RedisQueueRepository implements QueueRepository {
     }
 
     @Override
-    public void createAdmissionToken(AdmissionToken admissionToken, Duration ttl) {
-        String key = admissionTokenKey(admissionToken.token());
-        saveAdmissionTokenFields(key, admissionToken);
-        redisTemplate.expire(key, ttl);
+    public boolean updateAdmissionTokenIfPresent(AdmissionToken admissionToken) {
+        Long updated = redisTemplate.execute(
+                UPDATE_ADMISSION_TOKEN_IF_PRESENT_SCRIPT,
+                List.of(admissionTokenKey(admissionToken.sessionId(), admissionToken.token())),
+                admissionToken.sessionId().toString(),
+                String.valueOf(admissionToken.userId()),
+                admissionToken.expiresAt().toString(),
+                admissionToken.status().name()
+        );
+        return updated != null && updated == 1L;
     }
 
     @Override
-    public void updateAdmissionToken(AdmissionToken admissionToken) {
-        saveAdmissionTokenFields(admissionTokenKey(admissionToken.token()), admissionToken);
-    }
-
-    private void saveAdmissionTokenFields(String key, AdmissionToken admissionToken) {
-        redisTemplate.opsForHash().put(key, SESSION_ID_FIELD, admissionToken.sessionId().toString());
-        redisTemplate.opsForHash().put(key, USER_ID_FIELD, String.valueOf(admissionToken.userId()));
-        redisTemplate.opsForHash().put(key, EXPIRES_AT_FIELD, admissionToken.expiresAt().toString());
-        redisTemplate.opsForHash().put(key, TOKEN_STATUS_FIELD, admissionToken.status().name());
-    }
-
-    @Override
-    public void saveAdmissionTokenReference(UUID sessionId, long userId, String token, Duration ttl) {
-        String key = admissionTokenReferenceKey(sessionId, userId);
-        redisTemplate.opsForValue().set(key, token, ttl);
-    }
-
-    @Override
-    public void deleteAdmissionToken(String token) {
-        redisTemplate.delete(admissionTokenKey(token));
+    public void deleteAdmissionToken(UUID sessionId, String token) {
+        redisTemplate.delete(admissionTokenKey(sessionId, token));
     }
 
     @Override
@@ -243,8 +336,8 @@ public class RedisQueueRepository implements QueueRepository {
         return "queue:active:{" + sessionId + "}";
     }
 
-    private String admissionTokenKey(String token) {
-        return "queue:admission-token:" + token;
+    private String admissionTokenKey(UUID sessionId, String token) {
+        return "queue:admission-token:{" + sessionId + "}:" + token;
     }
 
     private String admissionTokenReferenceKey(UUID sessionId, long userId) {

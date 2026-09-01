@@ -12,7 +12,7 @@ public interface QueueRepository {
 
     Optional<QueueEntry> findEntry(UUID sessionId, long userId);
 
-    Optional<AdmissionToken> findAdmissionToken(String token);
+    Optional<AdmissionToken> findAdmissionToken(UUID sessionId, String token);
 
     Optional<String> findAdmissionTokenReference(UUID sessionId, long userId);
 
@@ -26,19 +26,22 @@ public interface QueueRepository {
 
     boolean updateEntryIfPresent(QueueEntry entry);
 
-    void removeWaitingUser(UUID sessionId, long userId);
+    boolean admitIfWaiting(
+            QueueEntry admittedEntry,
+            AdmissionToken admissionToken,
+            Duration sessionTtl,
+            Duration admissionTokenTtl
+    );
 
-    void addActiveUser(UUID sessionId, long userId, Instant expiresAt, Duration sessionTtl);
+    boolean enterIfAdmissionTokenActive(QueueEntry enteredEntry, AdmissionToken admissionToken);
+
+    void removeWaitingUser(UUID sessionId, long userId);
 
     void removeActiveUser(UUID sessionId, long userId);
 
-    void createAdmissionToken(AdmissionToken admissionToken, Duration ttl);
+    boolean updateAdmissionTokenIfPresent(AdmissionToken admissionToken);
 
-    void updateAdmissionToken(AdmissionToken admissionToken);
-
-    void saveAdmissionTokenReference(UUID sessionId, long userId, String token, Duration ttl);
-
-    void deleteAdmissionToken(String token);
+    void deleteAdmissionToken(UUID sessionId, String token);
 
     void deleteAdmissionTokenReference(UUID sessionId, long userId);
 

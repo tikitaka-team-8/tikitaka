@@ -1,7 +1,10 @@
 package com.tikitaka.ticketing.queue.infrastructure;
 
 import com.tikitaka.ticketing.queue.application.QueueRepository;
+import com.tikitaka.ticketing.queue.domain.AdmissionToken;
+import com.tikitaka.ticketing.queue.domain.AdmissionTokenStatus;
 import com.tikitaka.ticketing.queue.domain.QueueEntry;
+import com.tikitaka.ticketing.queue.domain.QueueStatus;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.data.redis.DataRedisTest;
@@ -63,16 +66,37 @@ class RedisQueueRepositoryTest {
     }
 
     @Test
-    void addActiveUserExpiresTheSessionActiveIndex() {
+    void admitIfWaitingUpdatesQueueIndexesAndCreatesTokenAtomically() {
         UUID sessionId = UUID.randomUUID();
-        queueRepository.createWaitingEntryIfAbsent(
+        QueueEntry waitingEntry = queueRepository.createWaitingEntryIfAbsent(
                 sessionId, 100L, Instant.parse("2026-09-01T01:00:00Z"),
-                Instant.parse("2026-09-01T03:00:00Z"), SESSION_TTL);
+                Instant.parse("2026-09-01T03:00:00Z"), SESSION_TTL).orElseThrow();
+        AdmissionToken admissionToken = new AdmissionToken(
+                "token-1",
+                sessionId,
+                100L,
+                Instant.parse("2026-09-01T01:10:00Z"),
+                AdmissionTokenStatus.ACTIVE
+        );
 
-        queueRepository.addActiveUser(
-                sessionId, 100L, Instant.parse("2026-09-01T01:10:00Z"), SESSION_TTL);
+        boolean admitted = queueRepository.admitIfWaiting(
+                waitingEntry.admit(Instant.parse("2026-09-01T01:01:00Z")),
+                admissionToken,
+                SESSION_TTL,
+                Duration.ofMinutes(10)
+        );
 
+        assertThat(admitted).isTrue();
+        assertThat(queueRepository.findEntry(sessionId, 100L))
+                .get()
+                .extracting(QueueEntry::status)
+                .isEqualTo(QueueStatus.ADMITTED);
+        assertThat(redisTemplate.opsForZSet().score("queue:waiting:{" + sessionId + "}", "100")).isNull();
+        assertThat(redisTemplate.opsForZSet().score("queue:active:{" + sessionId + "}", "100"))
+                .isEqualTo(admissionToken.expiresAt().toEpochMilli());
         assertThat(redisTemplate.getExpire("queue:active:{" + sessionId + "}")).isPositive();
+        assertThat(queueRepository.findAdmissionToken(sessionId, admissionToken.token())).contains(admissionToken);
+        assertThat(queueRepository.findAdmissionTokenReference(sessionId, 100L)).contains(admissionToken.token());
     }
 
     @Test
@@ -108,5 +132,21 @@ class RedisQueueRepositoryTest {
 
         assertThat(updated).isFalse();
         assertThat(queueRepository.findEntry(expiredEntry.sessionId(), expiredEntry.userId())).isEmpty();
+    }
+
+    @Test
+    void updateAdmissionTokenIfPresentDoesNotRecreateAnExpiredToken() {
+        AdmissionToken expiredToken = new AdmissionToken(
+                "token-1",
+                UUID.randomUUID(),
+                100L,
+                Instant.parse("2026-09-01T01:10:00Z"),
+                AdmissionTokenStatus.EXPIRED
+        );
+
+        boolean updated = queueRepository.updateAdmissionTokenIfPresent(expiredToken);
+
+        assertThat(updated).isFalse();
+        assertThat(queueRepository.findAdmissionToken(expiredToken.sessionId(), expiredToken.token())).isEmpty();
     }
 }
