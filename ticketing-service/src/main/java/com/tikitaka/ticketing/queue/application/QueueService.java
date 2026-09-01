@@ -52,8 +52,9 @@ public class QueueService {
             queueRepository.deleteEntry(sessionId, userId);
         }
 
-        PlatformSalesStatus salesStatus = getSellableSession(sessionId);
+        PlatformSalesStatus salesStatus = getSalesStatus(sessionId);
         Instant now = Instant.now(clock);
+        validateSellableSession(salesStatus, now);
         Instant queueExpiresAt = salesStatus.salesCloseAt().toInstant()
                 .plus(queueProperties.retentionAfterSalesClose());
         Optional<QueueEntry> createdEntry = queueRepository.createWaitingEntryIfAbsent(
@@ -79,15 +80,17 @@ public class QueueService {
                 .orElseThrow(() -> new BusinessException(QueueErrorCode.QUEUE_ENTRY_NOT_FOUND));
     }
 
-    private PlatformSalesStatus getSellableSession(UUID sessionId) {
+    private PlatformSalesStatus getSalesStatus(UUID sessionId) {
         PlatformSalesStatus salesStatus;
         try {
             salesStatus = platformSalesStatusClient.getSalesStatus(sessionId);
         } catch (FeignException exception) {
             throw new BusinessException(QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE);
         }
+        return salesStatus;
+    }
 
-        Instant now = Instant.now(clock);
+    private void validateSellableSession(PlatformSalesStatus salesStatus, Instant now) {
         OffsetDateTime salesOpenAt = salesStatus.salesOpenAt();
         OffsetDateTime salesCloseAt = salesStatus.salesCloseAt();
         boolean saleStarted = salesOpenAt != null && !salesOpenAt.toInstant().isAfter(now);
@@ -97,6 +100,5 @@ public class QueueService {
         if (!salesStatus.queueEnabled() || !onSale || !saleStarted || saleEnded) {
             throw new BusinessException(QueueErrorCode.QUEUE_SESSION_NOT_OPEN);
         }
-        return salesStatus;
     }
 }
