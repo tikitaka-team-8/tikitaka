@@ -1,8 +1,10 @@
 package com.tikitaka.ticketing.reservation.domain.entity;
 
+import com.tikitaka.ticketing.global.exception.BusinessException;
 import com.tikitaka.ticketing.global.persistence.entity.BaseEntity;
 import com.tikitaka.ticketing.reservation.domain.enums.ReservationFailureReason;
 import com.tikitaka.ticketing.reservation.domain.enums.ReservationStatus;
+import com.tikitaka.ticketing.reservation.exception.ReservationErrorCode;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -66,5 +68,29 @@ public class Reservation extends BaseEntity {
 
     @Column(nullable = false, length = 100, updatable = false)
     private String idempotencyKey;
+
+    public void updateStatus(ReservationStatus nextStatus, Long userId) {
+        if (reservationStatus == nextStatus) {
+            return;
+        }
+        if (!canTransitTo(nextStatus)) {
+            throw new BusinessException(ReservationErrorCode.INVALID_RESERVATION_STATUS_TRANSITION);
+        }
+
+        reservationStatus = nextStatus;
+        markAsUpdated(userId);
+    }
+
+    private boolean canTransitTo(ReservationStatus nextStatus) {
+        return switch (reservationStatus) {
+            case PAYMENT_PENDING -> nextStatus == ReservationStatus.PAYMENT_PROCESSING
+                    || nextStatus == ReservationStatus.FAILED;
+            case PAYMENT_PROCESSING -> nextStatus == ReservationStatus.CONFIRMED
+                    || nextStatus == ReservationStatus.FAILED;
+            case CONFIRMED -> nextStatus == ReservationStatus.CANCEL_PENDING;
+            case CANCEL_PENDING -> nextStatus == ReservationStatus.CANCELLED;
+            case FAILED, CANCELLED -> false;
+        };
+    }
 
 }
