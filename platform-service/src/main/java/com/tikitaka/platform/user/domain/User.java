@@ -56,7 +56,7 @@ public class User {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    public static User signup(
+    public static User signUp(
             String email,
             String passwordHash,
             String name,
