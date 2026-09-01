@@ -15,7 +15,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 @Repository
 public class RedisQueueRepository implements QueueRepository {
@@ -37,12 +36,39 @@ public class RedisQueueRepository implements QueueRepository {
                     redis.call('HSET', KEYS[1],
                         'status', 'WAITING',
                         'sequence', sequence,
-                        'joinedAt', ARGV[2])
-                    redis.call('PEXPIRE', KEYS[1], ARGV[3])
+                        'joinedAt', ARGV[2],
+                        'expiresAt', ARGV[3])
+                    redis.call('PEXPIRE', KEYS[1], ARGV[4])
                     redis.call('ZADD', KEYS[2], sequence, ARGV[1])
                     redis.call('PEXPIRE', KEYS[2], ARGV[4])
                     redis.call('PEXPIRE', KEYS[3], ARGV[4])
                     return sequence
+                    """,
+            Long.class
+    );
+    private static final DefaultRedisScript<Long> UPDATE_ENTRY_IF_PRESENT_SCRIPT = new DefaultRedisScript<>(
+            """
+                    if redis.call('EXISTS', KEYS[1]) == 0 then
+                        return 0
+                    end
+
+                    redis.call('HSET', KEYS[1],
+                        'status', ARGV[1],
+                        'sequence', ARGV[2],
+                        'joinedAt', ARGV[3])
+
+                    if ARGV[4] == '' then
+                        redis.call('HDEL', KEYS[1], 'admittedAt')
+                    else
+                        redis.call('HSET', KEYS[1], 'admittedAt', ARGV[4])
+                    end
+
+                    if ARGV[5] == '' then
+                        redis.call('HDEL', KEYS[1], 'expiresAt')
+                    else
+                        redis.call('HSET', KEYS[1], 'expiresAt', ARGV[5])
+                    end
+                    return 1
                     """,
             Long.class
     );
@@ -97,7 +123,7 @@ public class RedisQueueRepository implements QueueRepository {
             UUID sessionId,
             long userId,
             Instant joinedAt,
-            Duration entryTtl,
+            Instant expiresAt,
             Duration sessionTtl
     ) {
         Long sequence = redisTemplate.execute(
@@ -105,23 +131,27 @@ public class RedisQueueRepository implements QueueRepository {
                 List.of(entryKey(sessionId, userId), waitingKey(sessionId), sequenceKey(sessionId)),
                 String.valueOf(userId),
                 joinedAt.toString(),
-                String.valueOf(entryTtl.toMillis()),
+                expiresAt.toString(),
                 String.valueOf(sessionTtl.toMillis())
         );
         if (sequence == null || sequence == 0L) {
             return Optional.empty();
         }
-        return Optional.of(QueueEntry.waiting(sessionId, userId, sequence, joinedAt));
+        return Optional.of(QueueEntry.waiting(sessionId, userId, sequence, joinedAt, expiresAt));
     }
 
     @Override
-    public void saveEntry(QueueEntry entry) {
-        String key = entryKey(entry.sessionId(), entry.userId());
-        redisTemplate.opsForHash().put(key, STATUS_FIELD, entry.status().name());
-        redisTemplate.opsForHash().put(key, SEQUENCE_FIELD, String.valueOf(entry.sequence()));
-        redisTemplate.opsForHash().put(key, JOINED_AT_FIELD, entry.joinedAt().toString());
-        putOptionalHashValue(key, ADMITTED_AT_FIELD, entry.admittedAt());
-        putOptionalHashValue(key, EXPIRES_AT_FIELD, entry.expiresAt());
+    public boolean updateEntryIfPresent(QueueEntry entry) {
+        Long updated = redisTemplate.execute(
+                UPDATE_ENTRY_IF_PRESENT_SCRIPT,
+                List.of(entryKey(entry.sessionId(), entry.userId())),
+                entry.status().name(),
+                String.valueOf(entry.sequence()),
+                entry.joinedAt().toString(),
+                optionalInstantValue(entry.admittedAt()),
+                optionalInstantValue(entry.expiresAt())
+        );
+        return updated != null && updated == 1L;
     }
 
     @Override
@@ -130,14 +160,10 @@ public class RedisQueueRepository implements QueueRepository {
     }
 
     @Override
-    public void addActiveUser(UUID sessionId, long userId, Instant expiresAt) {
-        Long entryTtlMillis = redisTemplate.getExpire(entryKey(sessionId, userId), TimeUnit.MILLISECONDS);
-        if (entryTtlMillis == null || entryTtlMillis <= 0) {
-            throw new IllegalStateException("Queue entry must exist with a positive TTL before activation");
-        }
+    public void addActiveUser(UUID sessionId, long userId, Instant expiresAt, Duration sessionTtl) {
         String key = activeKey(sessionId);
         redisTemplate.opsForZSet().add(key, String.valueOf(userId), expiresAt.toEpochMilli());
-        redisTemplate.expire(key, Duration.ofMillis(entryTtlMillis));
+        redisTemplate.expire(key, sessionTtl);
     }
 
     @Override
@@ -185,14 +211,6 @@ public class RedisQueueRepository implements QueueRepository {
         redisTemplate.delete(entryKey(sessionId, userId));
     }
 
-    private void putOptionalHashValue(String key, String field, Instant value) {
-        if (value == null) {
-            redisTemplate.opsForHash().delete(key, field);
-            return;
-        }
-        redisTemplate.opsForHash().put(key, field, value.toString());
-    }
-
     private String requiredValue(Map<Object, Object> values, String field) {
         Object value = values.get(field);
         if (value == null) {
@@ -203,6 +221,10 @@ public class RedisQueueRepository implements QueueRepository {
 
     private Instant optionalInstant(Object value) {
         return value == null ? null : Instant.parse(value.toString());
+    }
+
+    private String optionalInstantValue(Instant value) {
+        return value == null ? "" : value.toString();
     }
 
     private String sequenceKey(UUID sessionId) {

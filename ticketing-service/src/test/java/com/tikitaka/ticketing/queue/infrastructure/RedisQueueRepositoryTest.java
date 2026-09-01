@@ -25,7 +25,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Import(RedisQueueRepository.class)
 @Testcontainers(disabledWithoutDocker = true)
 class RedisQueueRepositoryTest {
-    private static final Duration ENTRY_TTL = Duration.ofMinutes(10);
     private static final Duration SESSION_TTL = Duration.ofHours(2);
 
     @Container
@@ -51,10 +50,10 @@ class RedisQueueRepositoryTest {
         Instant joinedAt = Instant.parse("2026-09-01T01:00:00Z");
 
         QueueEntry createdEntry = queueRepository.createWaitingEntryIfAbsent(
-                        sessionId, userId, joinedAt, ENTRY_TTL, SESSION_TTL)
+                        sessionId, userId, joinedAt, joinedAt.plus(SESSION_TTL), SESSION_TTL)
                 .orElseThrow();
         boolean createdAgain = queueRepository.createWaitingEntryIfAbsent(
-                sessionId, userId, joinedAt.plusSeconds(1), ENTRY_TTL, SESSION_TTL).isPresent();
+                sessionId, userId, joinedAt.plusSeconds(1), joinedAt.plus(SESSION_TTL), SESSION_TTL).isPresent();
 
         assertThat(createdEntry.sequence()).isEqualTo(1L);
         assertThat(createdAgain).isFalse();
@@ -67,9 +66,11 @@ class RedisQueueRepositoryTest {
     void addActiveUserExpiresTheSessionActiveIndex() {
         UUID sessionId = UUID.randomUUID();
         queueRepository.createWaitingEntryIfAbsent(
-                sessionId, 100L, Instant.parse("2026-09-01T01:00:00Z"), ENTRY_TTL, SESSION_TTL);
+                sessionId, 100L, Instant.parse("2026-09-01T01:00:00Z"),
+                Instant.parse("2026-09-01T03:00:00Z"), SESSION_TTL);
 
-        queueRepository.addActiveUser(sessionId, 100L, Instant.parse("2026-09-01T01:10:00Z"));
+        queueRepository.addActiveUser(
+                sessionId, 100L, Instant.parse("2026-09-01T01:10:00Z"), SESSION_TTL);
 
         assertThat(redisTemplate.getExpire("queue:active:{" + sessionId + "}")).isPositive();
     }
@@ -79,17 +80,33 @@ class RedisQueueRepositoryTest {
         UUID sessionId = UUID.randomUUID();
         long userId = 100L;
         QueueEntry waitingEntry = queueRepository.createWaitingEntryIfAbsent(
-                        sessionId, userId, Instant.parse("2026-09-01T01:00:00Z"), ENTRY_TTL, SESSION_TTL)
+                        sessionId, userId, Instant.parse("2026-09-01T01:00:00Z"),
+                        Instant.parse("2026-09-01T03:00:00Z"), SESSION_TTL)
                 .orElseThrow();
         String entryKey = "queue:entry:{" + sessionId + "}:" + userId;
         long ttlBefore = redisTemplate.getExpire(entryKey, TimeUnit.MILLISECONDS);
 
-        queueRepository.saveEntry(waitingEntry.admit(
-                Instant.parse("2026-09-01T01:01:00Z"),
-                Instant.parse("2026-09-01T01:11:00Z")
-        ));
+        boolean updated = queueRepository.updateEntryIfPresent(
+                waitingEntry.admit(Instant.parse("2026-09-01T01:01:00Z")));
 
         long ttlAfter = redisTemplate.getExpire(entryKey, TimeUnit.MILLISECONDS);
+        assertThat(updated).isTrue();
         assertThat(ttlAfter).isPositive().isLessThanOrEqualTo(ttlBefore);
+    }
+
+    @Test
+    void updateEntryIfPresentDoesNotRecreateAnExpiredEntry() {
+        QueueEntry expiredEntry = QueueEntry.waiting(
+                UUID.randomUUID(), 100L, 1L,
+                Instant.parse("2026-09-01T01:00:00Z"),
+                Instant.parse("2026-09-01T03:00:00Z")
+        );
+
+        boolean updated = queueRepository.updateEntryIfPresent(expiredEntry.admit(
+                Instant.parse("2026-09-01T01:01:00Z")
+        ));
+
+        assertThat(updated).isFalse();
+        assertThat(queueRepository.findEntry(expiredEntry.sessionId(), expiredEntry.userId())).isEmpty();
     }
 }

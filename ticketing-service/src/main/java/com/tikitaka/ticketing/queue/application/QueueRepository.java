@@ -20,15 +20,15 @@ public interface QueueRepository {
             UUID sessionId,
             long userId,
             Instant joinedAt,
-            Duration entryTtl,
+            Instant expiresAt,
             Duration sessionTtl
     );
 
-    void saveEntry(QueueEntry entry);
+    boolean updateEntryIfPresent(QueueEntry entry);
 
     void removeWaitingUser(UUID sessionId, long userId);
 
-    void addActiveUser(UUID sessionId, long userId, Instant expiresAt);
+    void addActiveUser(UUID sessionId, long userId, Instant expiresAt, Duration sessionTtl);
 
     void removeActiveUser(UUID sessionId, long userId);
 
