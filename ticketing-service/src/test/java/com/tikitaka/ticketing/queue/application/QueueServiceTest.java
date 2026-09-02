@@ -11,14 +11,18 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tikitaka.ticketing.global.exception.BusinessException;
+import com.tikitaka.ticketing.global.exception.CommonErrorCode;
 import com.tikitaka.ticketing.queue.config.QueueProperties;
 import com.tikitaka.ticketing.queue.domain.QueueEntry;
 import com.tikitaka.ticketing.queue.domain.QueueStatus;
 import com.tikitaka.ticketing.queue.exception.QueueErrorCode;
 import feign.FeignException;
 import feign.Request;
+import feign.RetryableException;
 import feign.Response;
+import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
@@ -33,6 +37,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.RedisConnectionFailureException;
 
 @ExtendWith(MockitoExtension.class)
 class QueueServiceTest {
@@ -54,7 +59,8 @@ class QueueServiceTest {
                 queueRepository,
                 platformSalesStatusClient,
                 new QueueProperties(Duration.ofMinutes(10), Duration.ofHours(1)),
-                Clock.fixed(NOW, ZoneOffset.UTC)
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                new ObjectMapper()
         );
     }
 
@@ -63,10 +69,9 @@ class QueueServiceTest {
         QueueEntry existingEntry = waitingEntry(3L);
         when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.of(existingEntry));
 
-        QueueCommandResult result = queueService.enterQueue(SESSION_ID, USER_ID);
+        QueueEntry result = queueService.enterQueue(SESSION_ID, USER_ID);
 
-        assertThat(result.entry()).isEqualTo(existingEntry);
-        assertThat(result.existingEntry()).isTrue();
+        assertThat(result).isEqualTo(existingEntry);
         verify(platformSalesStatusClient, never()).getSalesStatus(any());
     }
 
@@ -79,10 +84,9 @@ class QueueServiceTest {
                 eq(SESSION_ID), eq(USER_ID), eq(NOW), eq(NOW.plus(Duration.ofHours(2))), eq(Duration.ofHours(2))))
                 .thenReturn(Optional.of(createdEntry));
 
-        QueueCommandResult result = queueService.enterQueue(SESSION_ID, USER_ID);
+        QueueEntry result = queueService.enterQueue(SESSION_ID, USER_ID);
 
-        assertThat(result.entry()).isEqualTo(createdEntry);
-        assertThat(result.existingEntry()).isFalse();
+        assertThat(result).isEqualTo(createdEntry);
     }
 
     @Test
@@ -94,7 +98,8 @@ class QueueServiceTest {
                 queueRepository,
                 platformSalesStatusClient,
                 new QueueProperties(Duration.ofMinutes(10), Duration.ofHours(1)),
-                advancingClock
+                advancingClock,
+                new ObjectMapper()
         );
         QueueEntry createdEntry = QueueEntry.waiting(
                 SESSION_ID,
@@ -119,9 +124,9 @@ class QueueServiceTest {
                 eq(Duration.ofHours(1).plusMillis(1))
         )).thenReturn(Optional.of(createdEntry));
 
-        QueueCommandResult result = serviceWithAdvancingClock.enterQueue(SESSION_ID, USER_ID);
+        QueueEntry result = serviceWithAdvancingClock.enterQueue(SESSION_ID, USER_ID);
 
-        assertThat(result.entry()).isEqualTo(createdEntry);
+        assertThat(result).isEqualTo(createdEntry);
     }
 
     @Test
@@ -133,10 +138,9 @@ class QueueServiceTest {
         when(queueRepository.createWaitingEntryIfAbsent(any(), anyLong(), any(), any(), any()))
                 .thenReturn(Optional.empty());
 
-        QueueCommandResult result = queueService.enterQueue(SESSION_ID, USER_ID);
+        QueueEntry result = queueService.enterQueue(SESSION_ID, USER_ID);
 
-        assertThat(result.entry()).isEqualTo(concurrentEntry);
-        assertThat(result.existingEntry()).isTrue();
+        assertThat(result).isEqualTo(concurrentEntry);
     }
 
     @Test
@@ -185,20 +189,44 @@ class QueueServiceTest {
     }
 
     @Test
-    void Platform_호출_실패시_fail_closed로_대기열_진입을_막는다() {
+    void Platform_5xx_호출_실패시_연동_실패_오류로_대기열_진입을_막는다() {
         when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.empty());
         when(platformSalesStatusClient.getSalesStatus(SESSION_ID)).thenThrow(platformUnavailable());
 
-        assertQueueError(() -> queueService.enterQueue(SESSION_ID, USER_ID), QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE);
+        assertQueueError(() -> queueService.enterQueue(SESSION_ID, USER_ID), CommonErrorCode.DOWNSTREAM_SERVICE_FAILURE);
         verify(queueRepository, never()).createWaitingEntryIfAbsent(any(), anyLong(), any(), any(), any());
     }
 
     @Test
-    void Platform에서_회차를_찾지_못하면_회차_없음_오류를_반환한다() {
+    void Redis_연결_실패시_Queue_서비스_이용_불가_오류를_반환한다() {
+        when(queueRepository.findEntry(SESSION_ID, USER_ID))
+                .thenThrow(new RedisConnectionFailureException("Redis connection failed"));
+
+        assertQueueError(() -> queueService.enterQueue(SESSION_ID, USER_ID), QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE);
+        verify(platformSalesStatusClient, never()).getSalesStatus(any());
+    }
+
+    @Test
+    void Platform_호출_Timeout시_연동_Timeout_오류로_대기열_진입을_막는다() {
+        when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.empty());
+        when(platformSalesStatusClient.getSalesStatus(SESSION_ID)).thenThrow(platformTimeout());
+
+        assertQueueError(() -> queueService.enterQueue(SESSION_ID, USER_ID), CommonErrorCode.DOWNSTREAM_SERVICE_TIMEOUT);
+        verify(queueRepository, never()).createWaitingEntryIfAbsent(any(), anyLong(), any(), any(), any());
+    }
+
+    @Test
+    void Platform_도메인_오류는_code와_HTTP_status를_유지한다() {
         when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.empty());
         when(platformSalesStatusClient.getSalesStatus(SESSION_ID)).thenThrow(platformSessionNotFound());
 
-        assertQueueError(() -> queueService.enterQueue(SESSION_ID, USER_ID), QueueErrorCode.QUEUE_SESSION_NOT_FOUND);
+        assertThatThrownBy(() -> queueService.enterQueue(SESSION_ID, USER_ID))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode().getCode()).isEqualTo("E-007");
+                    assertThat(businessException.getErrorCode().getStatus().value()).isEqualTo(404);
+                });
         verify(queueRepository, never()).createWaitingEntryIfAbsent(any(), anyLong(), any(), any(), any());
     }
 
@@ -231,10 +259,6 @@ class QueueServiceTest {
     }
 
     private FeignException platformSessionNotFound() {
-        return platformException(404, "Not Found");
-    }
-
-    private FeignException platformException(int status, String reason) {
         Request request = Request.create(
                 Request.HttpMethod.GET,
                 "http://localhost:8081/api/v1/internal/event-sessions/" + SESSION_ID + "/sales-status",
@@ -244,14 +268,46 @@ class QueueServiceTest {
                 null
         );
         Response response = Response.builder()
-                .status(status)
-                .reason(reason)
+                .status(404)
+                .reason("Not Found")
                 .request(request)
+                .body("{\"code\":\"E-007\",\"status\":404,\"message\":\"공연 회차를 찾을 수 없습니다.\"}".getBytes(StandardCharsets.UTF_8))
                 .build();
         return FeignException.errorStatus("getSalesStatus", response);
     }
 
-    private void assertQueueError(ThrowingCallable action, QueueErrorCode expectedErrorCode) {
+    private RetryableException platformTimeout() {
+        return new RetryableException(
+                -1,
+                "Read timed out",
+                Request.HttpMethod.GET,
+                new SocketTimeoutException("Read timed out"),
+                (Long) null,
+                platformRequest()
+        );
+    }
+
+    private FeignException platformException(int status, String reason) {
+        Response response = Response.builder()
+                .status(status)
+                .reason(reason)
+                .request(platformRequest())
+                .build();
+        return FeignException.errorStatus("getSalesStatus", response);
+    }
+
+    private Request platformRequest() {
+        return Request.create(
+                Request.HttpMethod.GET,
+                "http://localhost:8081/api/v1/internal/event-sessions/" + SESSION_ID + "/sales-status",
+                Map.of(),
+                null,
+                StandardCharsets.UTF_8,
+                null
+        );
+    }
+
+    private void assertQueueError(ThrowingCallable action, com.tikitaka.ticketing.global.exception.ErrorCode expectedErrorCode) {
         assertThatThrownBy(action)
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")

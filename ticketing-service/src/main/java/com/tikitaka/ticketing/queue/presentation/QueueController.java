@@ -1,7 +1,6 @@
 package com.tikitaka.ticketing.queue.presentation;
 
 import com.tikitaka.ticketing.global.response.ApiResponse;
-import com.tikitaka.ticketing.queue.application.QueueCommandResult;
 import com.tikitaka.ticketing.queue.application.QueueService;
 import com.tikitaka.ticketing.queue.domain.QueueEntry;
 import jakarta.validation.constraints.Positive;
@@ -30,8 +29,8 @@ public class QueueController {
             @PathVariable UUID sessionId,
             @RequestHeader("X-User-Id") @Positive long userId
     ) {
-        QueueCommandResult result = queueService.enterQueue(sessionId, userId);
-        return ApiResponse.success(HttpStatus.OK, "대기열에 진입했습니다.", QueueEntryResponse.from(result.entry()));
+        QueueEntry entry = queueService.enterQueue(sessionId, userId);
+        return ApiResponse.success(HttpStatus.OK, "대기열에 진입했습니다.", QueueEntryResponse.from(entry));
     }
 
     @GetMapping("/queues/sessions/{sessionId}/entries/me")
