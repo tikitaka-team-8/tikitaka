@@ -1,6 +1,8 @@
 package com.tikitaka.platform.auth.presentation;
 
 import com.tikitaka.platform.auth.application.AuthService;
+import com.tikitaka.platform.auth.presentation.dto.AuthLoginRequest;
+import com.tikitaka.platform.auth.presentation.dto.AuthLoginResponse;
 import com.tikitaka.platform.auth.presentation.dto.AuthSignupRequest;
 import com.tikitaka.platform.auth.presentation.dto.AuthSignupResponse;
 import com.tikitaka.platform.global.response.ApiResponse;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private static final String SIGNUP_SUCCESS_MESSAGE = "회원가입이 완료되었습니다.";
+    private static final String LOGIN_SUCCESS_MESSAGE = "로그인되었습니다.";
 
     private final AuthService authService;
 
@@ -35,5 +38,18 @@ public class AuthController {
                         SIGNUP_SUCCESS_MESSAGE,
                         response
                 ));
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<ApiResponse<AuthLoginResponse>> login(
+            @Valid @RequestBody AuthLoginRequest request
+    ) {
+        AuthLoginResponse response = authService.login(request);
+
+        return ResponseEntity.ok(ApiResponse.success(
+                HttpStatus.OK,
+                LOGIN_SUCCESS_MESSAGE,
+                response
+        ));
     }
 }
