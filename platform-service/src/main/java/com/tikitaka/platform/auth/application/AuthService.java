@@ -5,6 +5,9 @@ import com.tikitaka.platform.auth.infrastructure.token.RefreshTokenRepository;
 import com.tikitaka.platform.auth.infrastructure.token.TokenProvider;
 import com.tikitaka.platform.auth.presentation.dto.AuthLoginRequest;
 import com.tikitaka.platform.auth.presentation.dto.AuthLoginResponse;
+import com.tikitaka.platform.auth.presentation.dto.AuthLogoutRequest;
+import com.tikitaka.platform.auth.presentation.dto.AuthReissueRequest;
+import com.tikitaka.platform.auth.presentation.dto.AuthReissueResponse;
 import com.tikitaka.platform.auth.presentation.dto.AuthSignupRequest;
 import com.tikitaka.platform.auth.presentation.dto.AuthSignupResponse;
 import com.tikitaka.platform.global.exception.BusinessException;
@@ -79,6 +82,31 @@ public class AuthService {
                 refreshToken,
                 tokenProvider.getAccessTokenExpiresInSeconds()
         );
+    }
+
+    public AuthReissueResponse reissue(AuthReissueRequest request) {
+        String refreshTokenHash = tokenProvider.hashRefreshToken(request.refreshToken());
+        Long userId = refreshTokenRepository.findUserId(refreshTokenHash)
+                .orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_REFRESH_TOKEN));
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_REFRESH_TOKEN));
+
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            throw new BusinessException(AuthErrorCode.INACTIVE_ACCOUNT);
+        }
+
+        String accessToken = tokenProvider.createAccessToken(user.getId(), user.getRole());
+
+        return AuthReissueResponse.of(
+                accessToken,
+                request.refreshToken(),
+                tokenProvider.getAccessTokenExpiresInSeconds()
+        );
+    }
+
+    public void logout(Long authenticatedUserId, AuthLogoutRequest request) {
+        String refreshTokenHash = tokenProvider.hashRefreshToken(request.refreshToken());
+        refreshTokenRepository.deleteIfOwnedBy(authenticatedUserId, refreshTokenHash);
     }
 
     private void validateDuplicateEmail(String email) {
