@@ -5,6 +5,7 @@ import com.tikitaka.platform.organizer.application.OrganizerService;
 import com.tikitaka.platform.organizer.presentation.dto.OrganizerCreateRequest;
 import com.tikitaka.platform.organizer.presentation.dto.OrganizerCreateResponse;
 import com.tikitaka.platform.organizer.presentation.dto.OrganizerDetailResponse;
+import com.tikitaka.platform.organizer.presentation.dto.OrganizerUpdateRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -46,6 +47,23 @@ public class OrganizerController {
         ApiResponse.success(
             HttpStatus.OK,
             "주최자 정보를 조회했습니다.",
+            response
+        )
+    );
+  }
+
+  @PatchMapping("/me")
+  public ResponseEntity<ApiResponse<OrganizerDetailResponse>> updateMyOrganizer(
+      @RequestHeader("X-User-Id") Long userId,
+      @Valid @RequestBody OrganizerUpdateRequest request
+  ) {
+    OrganizerDetailResponse response =
+        organizerService.updateOrganizer(request.toCommand(userId));
+
+    return ResponseEntity.ok(
+        ApiResponse.success(
+            HttpStatus.OK,
+            "주최자 정보가 수정되었습니다.",
             response
         )
     );

@@ -2,6 +2,7 @@ package com.tikitaka.platform.organizer.application;
 
 import com.tikitaka.platform.global.exception.BusinessException;
 import com.tikitaka.platform.organizer.application.command.OrganizerCreateCommand;
+import com.tikitaka.platform.organizer.application.command.OrganizerUpdateCommand;
 import com.tikitaka.platform.organizer.domain.Organizer;
 import com.tikitaka.platform.organizer.domain.OrganizerStatus;
 import com.tikitaka.platform.organizer.exception.OrganizerErrorCode;
@@ -100,6 +101,34 @@ class OrganizerServiceTest {
     );
 
     assertThat(ex.getErrorCode()).isEqualTo(OrganizerErrorCode.ORGANIZER_NOT_FOUND);
+  }
+
+  @Test
+  void 주최자_정보_부분_수정() {
+
+    Long userId = 1L;
+
+    Organizer organizer = createOrganizer(userId);
+
+    OrganizerUpdateCommand command = new OrganizerUpdateCommand(
+        userId,
+        null,
+        null,
+        "update@tikitaka.com",
+        "010-9876-5434",
+        "수정"
+    );
+
+    given(organizerRepository.findByUserId(userId))
+        .willReturn(Optional.of(organizer));
+
+    OrganizerDetailResponse response =
+        organizerService.updateOrganizer(command);
+
+    assertThat(response.organizerId()).isEqualTo(organizer.getId());
+    assertThat(response.contactEmail()).isEqualTo(organizer.getContactEmail());
+    assertThat(response.contactPhone()).isEqualTo(organizer.getContactPhone());
+    assertThat(response.description()).isEqualTo(organizer.getDescription());
   }
 
   private Organizer createOrganizer(Long userId) {

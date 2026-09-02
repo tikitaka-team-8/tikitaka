@@ -20,13 +20,13 @@ public record OrganizerCreateRequest(
     String contactEmail,
 
     @Size(
-        min = 1,
+        min = 8,
         max = 20,
-        message = "담당자 연락처는 1자 이상 20자 이하여야 합니다."
+        message = "담당자 연락처는 8자 이상 20자 이하여야 합니다."
     )
     String contactPhone,
 
-    @Size(max = 20, message = "주최자 소개는 20자 이하여야 합니다.")
+    @Size(max = 1000, message = "주최자 소개는 1000자 이하여야 합니다.")
     String description
 ) {
 

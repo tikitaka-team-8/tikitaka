@@ -106,6 +106,35 @@ public class Organizer {
     this.status = targetStatus;
   }
 
+  // 정보 수정
+  public void updateInfo(
+      String name,
+      String representativeName,
+      String contactEmail,
+      String contactPhone,
+      String description
+  ) {
+    if (name != null) {
+      this.name = name;
+    }
+
+    if (representativeName != null) {
+      this.representativeName = representativeName;
+    }
+
+    if (contactEmail != null) {
+      this.contactEmail = contactEmail;
+    }
+
+    if (contactPhone != null) {
+      this.contactPhone = contactPhone;
+    }
+
+    if (description != null) {
+      this.description = description;
+    }
+  }
+
   private void validateTransition(OrganizerStatus targetStatus) {
     boolean allowed = switch (this.status) {
       case PENDING -> targetStatus == OrganizerStatus.ACTIVE
