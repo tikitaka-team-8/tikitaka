@@ -66,6 +66,29 @@ class RedisQueueRepositoryTest {
     }
 
     @Test
+    void waitingSessionRegistry에서_회차별_선두_대기_사용자와_순번을_조회한다() {
+        UUID sessionId = UUID.randomUUID();
+        QueueEntry first = queueRepository.createWaitingEntryIfAbsent(
+                        sessionId, 100L, Instant.parse("2026-09-01T01:00:00Z"),
+                        Instant.parse("2026-09-01T03:00:00Z"), SESSION_TTL)
+                .orElseThrow();
+        QueueEntry second = queueRepository.createWaitingEntryIfAbsent(
+                        sessionId, 200L, Instant.parse("2026-09-01T01:00:01Z"),
+                        Instant.parse("2026-09-01T03:00:00Z"), SESSION_TTL)
+                .orElseThrow();
+        queueRepository.registerWaitingSession(sessionId);
+
+        assertThat(queueRepository.findWaitingSessionIds()).contains(sessionId);
+        assertThat(queueRepository.findWaitingEntries(sessionId, 1)).containsExactly(first);
+        assertThat(queueRepository.findWaitingPosition(sessionId, second.userId())).contains(2L);
+
+        queueRepository.removeWaitingUser(sessionId, first.userId());
+        assertThat(queueRepository.findWaitingSessionIds()).contains(sessionId);
+        queueRepository.removeWaitingUser(sessionId, second.userId());
+        assertThat(queueRepository.findWaitingSessionIds()).doesNotContain(sessionId);
+    }
+
+    @Test
     void admissionAndEntryTransitionsUpdateQueueIndexesAndTokenAtomically() {
         UUID sessionId = UUID.randomUUID();
         QueueEntry waitingEntry = queueRepository.createWaitingEntryIfAbsent(
@@ -97,6 +120,11 @@ class RedisQueueRepositoryTest {
         assertThat(redisTemplate.getExpire("queue:active:{" + sessionId + "}")).isPositive();
         assertThat(queueRepository.findAdmissionToken(sessionId, admissionToken.token())).contains(admissionToken);
         assertThat(queueRepository.findAdmissionTokenReference(sessionId, 100L)).contains(admissionToken.token());
+        long admissionTokenTtl = redisTemplate.getExpire(
+                "queue:admission-token:{" + sessionId + "}:" + admissionToken.token(),
+                TimeUnit.MILLISECONDS
+        );
+        assertThat(admissionTokenTtl).isBetween(Duration.ofMinutes(9).toMillis(), Duration.ofMinutes(10).toMillis());
 
         QueueEntry admittedEntry = queueRepository.findEntry(sessionId, 100L).orElseThrow();
         boolean entered = queueRepository.enterIfAdmissionTokenActive(admittedEntry.enter(), admissionToken);
@@ -111,6 +139,26 @@ class RedisQueueRepositoryTest {
                 .get()
                 .extracting(AdmissionToken::status)
                 .isEqualTo(AdmissionTokenStatus.USED);
+    }
+
+    @Test
+    void 중복_admission은_두번째_토큰을_발급하지_않는다() {
+        UUID sessionId = UUID.randomUUID();
+        QueueEntry waitingEntry = queueRepository.createWaitingEntryIfAbsent(
+                sessionId, 100L, Instant.parse("2026-09-01T01:00:00Z"),
+                Instant.parse("2026-09-01T03:00:00Z"), SESSION_TTL).orElseThrow();
+        QueueEntry admittedEntry = waitingEntry.admit(Instant.parse("2026-09-01T01:01:00Z"));
+        AdmissionToken firstToken = new AdmissionToken(
+                "token-1", sessionId, 100L, Instant.parse("2026-09-01T01:11:00Z"), AdmissionTokenStatus.ACTIVE
+        );
+        AdmissionToken secondToken = new AdmissionToken(
+                "token-2", sessionId, 100L, Instant.parse("2026-09-01T01:11:00Z"), AdmissionTokenStatus.ACTIVE
+        );
+
+        assertThat(queueRepository.admitIfWaiting(admittedEntry, firstToken, SESSION_TTL, Duration.ofMinutes(10))).isTrue();
+        assertThat(queueRepository.admitIfWaiting(admittedEntry, secondToken, SESSION_TTL, Duration.ofMinutes(10))).isFalse();
+        assertThat(queueRepository.findAdmissionTokenReference(sessionId, 100L)).contains(firstToken.token());
+        assertThat(queueRepository.findAdmissionToken(sessionId, secondToken.token())).isEmpty();
     }
 
     @Test

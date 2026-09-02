@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.List;
 
@@ -161,6 +162,49 @@ public class RedisQueueRepository implements QueueRepository {
     }
 
     @Override
+    public List<QueueEntry> findWaitingEntries(UUID sessionId, int limit) {
+        if (limit <= 0) {
+            return List.of();
+        }
+
+        var userIds = redisTemplate.opsForZSet().range(waitingKey(sessionId), 0, limit - 1L);
+        if (userIds == null || userIds.isEmpty()) {
+            return List.of();
+        }
+        return userIds.stream()
+                .map(Long::parseLong)
+                .map(userId -> findEntry(sessionId, userId))
+                .flatMap(Optional::stream)
+                .filter(entry -> entry.status() == QueueStatus.WAITING)
+                .toList();
+    }
+
+    @Override
+    public Optional<Long> findWaitingPosition(UUID sessionId, long userId) {
+        Long rank = redisTemplate.opsForZSet().rank(waitingKey(sessionId), String.valueOf(userId));
+        return rank == null ? Optional.empty() : Optional.of(rank + 1);
+    }
+
+    @Override
+    public Set<UUID> findWaitingSessionIds() {
+        Set<String> sessionIds = redisTemplate.opsForSet().members(waitingSessionRegistryKey());
+        if (sessionIds == null || sessionIds.isEmpty()) {
+            return Set.of();
+        }
+        return sessionIds.stream().map(UUID::fromString).collect(java.util.stream.Collectors.toUnmodifiableSet());
+    }
+
+    @Override
+    public void registerWaitingSession(UUID sessionId) {
+        redisTemplate.opsForSet().add(waitingSessionRegistryKey(), sessionId.toString());
+    }
+
+    @Override
+    public void removeWaitingSession(UUID sessionId) {
+        redisTemplate.opsForSet().remove(waitingSessionRegistryKey(), sessionId.toString());
+    }
+
+    @Override
     public Optional<AdmissionToken> findAdmissionToken(UUID sessionId, String token) {
         Map<Object, Object> values = redisTemplate.opsForHash().entries(admissionTokenKey(sessionId, token));
         if (values.isEmpty()) {
@@ -269,6 +313,10 @@ public class RedisQueueRepository implements QueueRepository {
     @Override
     public void removeWaitingUser(UUID sessionId, long userId) {
         redisTemplate.opsForZSet().remove(waitingKey(sessionId), String.valueOf(userId));
+        Long waitingUserCount = redisTemplate.opsForZSet().size(waitingKey(sessionId));
+        if (waitingUserCount == null || waitingUserCount == 0L) {
+            removeWaitingSession(sessionId);
+        }
     }
 
     @Override
@@ -326,6 +374,10 @@ public class RedisQueueRepository implements QueueRepository {
 
     private String waitingKey(UUID sessionId) {
         return "queue:waiting:{" + sessionId + "}";
+    }
+
+    private String waitingSessionRegistryKey() {
+        return "queue:waiting-sessions";
     }
 
     private String entryKey(UUID sessionId, long userId) {

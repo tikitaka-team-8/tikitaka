@@ -7,6 +7,7 @@ import com.tikitaka.ticketing.global.exception.CommonErrorCode;
 import com.tikitaka.ticketing.global.exception.DownstreamErrorCode;
 import com.tikitaka.ticketing.global.response.ApiErrorResponse;
 import com.tikitaka.ticketing.queue.config.QueueProperties;
+import com.tikitaka.ticketing.queue.domain.AdmissionToken;
 import com.tikitaka.ticketing.queue.domain.QueueEntry;
 import com.tikitaka.ticketing.queue.domain.QueueStatus;
 import com.tikitaka.ticketing.queue.exception.QueueErrorCode;
@@ -67,6 +68,9 @@ public class QueueService {
     private QueueEntry enterQueueInternal(UUID sessionId, long userId) {
         Optional<QueueEntry> existingEntry = queueRepository.findEntry(sessionId, userId);
         if (existingEntry.isPresent() && existingEntry.get().status().isActive()) {
+            if (existingEntry.get().status() == QueueStatus.WAITING) {
+                queueRepository.registerWaitingSession(sessionId);
+            }
             return existingEntry.get();
         }
         if (existingEntry.isPresent() && existingEntry.get().status() == QueueStatus.EXPIRED) {
@@ -86,11 +90,15 @@ public class QueueService {
                 Duration.between(now, queueExpiresAt)
         );
         if (createdEntry.isPresent()) {
+            queueRepository.registerWaitingSession(sessionId);
             return createdEntry.get();
         }
 
         QueueEntry concurrentEntry = getEntry(sessionId, userId);
         if (concurrentEntry.status().isActive()) {
+            if (concurrentEntry.status() == QueueStatus.WAITING) {
+                queueRepository.registerWaitingSession(sessionId);
+            }
             return concurrentEntry;
         }
         throw new BusinessException(QueueErrorCode.QUEUE_ENTRY_STATE_CONFLICT);
@@ -100,6 +108,24 @@ public class QueueService {
         try {
             return queueRepository.findEntry(sessionId, userId)
                     .orElseThrow(() -> new BusinessException(QueueErrorCode.QUEUE_ENTRY_NOT_FOUND));
+        } catch (RedisConnectionFailureException exception) {
+            throw new BusinessException(QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE);
+        }
+    }
+
+    public QueueStatusResult getQueueStatus(UUID sessionId, long userId) {
+        try {
+            QueueEntry entry = queueRepository.findEntry(sessionId, userId)
+                    .orElseThrow(() -> new BusinessException(QueueErrorCode.QUEUE_ENTRY_NOT_FOUND));
+            Long position = entry.status() == QueueStatus.WAITING
+                    ? queueRepository.findWaitingPosition(sessionId, userId).orElse(null)
+                    : null;
+            AdmissionToken admissionToken = entry.status() == QueueStatus.ADMITTED
+                    ? queueRepository.findAdmissionTokenReference(sessionId, userId)
+                    .flatMap(token -> queueRepository.findAdmissionToken(sessionId, token))
+                    .orElse(null)
+                    : null;
+            return new QueueStatusResult(entry, position, admissionToken);
         } catch (RedisConnectionFailureException exception) {
             throw new BusinessException(QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE);
         }
@@ -120,9 +146,9 @@ public class QueueService {
         OffsetDateTime salesCloseAt = salesStatus.salesCloseAt();
         boolean saleStarted = salesOpenAt != null && !salesOpenAt.toInstant().isAfter(now);
         boolean saleEnded = salesCloseAt == null || !salesCloseAt.toInstant().isAfter(now);
-        boolean onSale = "ON_SALE".equalsIgnoreCase(salesStatus.sessionStatus());
+        boolean scheduled = "SCHEDULED".equalsIgnoreCase(salesStatus.sessionStatus());
 
-        if (!salesStatus.queueEnabled() || !onSale || !saleStarted || saleEnded) {
+        if (!salesStatus.queueEnabled() || !scheduled || !saleStarted || saleEnded) {
             throw new BusinessException(QueueErrorCode.QUEUE_SESSION_NOT_OPEN);
         }
     }

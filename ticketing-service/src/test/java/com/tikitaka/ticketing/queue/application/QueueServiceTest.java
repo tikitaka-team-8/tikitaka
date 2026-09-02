@@ -15,6 +15,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tikitaka.ticketing.global.exception.BusinessException;
 import com.tikitaka.ticketing.global.exception.CommonErrorCode;
 import com.tikitaka.ticketing.queue.config.QueueProperties;
+import com.tikitaka.ticketing.queue.domain.AdmissionToken;
+import com.tikitaka.ticketing.queue.domain.AdmissionTokenStatus;
 import com.tikitaka.ticketing.queue.domain.QueueEntry;
 import com.tikitaka.ticketing.queue.domain.QueueStatus;
 import com.tikitaka.ticketing.queue.exception.QueueErrorCode;
@@ -58,7 +60,7 @@ class QueueServiceTest {
         queueService = new QueueService(
                 queueRepository,
                 platformSalesStatusClient,
-                new QueueProperties(Duration.ofMinutes(10), Duration.ofHours(1)),
+                new QueueProperties(Duration.ofMinutes(10), Duration.ofHours(1), 50),
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 new ObjectMapper()
         );
@@ -97,7 +99,7 @@ class QueueServiceTest {
         QueueService serviceWithAdvancingClock = new QueueService(
                 queueRepository,
                 platformSalesStatusClient,
-                new QueueProperties(Duration.ofMinutes(10), Duration.ofHours(1)),
+                new QueueProperties(Duration.ofMinutes(10), Duration.ofHours(1), 50),
                 advancingClock,
                 new ObjectMapper()
         );
@@ -111,7 +113,7 @@ class QueueServiceTest {
         when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.empty());
         when(platformSalesStatusClient.getSalesStatus(SESSION_ID)).thenReturn(new PlatformSalesStatus(
                 SESSION_ID,
-                "ON_SALE",
+                "SCHEDULED",
                 OffsetDateTime.parse("2026-09-01T09:00:00+09:00"),
                 OffsetDateTime.parse("2026-09-01T10:00:00+09:00"),
                 true
@@ -148,7 +150,7 @@ class QueueServiceTest {
         when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.empty());
         when(platformSalesStatusClient.getSalesStatus(SESSION_ID)).thenReturn(new PlatformSalesStatus(
                 SESSION_ID,
-                "ON_SALE",
+                "SCHEDULED",
                 OffsetDateTime.parse("2026-09-01T11:00:00+09:00"),
                 OffsetDateTime.parse("2026-09-01T12:00:00+09:00"),
                 true
@@ -163,7 +165,7 @@ class QueueServiceTest {
         when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.empty());
         when(platformSalesStatusClient.getSalesStatus(SESSION_ID)).thenReturn(new PlatformSalesStatus(
                 SESSION_ID,
-                "ON_SALE",
+                "SCHEDULED",
                 OffsetDateTime.parse("2026-09-01T09:00:00+09:00"),
                 OffsetDateTime.parse("2026-09-01T10:00:00+09:00"),
                 true
@@ -178,7 +180,7 @@ class QueueServiceTest {
         when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.empty());
         when(platformSalesStatusClient.getSalesStatus(SESSION_ID)).thenReturn(new PlatformSalesStatus(
                 SESSION_ID,
-                "ON_SALE",
+                "SCHEDULED",
                 OffsetDateTime.parse("2026-09-01T09:00:00+09:00"),
                 OffsetDateTime.parse("2026-09-01T11:00:00+09:00"),
                 false
@@ -240,6 +242,41 @@ class QueueServiceTest {
         assertThat(result).isEqualTo(entry);
     }
 
+    @Test
+    void WAITING_상태_조회는_현재_순번을_반환한다() {
+        QueueEntry entry = waitingEntry(5L);
+        when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.of(entry));
+        when(queueRepository.findWaitingPosition(SESSION_ID, USER_ID)).thenReturn(Optional.of(3L));
+
+        QueueStatusResult result = queueService.getQueueStatus(SESSION_ID, USER_ID);
+
+        assertThat(result.entry()).isEqualTo(entry);
+        assertThat(result.position()).isEqualTo(3L);
+        assertThat(result.admissionToken()).isNull();
+        verify(queueRepository, never()).admitIfWaiting(any(), any(), any(), any());
+    }
+
+    @Test
+    void ADMITTED_상태_조회는_입장_토큰을_반환한다() {
+        QueueEntry entry = waitingEntry(5L).admit(NOW.minusSeconds(1));
+        AdmissionToken token = new AdmissionToken(
+                "admission-token",
+                SESSION_ID,
+                USER_ID,
+                NOW.plus(Duration.ofMinutes(10)),
+                AdmissionTokenStatus.ACTIVE
+        );
+        when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.of(entry));
+        when(queueRepository.findAdmissionTokenReference(SESSION_ID, USER_ID)).thenReturn(Optional.of(token.token()));
+        when(queueRepository.findAdmissionToken(SESSION_ID, token.token())).thenReturn(Optional.of(token));
+
+        QueueStatusResult result = queueService.getQueueStatus(SESSION_ID, USER_ID);
+
+        assertThat(result.position()).isNull();
+        assertThat(result.admissionToken()).isEqualTo(token);
+        verify(queueRepository, never()).admitIfWaiting(any(), any(), any(), any());
+    }
+
     private QueueEntry waitingEntry(long sequence) {
         return QueueEntry.waiting(SESSION_ID, USER_ID, sequence, NOW, NOW.plus(Duration.ofHours(2)));
     }
@@ -247,7 +284,7 @@ class QueueServiceTest {
     private PlatformSalesStatus openSalesStatus() {
         return new PlatformSalesStatus(
                 SESSION_ID,
-                "ON_SALE",
+                "SCHEDULED",
                 OffsetDateTime.parse("2026-09-01T09:00:00+09:00"),
                 OffsetDateTime.parse("2026-09-01T11:00:00+09:00"),
                 true
