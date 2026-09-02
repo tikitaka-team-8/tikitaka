@@ -127,11 +127,11 @@ public class Organizer {
     }
 
     if (contactPhone != null) {
-      this.contactPhone = contactPhone;
+      this.contactPhone = contactPhone.isBlank() ? null : contactPhone;
     }
 
     if (description != null) {
-      this.description = description;
+      this.description = description.isBlank() ? null : description;
     }
   }
 
