@@ -8,3 +8,9 @@ spring:
     validate-on-migrate: true
     out-of-order: false
     clean-disabled: true
+
+auth:
+  token:
+    secret: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+    access-token-expiration: 15m
+    refresh-token-expiration: 14d
