@@ -114,6 +114,37 @@ class RedisQueueRepositoryTest {
     }
 
     @Test
+    void 다른_사용자의_활성_토큰으로는_ADMITTED_엔트리를_ENTERED로_전환할_수_없다() {
+        UUID sessionId = UUID.randomUUID();
+        QueueEntry firstWaitingEntry = createWaitingEntry(sessionId, 100L);
+        QueueEntry secondWaitingEntry = createWaitingEntry(sessionId, 200L);
+        AdmissionToken firstToken = admissionToken(sessionId, "token-1", 100L);
+        AdmissionToken secondToken = admissionToken(sessionId, "token-2", 200L);
+
+        assertThat(queueRepository.admitIfWaiting(
+                firstWaitingEntry.admit(Instant.parse("2026-09-01T01:01:00Z")),
+                firstToken,
+                SESSION_TTL,
+                Duration.ofMinutes(10)
+        )).isTrue();
+        assertThat(queueRepository.admitIfWaiting(
+                secondWaitingEntry.admit(Instant.parse("2026-09-01T01:01:00Z")),
+                secondToken,
+                SESSION_TTL,
+                Duration.ofMinutes(10)
+        )).isTrue();
+
+        QueueEntry firstAdmittedEntry = queueRepository.findEntry(sessionId, 100L).orElseThrow();
+        boolean entered = queueRepository.enterIfAdmissionTokenActive(firstAdmittedEntry.enter(), secondToken);
+
+        assertThat(entered).isFalse();
+        assertThat(queueRepository.findEntry(sessionId, 100L))
+                .get()
+                .extracting(QueueEntry::status)
+                .isEqualTo(QueueStatus.ADMITTED);
+    }
+
+    @Test
     void saveEntryPreservesTheExistingEntryTtl() {
         UUID sessionId = UUID.randomUUID();
         long userId = 100L;
@@ -162,5 +193,26 @@ class RedisQueueRepositoryTest {
 
         assertThat(updated).isFalse();
         assertThat(queueRepository.findAdmissionToken(expiredToken.sessionId(), expiredToken.token())).isEmpty();
+    }
+
+    private QueueEntry createWaitingEntry(UUID sessionId, long userId) {
+        return queueRepository.createWaitingEntryIfAbsent(
+                        sessionId,
+                        userId,
+                        Instant.parse("2026-09-01T01:00:00Z"),
+                        Instant.parse("2026-09-01T03:00:00Z"),
+                        SESSION_TTL
+                )
+                .orElseThrow();
+    }
+
+    private AdmissionToken admissionToken(UUID sessionId, String token, long userId) {
+        return new AdmissionToken(
+                token,
+                sessionId,
+                userId,
+                Instant.parse("2026-09-01T01:10:00Z"),
+                AdmissionTokenStatus.ACTIVE
+        );
     }
 }
