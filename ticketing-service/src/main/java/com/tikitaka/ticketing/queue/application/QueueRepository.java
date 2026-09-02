@@ -22,7 +22,7 @@ public interface QueueRepository {
 
     void registerWaitingSession(UUID sessionId);
 
-    void removeWaitingSession(UUID sessionId);
+    boolean removeWaitingSessionIfEmpty(UUID sessionId);
 
     Optional<AdmissionToken> findAdmissionToken(UUID sessionId, String token);
 

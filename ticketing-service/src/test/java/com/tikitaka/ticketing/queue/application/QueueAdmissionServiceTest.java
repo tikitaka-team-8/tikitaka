@@ -74,7 +74,7 @@ class QueueAdmissionServiceTest {
 
         queueAdmissionService.admitWaitingUsers();
 
-        verify(queueRepository).removeWaitingSession(SESSION_ID);
+        verify(queueRepository).removeWaitingSessionIfEmpty(SESSION_ID);
     }
 
     @Test

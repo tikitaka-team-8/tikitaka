@@ -47,7 +47,7 @@ public class QueueAdmissionService {
     private void admitWaitingUsers(UUID sessionId) {
         var waitingEntries = queueRepository.findWaitingEntries(sessionId, queueProperties.admissionBatchSize());
         if (waitingEntries.isEmpty()) {
-            queueRepository.removeWaitingSession(sessionId);
+            queueRepository.removeWaitingSessionIfEmpty(sessionId);
             return;
         }
 

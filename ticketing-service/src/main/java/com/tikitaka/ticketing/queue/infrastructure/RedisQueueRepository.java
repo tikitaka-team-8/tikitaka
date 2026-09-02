@@ -136,6 +136,17 @@ public class RedisQueueRepository implements QueueRepository {
                     """,
             Long.class
     );
+    private static final DefaultRedisScript<Long> REMOVE_WAITING_SESSION_IF_EMPTY_SCRIPT = new DefaultRedisScript<>(
+            """
+                    if redis.call('ZCARD', KEYS[1]) ~= 0 then
+                        return 0
+                    end
+
+                    redis.call('SREM', KEYS[2], ARGV[1])
+                    return 1
+                    """,
+            Long.class
+    );
 
     private final StringRedisTemplate redisTemplate;
 
@@ -200,8 +211,13 @@ public class RedisQueueRepository implements QueueRepository {
     }
 
     @Override
-    public void removeWaitingSession(UUID sessionId) {
-        redisTemplate.opsForSet().remove(waitingSessionRegistryKey(), sessionId.toString());
+    public boolean removeWaitingSessionIfEmpty(UUID sessionId) {
+        Long removed = redisTemplate.execute(
+                REMOVE_WAITING_SESSION_IF_EMPTY_SCRIPT,
+                List.of(waitingKey(sessionId), waitingSessionRegistryKey()),
+                sessionId.toString()
+        );
+        return removed != null && removed == 1L;
     }
 
     @Override
@@ -313,10 +329,7 @@ public class RedisQueueRepository implements QueueRepository {
     @Override
     public void removeWaitingUser(UUID sessionId, long userId) {
         redisTemplate.opsForZSet().remove(waitingKey(sessionId), String.valueOf(userId));
-        Long waitingUserCount = redisTemplate.opsForZSet().size(waitingKey(sessionId));
-        if (waitingUserCount == null || waitingUserCount == 0L) {
-            removeWaitingSession(sessionId);
-        }
+        removeWaitingSessionIfEmpty(sessionId);
     }
 
     @Override

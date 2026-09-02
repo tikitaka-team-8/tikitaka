@@ -89,6 +89,20 @@ class RedisQueueRepositoryTest {
     }
 
     @Test
+    void waiting_사용자가_있는_회차는_registry에서_제거하지_않는다() {
+        UUID sessionId = UUID.randomUUID();
+        queueRepository.registerWaitingSession(sessionId);
+        queueRepository.createWaitingEntryIfAbsent(
+                sessionId, 100L, Instant.parse("2026-09-01T01:00:00Z"),
+                Instant.parse("2026-09-01T03:00:00Z"), SESSION_TTL);
+
+        boolean removed = queueRepository.removeWaitingSessionIfEmpty(sessionId);
+
+        assertThat(removed).isFalse();
+        assertThat(queueRepository.findWaitingSessionIds()).contains(sessionId);
+    }
+
+    @Test
     void admissionAndEntryTransitionsUpdateQueueIndexesAndTokenAtomically() {
         UUID sessionId = UUID.randomUUID();
         QueueEntry waitingEntry = queueRepository.createWaitingEntryIfAbsent(
