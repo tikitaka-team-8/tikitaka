@@ -4,6 +4,7 @@ import com.tikitaka.platform.global.response.ApiResponse;
 import com.tikitaka.platform.organizer.application.OrganizerService;
 import com.tikitaka.platform.organizer.presentation.dto.OrganizerCreateRequest;
 import com.tikitaka.platform.organizer.presentation.dto.OrganizerCreateResponse;
+import com.tikitaka.platform.organizer.presentation.dto.OrganizerDetailResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -18,9 +19,8 @@ public class OrganizerController {
   private final OrganizerService organizerService;
 
   @PostMapping
-  // TODO 인증 인가
   public ResponseEntity<ApiResponse<OrganizerCreateResponse>> create(
-      @RequestParam Long userId, // TODO 사용자 정보 규격 확정 후 변경
+      @RequestHeader("X-User-Id") Long userId,
       @Valid @RequestBody OrganizerCreateRequest request
   ) {
 
@@ -34,5 +34,20 @@ public class OrganizerController {
             "주최자 등록 신청이 완료되었습니다.",
             response
         ));
+  }
+
+  @GetMapping("/me")
+  public ResponseEntity<ApiResponse<OrganizerDetailResponse>> getMyOrganizer(
+      @RequestHeader("X-User-Id") Long userId
+  ) {
+    OrganizerDetailResponse response = organizerService.getMyOrganizer(userId);
+
+    return ResponseEntity.ok(
+        ApiResponse.success(
+            HttpStatus.OK,
+            "주최자 정보를 조회했습니다.",
+            response
+        )
+    );
   }
 }

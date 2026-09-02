@@ -6,16 +6,20 @@ import com.tikitaka.platform.organizer.domain.Organizer;
 import com.tikitaka.platform.organizer.exception.OrganizerErrorCode;
 import com.tikitaka.platform.organizer.infrastructure.OrganizerRepository;
 import com.tikitaka.platform.organizer.presentation.dto.OrganizerCreateResponse;
+import com.tikitaka.platform.organizer.presentation.dto.OrganizerDetailResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class OrganizerService {
 
   private final OrganizerRepository organizerRepository;
 
+
+  // 주최자 신청
   @Transactional
   public OrganizerCreateResponse createOrganizer(
       OrganizerCreateCommand command
@@ -34,8 +38,17 @@ public class OrganizerService {
     );
 
     Organizer savedOrganizer = organizerRepository.save(organizer);
-
     return OrganizerCreateResponse.from(savedOrganizer);
+  }
+
+  // 주최자 조회
+  public OrganizerDetailResponse getMyOrganizer(Long userId) {
+    Organizer organizer = organizerRepository.findByUserId(userId)
+        .orElseThrow(() ->
+            new BusinessException(OrganizerErrorCode.ORGANIZER_NOT_FOUND)
+        );
+
+    return OrganizerDetailResponse.from(organizer);
   }
 
   private void validateDuplicateOrganizer(Long userId) {
@@ -43,4 +56,6 @@ public class OrganizerService {
       throw new BusinessException(OrganizerErrorCode.ORGANIZER_ALREADY_EXISTS);
     }
   }
+
+
 }
