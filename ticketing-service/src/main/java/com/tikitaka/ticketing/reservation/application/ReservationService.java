@@ -18,9 +18,14 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 
 @Service
 @Transactional
@@ -30,6 +35,8 @@ public class ReservationService {
     private static final int DEFAULT_PAGE = 0;
     private static final int DEFAULT_SIZE = 10;
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("createdAt", "sessionStartAt");
+    private static final ZoneId SEOUL_ZONE_ID = ZoneId.of("Asia/Seoul");
+    private static final DateTimeFormatter RESERVATION_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyMMdd");
 
     private final ReservationRepositoryPort reservationRepositoryPort;
 
@@ -131,5 +138,13 @@ public class ReservationService {
             case 10, 30, 50 -> size;
             default -> DEFAULT_SIZE;
         };
+    }
+
+    private String generateReservationNumber() {
+        String date = LocalDate.now(SEOUL_ZONE_ID).format(RESERVATION_DATE_FORMATTER);
+        String randomPart = UUID.randomUUID().toString().replace("-", "")
+                .substring(0, 12).toUpperCase(Locale.ROOT);
+
+        return "RSV-" + date + "-" + randomPart; // ex. RSV-260902-8F3A91C2D7E4
     }
 }
