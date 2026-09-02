@@ -27,9 +27,10 @@ public class Reservation extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID reservationId;
 
+    /* TODO: flyway v2 추가 후 주석 해제
     @Version
     @Column(nullable = false)
-    private Long version;
+    private Long version;*/
 
     @Column(nullable = false, updatable = false)
     private Long userId;
