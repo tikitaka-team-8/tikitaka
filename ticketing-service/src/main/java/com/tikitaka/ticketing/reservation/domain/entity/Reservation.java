@@ -27,6 +27,11 @@ public class Reservation extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID reservationId;
 
+    /* TODO: flyway v2 추가 후 주석 해제
+    @Version
+    @Column(nullable = false)
+    private Long version;*/
+
     @Column(nullable = false, updatable = false)
     private Long userId;
 
@@ -68,6 +73,9 @@ public class Reservation extends BaseEntity {
 
     @Column(nullable = false, length = 100, updatable = false)
     private String idempotencyKey;
+
+    @Column(nullable = false)
+    private boolean isDeleted = false;
 
     private Reservation(Long userId) {
         super(userId);
@@ -116,6 +124,15 @@ public class Reservation extends BaseEntity {
 
         reservationStatus = nextStatus;
         markAsUpdated(userId);
+    }
+
+    @Override
+    public void markAsDeleted(Long deletedBy, Instant deletedAt) {
+        super.markAsDeleted(deletedBy, deletedAt);
+        this.isDeleted = true;
+        reservationSeats.forEach(
+                reservationSeat -> reservationSeat.markAsDeleted(deletedBy, deletedAt)
+        );
     }
 
     private boolean canTransitTo(ReservationStatus nextStatus) {
