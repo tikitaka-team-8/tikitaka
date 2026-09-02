@@ -1,9 +1,12 @@
 package com.tikitaka.ticketing.reservation.infrastructure.adapter;
 
 import com.tikitaka.ticketing.reservation.domain.entity.Reservation;
+import com.tikitaka.ticketing.reservation.domain.enums.ReservationStatus;
 import com.tikitaka.ticketing.reservation.domain.model.ReservationSeatDetail;
 import com.tikitaka.ticketing.reservation.domain.port.ReservationRepositoryPort;
 import com.tikitaka.ticketing.reservation.infrastructure.repository.ReservationRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -26,5 +29,10 @@ public class ReservationRepositoryAdapter implements ReservationRepositoryPort {
     @Override
     public List<ReservationSeatDetail> findSeatDetailsByReservationId(UUID reservationId) {
         return reservationRepository.findSeatDetailsByReservationId(reservationId);
+    }
+
+    @Override
+    public Page<Reservation> searchReservations(Long ownerUserId, String eventTitle, ReservationStatus reservationStatus, Pageable pageable) {
+        return reservationRepository.searchReservations(ownerUserId, eventTitle, reservationStatus, pageable);
     }
 }
