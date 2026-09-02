@@ -1,17 +1,27 @@
 package com.tikitaka.ticketing.reservation.application;
 
 import com.tikitaka.ticketing.global.exception.BusinessException;
+import com.tikitaka.ticketing.global.exception.CommonErrorCode;
 import com.tikitaka.ticketing.reservation.application.command.GetReservationCommand;
+import com.tikitaka.ticketing.reservation.application.command.SearchReservationsCommand;
 import com.tikitaka.ticketing.reservation.application.result.ReservationResult;
+import com.tikitaka.ticketing.reservation.application.result.ReservationSearchResult;
 import com.tikitaka.ticketing.reservation.domain.entity.Reservation;
+import com.tikitaka.ticketing.reservation.domain.enums.ReservationStatus;
 import com.tikitaka.ticketing.reservation.domain.model.ReservationSeatDetail;
 import com.tikitaka.ticketing.reservation.domain.port.ReservationRepositoryPort;
 import com.tikitaka.ticketing.reservation.exception.ReservationErrorCode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
@@ -22,6 +32,10 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.isNull;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -128,6 +142,140 @@ class ReservationServiceTest {
         // then
         assertThat(exception.getErrorCode()).isEqualTo(ReservationErrorCode.RESERVATION_NOT_FOUND);
         verify(reservationRepositoryPort, never()).findSeatDetailsByReservationId(RESERVATION_ID);
+    }
+
+    @Test
+    void 사용자는_본인의_예매_목록을_검색한다() {
+        // given
+        Reservation reservation = createReservation();
+        Pageable requestedPageable = PageRequest.of(2, 30, Sort.by(Sort.Direction.ASC, "sessionStartAt"));
+        SearchReservationsCommand command = new SearchReservationsCommand(
+                OWNER_ID, "USER", "  테스트 공연  ", null, requestedPageable);
+        Page<Reservation> reservationPage = new PageImpl<>(List.of(reservation), requestedPageable, 61);
+
+        given(reservationRepositoryPort.searchReservations(eq(OWNER_ID), eq("테스트 공연"), isNull(), any(Pageable.class)))
+                .willReturn(reservationPage);
+
+        // when
+        Page<ReservationSearchResult> resultPage = reservationService.searchReservations(command);
+
+        // then
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(reservationRepositoryPort)
+                .searchReservations(eq(OWNER_ID), eq("테스트 공연"), isNull(), pageableCaptor.capture());
+        Pageable normalizedPageable = pageableCaptor.getValue();
+
+        assertThat(normalizedPageable.getPageNumber()).isEqualTo(2);
+        assertThat(normalizedPageable.getPageSize()).isEqualTo(30);
+        assertThat(normalizedPageable.getSort().getOrderFor("sessionStartAt")).isNotNull().satisfies(order ->
+                assertThat(order.getDirection()).isEqualTo(Sort.Direction.ASC));
+        assertThat(resultPage.getContent()).singleElement().satisfies(result -> {
+            assertThat(result.getReservationId()).isEqualTo(RESERVATION_ID);
+            assertThat(result.getUserId()).isEqualTo(OWNER_ID);
+            assertThat(result.getReservationNumber()).isEqualTo("R-20260901-0001");
+        });
+    }
+
+    @Test
+    void 관리자는_소유자_조건_없이_상태로_예매_목록을_검색한다() {
+        // given
+        Pageable pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
+        SearchReservationsCommand command = new SearchReservationsCommand(
+                OTHER_USER_ID, "ADMIN", null, "CONFIRMED", pageable);
+        Page<Reservation> reservationPage = new PageImpl<>(List.of(createReservation()), pageable, 1);
+
+        given(reservationRepositoryPort.searchReservations(isNull(), isNull(), eq(ReservationStatus.CONFIRMED),
+                any(Pageable.class))).willReturn(reservationPage);
+
+        // when
+        Page<ReservationSearchResult> resultPage = reservationService.searchReservations(command);
+
+        // then
+        assertThat(resultPage.getContent()).hasSize(1);
+        verify(reservationRepositoryPort).searchReservations(isNull(), isNull(), eq(ReservationStatus.CONFIRMED),
+                any(Pageable.class));
+    }
+
+    @Test
+    void 잘못된_페이지와_크기를_기본값으로_보정하고_빈_목록을_반환한다() {
+        // given
+        Pageable requestedPageable = mock(Pageable.class);
+        given(requestedPageable.getPageNumber()).willReturn(-1);
+        given(requestedPageable.getPageSize()).willReturn(20);
+        given(requestedPageable.getSort()).willReturn(Sort.unsorted());
+        SearchReservationsCommand command = new SearchReservationsCommand(
+                OWNER_ID, "USER", " ", " ", requestedPageable);
+        Page<Reservation> emptyPage = Page.empty(
+                PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt")));
+
+        given(reservationRepositoryPort.searchReservations(eq(OWNER_ID), isNull(), isNull(), any(Pageable.class)))
+                .willReturn(emptyPage);
+
+        // when
+        Page<ReservationSearchResult> resultPage = reservationService.searchReservations(command);
+
+        // then
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(reservationRepositoryPort).searchReservations(eq(OWNER_ID), isNull(), isNull(), pageableCaptor.capture());
+        Pageable normalizedPageable = pageableCaptor.getValue();
+
+        assertThat(normalizedPageable.getPageNumber()).isZero();
+        assertThat(normalizedPageable.getPageSize()).isEqualTo(10);
+        assertThat(normalizedPageable.getSort().getOrderFor("createdAt")).isNotNull().satisfies(order ->
+                assertThat(order.getDirection()).isEqualTo(Sort.Direction.DESC));
+        assertThat(resultPage).isEmpty();
+    }
+
+    @Test
+    void 존재하지_않는_예매_상태로는_목록을_조회할_수_없다() {
+        // given
+        SearchReservationsCommand command = new SearchReservationsCommand(
+                OWNER_ID, "USER", null, "UNKNOWN", PageRequest.of(0, 10));
+
+        // when
+        BusinessException exception = catchThrowableOfType(
+                () -> reservationService.searchReservations(command),
+                BusinessException.class
+        );
+
+        // then
+        assertThat(exception.getErrorCode()).isEqualTo(CommonErrorCode.INVALID_INPUT);
+        verify(reservationRepositoryPort, never()).searchReservations(any(), any(), any(), any());
+    }
+
+    @Test
+    void 허용하지_않는_필드로는_예매_목록을_정렬할_수_없다() {
+        // given
+        Pageable pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "totalAmount"));
+        SearchReservationsCommand command = new SearchReservationsCommand(OWNER_ID, "USER", null, null, pageable);
+
+        // when
+        BusinessException exception = catchThrowableOfType(
+                () -> reservationService.searchReservations(command),
+                BusinessException.class
+        );
+
+        // then
+        assertThat(exception.getErrorCode()).isEqualTo(CommonErrorCode.INVALID_INPUT);
+        verify(reservationRepositoryPort, never()).searchReservations(any(), any(), any(), any());
+    }
+
+    @Test
+    void 복수_정렬_조건으로는_예매_목록을_조회할_수_없다() {
+        // given
+        Sort sort = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.asc("sessionStartAt"));
+        SearchReservationsCommand command = new SearchReservationsCommand(
+                OWNER_ID, "USER", null, null, PageRequest.of(0, 10, sort));
+
+        // when
+        BusinessException exception = catchThrowableOfType(
+                () -> reservationService.searchReservations(command),
+                BusinessException.class
+        );
+
+        // then
+        assertThat(exception.getErrorCode()).isEqualTo(CommonErrorCode.INVALID_INPUT);
+        verify(reservationRepositoryPort, never()).searchReservations(any(), any(), any(), any());
     }
 
     private Reservation createReservation() {
