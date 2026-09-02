@@ -1,6 +1,7 @@
 package com.tikitaka.paymentnotification.payment.presentation;
 
 
+import com.tikitaka.paymentnotification.global.response.ApiResponse;
 import com.tikitaka.paymentnotification.payment.application.PaymentService;
 import com.tikitaka.paymentnotification.payment.application.command.PaymentCreateCommand;
 import com.tikitaka.paymentnotification.payment.application.result.PaymentCreateResult;
@@ -25,10 +26,10 @@ public class PaymentController {
     private final PaymentService paymentService;
 
     @PostMapping
-    public ResponseEntity<PaymentCreateResponse> createPayment(
-            @RequestHeader("Idempotency-Key")String idempotencyKey,
-            @Valid @RequestBody PaymentCreateRequest request){
-
+    public ResponseEntity<ApiResponse<PaymentCreateResponse>> createPayment(
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @Valid @RequestBody PaymentCreateRequest request
+    ) {
         PaymentCreateCommand command = new PaymentCreateCommand(
                 request.reservationId(),
                 request.userId(),
@@ -39,9 +40,16 @@ public class PaymentController {
         );
 
         PaymentCreateResult result = paymentService.createPayment(command);
+
+        PaymentCreateResponse response = PaymentCreateResponse.from(result);
+
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(PaymentCreateResponse.from(result));
+                .body(ApiResponse.success(
+                        HttpStatus.CREATED,
+                        "결제가 생성되었습니다.",
+                        response
+                ));
     }
 
     @PostMapping("/{paymentId}/approve")
@@ -54,7 +62,7 @@ public class PaymentController {
                 request.paymentMethod()
         );
 
-        return ResponseEntity.ok().build();
+        return ResponseEntity.noContent().build();
     }
 
 
