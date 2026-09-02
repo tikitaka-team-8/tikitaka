@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.SQLRestriction;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -32,6 +33,15 @@ public class ReservationSeat extends BaseEntity {
 
     @Column(nullable = false, updatable = false)
     private Long price;
+
+    @Column(nullable = false)
+    private boolean isDeleted = false;
+
+    @Override
+    protected void markAsDeleted(Long deletedBy, Instant deletedAt) {
+        super.markAsDeleted(deletedBy, deletedAt);
+        this.isDeleted = true;
+    }
 
 
 }

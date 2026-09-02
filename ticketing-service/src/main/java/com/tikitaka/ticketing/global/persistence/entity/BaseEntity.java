@@ -4,6 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.MappedSuperclass;
 import lombok.Getter;
+import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -19,6 +20,7 @@ public abstract class BaseEntity {
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
+    // @CreatedBy
     @Column(nullable = false, updatable = false)
     private Long createdBy;
 
@@ -26,15 +28,13 @@ public abstract class BaseEntity {
     @Column(nullable = false)
     private Instant updatedAt;
 
+    // @LastModifiedBy
     @Column(nullable = false)
     private Long updatedBy;
 
     private Instant deletedAt;
 
     private Long deletedBy;
-
-    @Column(name = "is_deleted", nullable = false)
-    private boolean deleted = false;
 
     protected BaseEntity() {
     }
@@ -49,14 +49,13 @@ public abstract class BaseEntity {
         this.updatedBy = requireUserId(updatedBy);
     }
 
-    protected final void markAsDeleted(Long deletedBy, Instant deletedAt) {
-        if (deleted) {
+    protected void markAsDeleted(Long deletedBy, Instant deletedAt) {
+        if (this.deletedAt != null) {
             throw new IllegalStateException("이미 삭제된 데이터입니다.");
         }
 
         this.deletedBy = requireUserId(deletedBy);
         this.deletedAt = requireDeletedAt(deletedAt);
-        this.deleted = true;
         this.updatedBy = this.deletedBy;
     }
 
