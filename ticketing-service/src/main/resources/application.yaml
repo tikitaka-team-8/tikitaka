@@ -4,6 +4,13 @@ server:
 spring:
   application:
     name: ticketing-service
+  cloud:
+    openfeign:
+      client:
+        config:
+          platformSalesStatusClient:
+            connectTimeout: 1000
+            readTimeout: 2000
   jpa:
     hibernate:
       ddl-auto: validate
@@ -13,6 +20,10 @@ spring:
     validate-on-migrate: true
     out-of-order: false
     clean-disabled: true
+
+clients:
+  platform-service:
+    url: ${PLATFORM_SERVICE_URL:http://localhost:8081}
 
 queue:
   admission-token-ttl: PT10M
