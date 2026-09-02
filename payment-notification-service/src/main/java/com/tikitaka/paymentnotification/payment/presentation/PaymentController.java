@@ -4,9 +4,11 @@ package com.tikitaka.paymentnotification.payment.presentation;
 import com.tikitaka.paymentnotification.global.response.ApiResponse;
 import com.tikitaka.paymentnotification.payment.application.PaymentService;
 import com.tikitaka.paymentnotification.payment.application.command.PaymentCreateCommand;
+import com.tikitaka.paymentnotification.payment.application.result.PaymentApproveResult;
 import com.tikitaka.paymentnotification.payment.application.result.PaymentCreateResult;
 import com.tikitaka.paymentnotification.payment.domain.payment.PaymentProvider;
 import com.tikitaka.paymentnotification.payment.presentation.dto.PaymentApproveRequest;
+import com.tikitaka.paymentnotification.payment.presentation.dto.PaymentApproveResponse;
 import com.tikitaka.paymentnotification.payment.presentation.dto.PaymentCreateRequest;
 import com.tikitaka.paymentnotification.payment.presentation.dto.PaymentCreateResponse;
 import jakarta.validation.Valid;
@@ -53,17 +55,23 @@ public class PaymentController {
     }
 
     @PostMapping("/{paymentId}/approve")
-    public ResponseEntity<Void> approvePayment(
+    public ResponseEntity<ApiResponse<PaymentApproveResponse>> approvePayment(
             @PathVariable UUID paymentId,
             @Valid @RequestBody PaymentApproveRequest request
     ) {
-        paymentService.approvePayment(
-                paymentId,
-                request.paymentMethod()
+        PaymentApproveResult result =
+                paymentService.approvePayment(
+                        paymentId,
+                        request.paymentMethod()
+                );
+
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        HttpStatus.OK,
+                        "결제 승인 처리가 완료되었습니다.",
+                        PaymentApproveResponse.from(result)
+                )
         );
-
-        return ResponseEntity.noContent().build();
     }
-
 
 }
