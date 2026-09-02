@@ -1,9 +1,15 @@
 package com.tikitaka.platform.auth.application;
 
+import com.tikitaka.platform.auth.exception.AuthErrorCode;
+import com.tikitaka.platform.auth.infrastructure.token.RefreshTokenRepository;
+import com.tikitaka.platform.auth.infrastructure.token.TokenProvider;
+import com.tikitaka.platform.auth.presentation.dto.AuthLoginRequest;
+import com.tikitaka.platform.auth.presentation.dto.AuthLoginResponse;
 import com.tikitaka.platform.auth.presentation.dto.AuthSignupRequest;
 import com.tikitaka.platform.auth.presentation.dto.AuthSignupResponse;
 import com.tikitaka.platform.global.exception.BusinessException;
 import com.tikitaka.platform.user.domain.User;
+import com.tikitaka.platform.user.domain.UserStatus;
 import com.tikitaka.platform.user.exception.UserErrorCode;
 import com.tikitaka.platform.user.infrastructure.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +28,8 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final TokenProvider tokenProvider;
+    private final RefreshTokenRepository refreshTokenRepository;
 
     @Transactional
     public AuthSignupResponse signUp(AuthSignupRequest request) {
@@ -42,6 +50,35 @@ public class AuthService {
         } catch (DataIntegrityViolationException exception) {
             throw translateDataIntegrityViolation(exception);
         }
+    }
+
+    public AuthLoginResponse login(AuthLoginRequest request) {
+        User user = userRepository.findByEmailIgnoreCase(request.email())
+                .orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_CREDENTIALS));
+
+        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            throw new BusinessException(AuthErrorCode.INVALID_CREDENTIALS);
+        }
+
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            throw new BusinessException(AuthErrorCode.INACTIVE_ACCOUNT);
+        }
+
+        String accessToken = tokenProvider.createAccessToken(user.getId(), user.getRole());
+        String refreshToken = tokenProvider.createRefreshToken();
+        String refreshTokenHash = tokenProvider.hashRefreshToken(refreshToken);
+
+        refreshTokenRepository.save(
+                user.getId(),
+                refreshTokenHash,
+                tokenProvider.getRefreshTokenExpiresInSeconds()
+        );
+
+        return AuthLoginResponse.of(
+                accessToken,
+                refreshToken,
+                tokenProvider.getAccessTokenExpiresInSeconds()
+        );
     }
 
     private void validateDuplicateEmail(String email) {
