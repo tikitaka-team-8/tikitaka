@@ -9,6 +9,8 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -34,6 +36,9 @@ public class Event {
   @ManyToOne(fetch = FetchType.LAZY, optional = false)
   @JoinColumn(name = "venue_id", nullable = false)
   private Venue venue;
+
+  @OneToMany(mappedBy = "event", fetch = FetchType.LAZY)
+  private List<EventSession> sessions = new ArrayList<>();
 
   @Column(name = "title", nullable = false, length = 200)
   private String title;

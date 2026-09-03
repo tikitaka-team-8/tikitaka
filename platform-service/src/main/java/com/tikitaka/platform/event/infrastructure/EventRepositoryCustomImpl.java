@@ -22,15 +22,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class EventRepositoryCustomImpl implements EventRepositoryCustom {
 
-
-  // DRAFT와 CANCELED 상태는 제외
-  private static final List<EventStatus> PUBLIC_STATUS = List.of(
-      EventStatus.UPCOMING,
-      EventStatus.ON_SALE,
-      EventStatus.SALE_CLOSED,
-      EventStatus.COMPLETED
-  );
-
   private final JPAQueryFactory queryFactory;
 
   private final QEvent event = QEvent.event;
@@ -53,7 +44,8 @@ public class EventRepositoryCustomImpl implements EventRepositoryCustom {
         .from(event)
         .join(event.venue, venue)
         .where(
-            event.status.in(PUBLIC_STATUS),
+            // DRAFT와 CANCELED 상태는 제외
+            event.status.in(EventStatus.publicStatuses()),
             titleContains(condition.keyword()),
             venueIdEq(condition.venueId())
         )
@@ -70,7 +62,8 @@ public class EventRepositoryCustomImpl implements EventRepositoryCustom {
         .select(event.count())
         .from(event)
         .where(
-            event.status.in(PUBLIC_STATUS),
+            // DRAFT와 CANCELED 상태는 제외
+            event.status.in(EventStatus.publicStatuses()),
             titleContains(condition.keyword()),
             venueIdEq(condition.venueId())
         );
