@@ -17,7 +17,8 @@ public enum ReservationErrorCode implements ErrorCode {
     RESERVATION_ALREADY_CANCELLED("R-011", HttpStatus.CONFLICT, "이미 취소된 예매입니다."),
     PAYMENT_IN_PROGRESS("R-012", HttpStatus.CONFLICT, "결제 처리 중에는 예매를 취소할 수 없습니다."),
     REFUND_REQUEST_FAILED("R-013", HttpStatus.BAD_GATEWAY, "결제 환불 요청에 실패했습니다. 잠시 후 다시 시도해주세요."),
-    INVALID_RESERVATION_STATUS_TRANSITION("R-014", HttpStatus.CONFLICT, "현재 예매 상태에서는 요청한 상태로 변경할 수 없습니다.");
+    INVALID_RESERVATION_STATUS_TRANSITION("R-014", HttpStatus.CONFLICT, "현재 예매 상태에서는 요청한 상태로 변경할 수 없습니다."),
+    RESERVATION_PAYMENT_NOT_ALLOWED("R-015", HttpStatus.CONFLICT, "현재 예매 상태에서는 결제를 진행할 수 없습니다.");
 
     private final String code;
     private final HttpStatus status;

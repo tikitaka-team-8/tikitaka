@@ -114,6 +114,12 @@ public class Reservation extends BaseEntity {
         // TODO: 예매 생성 로직 구현 시 예매-예매좌석 관련된 필드 채우는 내용 작성 예정
     }
 
+    public void validatePaymentAvailability() {
+        if (reservationStatus != ReservationStatus.PAYMENT_PROCESSING) {
+            throw new BusinessException(ReservationErrorCode.RESERVATION_PAYMENT_NOT_ALLOWED);
+        }
+    }
+
     public void updateStatus(ReservationStatus nextStatus, Long userId) {
         if (reservationStatus == nextStatus) {
             return;

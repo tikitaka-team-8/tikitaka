@@ -3,7 +3,7 @@ package com.tikitaka.ticketing.reservation.application.result;
 import com.tikitaka.ticketing.reservation.domain.entity.Reservation;
 import com.tikitaka.ticketing.reservation.domain.enums.ReservationFailureReason;
 import com.tikitaka.ticketing.reservation.domain.enums.ReservationStatus;
-import com.tikitaka.ticketing.reservation.domain.model.ReservationSeatDetail;
+import com.tikitaka.ticketing.reservation.domain.model.ReservationSeatInfo;
 import lombok.Getter;
 
 import java.time.Instant;
@@ -28,7 +28,7 @@ public class ReservationResult {
     private final Instant createdAt;
     private final List<ReservationSeatResult> seats;
 
-    public ReservationResult(Reservation reservation, List<ReservationSeatDetail> seatDetails) {
+    public ReservationResult(Reservation reservation, List<ReservationSeatInfo> seatDetails) {
         this.reservationId = reservation.getReservationId();
         this.reservationNumber = reservation.getReservationNumber();
         this.userId = reservation.getUserId();

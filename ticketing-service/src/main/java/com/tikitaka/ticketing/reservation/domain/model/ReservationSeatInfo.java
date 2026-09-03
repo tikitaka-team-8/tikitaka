@@ -2,7 +2,7 @@ package com.tikitaka.ticketing.reservation.domain.model;
 
 import java.util.UUID;
 
-public record ReservationSeatDetail(
+public record ReservationSeatInfo(
         UUID scheduleSeatId,
         String section,
         String rowLabel,
