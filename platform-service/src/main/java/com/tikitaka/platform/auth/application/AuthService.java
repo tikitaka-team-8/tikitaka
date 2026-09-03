@@ -16,6 +16,7 @@ import com.tikitaka.platform.user.domain.UserStatus;
 import com.tikitaka.platform.user.exception.UserErrorCode;
 import com.tikitaka.platform.user.infrastructure.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -24,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AuthService {
 
     private static final String USER_EMAIL_UNIQUE_CONSTRAINT = "uq_user_email_lower";
@@ -49,6 +51,7 @@ public class AuthService {
 
         try {
             User savedUser = userRepository.saveAndFlush(user);
+            log.info("회원가입 완료: userId={}", savedUser.getId());
             return AuthSignupResponse.from(savedUser);
         } catch (DataIntegrityViolationException exception) {
             throw translateDataIntegrityViolation(exception);
@@ -77,6 +80,8 @@ public class AuthService {
                 tokenProvider.getRefreshTokenExpiresInSeconds()
         );
 
+        log.info("로그인 및 토큰 발급 완료: userId={}, role={}", user.getId(), user.getRole());
+
         return AuthLoginResponse.of(
                 accessToken,
                 refreshToken,
@@ -97,6 +102,8 @@ public class AuthService {
 
         String accessToken = tokenProvider.createAccessToken(user.getId(), user.getRole());
 
+        log.info("Access Token 재발급 완료: userId={}", user.getId());
+
         return AuthReissueResponse.of(
                 accessToken,
                 request.refreshToken(),
@@ -107,6 +114,7 @@ public class AuthService {
     public void logout(Long authenticatedUserId, AuthLogoutRequest request) {
         String refreshTokenHash = tokenProvider.hashRefreshToken(request.refreshToken());
         refreshTokenRepository.deleteIfOwnedBy(authenticatedUserId, refreshTokenHash);
+        log.info("로그아웃 처리 완료: userId={}", authenticatedUserId);
     }
 
     private void validateDuplicateEmail(String email) {
