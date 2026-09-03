@@ -4,6 +4,19 @@ server:
 spring:
   application:
     name: gateway
+  cloud:
+    gateway:
+      server:
+        webmvc:
+          routes:
+            - id: platform-auth
+              uri: ${PLATFORM_SERVICE_URL:http://localhost:8081}
+              predicates:
+                - Path=/api/v1/auth/**
+
+auth:
+  token:
+    secret: ${JWT_SECRET}
 
 management:
   endpoints:
