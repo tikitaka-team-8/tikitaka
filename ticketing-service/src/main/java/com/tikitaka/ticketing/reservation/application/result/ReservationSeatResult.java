@@ -1,6 +1,6 @@
 package com.tikitaka.ticketing.reservation.application.result;
 
-import com.tikitaka.ticketing.reservation.domain.model.ReservationSeatDetail;
+import com.tikitaka.ticketing.reservation.domain.model.ReservationSeatInfo;
 import lombok.Getter;
 
 import java.util.UUID;
@@ -15,7 +15,7 @@ public class ReservationSeatResult {
     private final String seatGrade;
     private final Long price;
 
-    public ReservationSeatResult(ReservationSeatDetail seatDetail) {
+    public ReservationSeatResult(ReservationSeatInfo seatDetail) {
         this.scheduleSeatId = seatDetail.scheduleSeatId();
         this.section = seatDetail.section();
         this.rowLabel = seatDetail.rowLabel();

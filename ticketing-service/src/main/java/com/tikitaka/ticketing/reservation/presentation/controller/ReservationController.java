@@ -1,4 +1,4 @@
-package com.tikitaka.ticketing.reservation.presentation;
+package com.tikitaka.ticketing.reservation.presentation.controller;
 
 import com.tikitaka.ticketing.global.response.ApiResponse;
 import com.tikitaka.ticketing.global.response.PageMeta;
