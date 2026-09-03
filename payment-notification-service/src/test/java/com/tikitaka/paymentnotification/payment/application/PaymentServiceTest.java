@@ -1,8 +1,14 @@
 package com.tikitaka.paymentnotification.payment.application;
 
+import com.tikitaka.paymentnotification.payment.application.gateway.PaymentEventSerializer;
 import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGateway;
 import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGatewayResult;
 import com.tikitaka.paymentnotification.payment.application.result.PaymentApproveResult;
+import com.tikitaka.paymentnotification.payment.domain.event.PaymentFailedEvent;
+import com.tikitaka.paymentnotification.payment.domain.event.PaymentSucceededEvent;
+import com.tikitaka.paymentnotification.payment.domain.outbox.PaymentOutbox;
+import com.tikitaka.paymentnotification.payment.domain.outbox.PaymentOutboxRepository;
+import com.tikitaka.paymentnotification.payment.domain.outbox.PaymentOutboxStatus;
 import com.tikitaka.paymentnotification.payment.domain.payment.*;
 import com.tikitaka.paymentnotification.payment.domain.transaction.PaymentTransaction;
 import com.tikitaka.paymentnotification.payment.domain.transaction.PaymentTransactionRepository;
@@ -34,6 +40,12 @@ class PaymentServiceTest {
 
     @Mock
     private PaymentTransactionRepository paymentTransactionRepository;
+
+    @Mock
+    private PaymentOutboxRepository paymentOutboxRepository;
+
+    @Mock
+    private PaymentEventSerializer paymentEventSerializer;
 
     @InjectMocks
     private PaymentService paymentService;
@@ -67,6 +79,9 @@ class PaymentServiceTest {
                         PaymentGatewayResult.success("MOCK-success-key")
                 );
 
+        when(paymentEventSerializer.serialize(any(PaymentSucceededEvent.class)))
+                .thenReturn("{\"eventType\":\"PAYMENT_SUCCEEDED\"}");
+
         // when
         paymentService.approvePayment(
                 paymentId,
@@ -80,22 +95,45 @@ class PaymentServiceTest {
         assertThat(payment.getPaymentMethod())
                 .isEqualTo(PaymentMethod.CARD);
 
-        ArgumentCaptor<PaymentTransaction> captor =
+        ArgumentCaptor<PaymentTransaction> transactionCaptor =
                 ArgumentCaptor.forClass(PaymentTransaction.class);
 
-        verify(paymentTransactionRepository).save(captor.capture());
+        verify(paymentTransactionRepository)
+                .save(transactionCaptor.capture());
 
-        PaymentTransaction transaction = captor.getValue();
+        PaymentTransaction transaction =
+                transactionCaptor.getValue();
 
         assertThat(transaction.getStatus())
                 .isEqualTo(PaymentTransactionStatus.SUCCESS);
 
         assertThat(transaction.getTransactionType())
                 .isEqualTo(PaymentTransactionType.APPROVE);
+
+        ArgumentCaptor<PaymentOutbox> outboxCaptor =
+                ArgumentCaptor.forClass(PaymentOutbox.class);
+
+        verify(paymentOutboxRepository)
+                .save(outboxCaptor.capture());
+
+        PaymentOutbox outbox =
+                outboxCaptor.getValue();
+
+        assertThat(outbox.getEventType())
+                .isEqualTo("PAYMENT_SUCCEEDED");
+
+        assertThat(outbox.getStatus())
+                .isEqualTo(PaymentOutboxStatus.PENDING);
+
+        assertThat(outbox.getRetryCount())
+                .isZero();
+
+        assertThat(outbox.getPayment())
+                .isEqualTo(payment);
     }
 
     @Test
-    void 결제_승인에_실패하면_결제상태와_거래이력이_실패로_저장된다() {
+    void 결제_승인에_실패하면_결제상태_거래이력_Outbox가_실패로_저장된다() {
         // given
         when(paymentRepository.findById(paymentId))
                 .thenReturn(Optional.of(payment));
@@ -108,6 +146,9 @@ class PaymentServiceTest {
                         )
                 );
 
+        when(paymentEventSerializer.serialize(any(PaymentFailedEvent.class)))
+                .thenReturn("{\"eventType\":\"PAYMENT_FAILED\"}");
+
         // when
         paymentService.approvePayment(
                 paymentId,
@@ -118,12 +159,14 @@ class PaymentServiceTest {
         assertThat(payment.getStatus())
                 .isEqualTo(PaymentStatus.FAILED);
 
-        ArgumentCaptor<PaymentTransaction> captor =
+        ArgumentCaptor<PaymentTransaction> transactionCaptor =
                 ArgumentCaptor.forClass(PaymentTransaction.class);
 
-        verify(paymentTransactionRepository).save(captor.capture());
+        verify(paymentTransactionRepository)
+                .save(transactionCaptor.capture());
 
-        PaymentTransaction transaction = captor.getValue();
+        PaymentTransaction transaction =
+                transactionCaptor.getValue();
 
         assertThat(transaction.getStatus())
                 .isEqualTo(PaymentTransactionStatus.FAILED);
@@ -133,6 +176,28 @@ class PaymentServiceTest {
 
         assertThat(transaction.getFailureReason())
                 .isEqualTo("Mock PG 결제 승인 실패");
+
+        ArgumentCaptor<PaymentOutbox> outboxCaptor =
+                ArgumentCaptor.forClass(PaymentOutbox.class);
+
+        verify(paymentOutboxRepository)
+                .save(outboxCaptor.capture());
+
+        PaymentOutbox outbox =
+                outboxCaptor.getValue();
+
+        assertThat(outbox.getEventType())
+                .isEqualTo("PAYMENT_FAILED");
+
+        assertThat(outbox.getStatus())
+                .isEqualTo(PaymentOutboxStatus.PENDING);
+
+        assertThat(outbox.getRetryCount())
+                .isZero();
+
+        assertThat(outbox.getPayment())
+                .isEqualTo(payment);
+
     }
 
 

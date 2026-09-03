@@ -1,11 +1,16 @@
 package com.tikitaka.paymentnotification.payment.application;
 
 import com.tikitaka.paymentnotification.payment.application.command.PaymentCreateCommand;
+import com.tikitaka.paymentnotification.payment.application.gateway.PaymentEventSerializer;
 import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGatewayRequest;
 import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGateway;
 import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGatewayResult;
 import com.tikitaka.paymentnotification.payment.application.result.PaymentApproveResult;
 import com.tikitaka.paymentnotification.payment.application.result.PaymentCreateResult;
+import com.tikitaka.paymentnotification.payment.domain.event.PaymentFailedEvent;
+import com.tikitaka.paymentnotification.payment.domain.event.PaymentSucceededEvent;
+import com.tikitaka.paymentnotification.payment.domain.outbox.PaymentOutbox;
+import com.tikitaka.paymentnotification.payment.domain.outbox.PaymentOutboxRepository;
 import com.tikitaka.paymentnotification.payment.domain.payment.Payment;
 import com.tikitaka.paymentnotification.payment.domain.payment.PaymentMethod;
 import com.tikitaka.paymentnotification.payment.domain.payment.PaymentRepository;
@@ -28,6 +33,9 @@ public class PaymentService {
     private final PaymentRepository paymentRepository;
     private final PaymentGateway paymentGateway;
     private final PaymentTransactionRepository paymentTransactionRepository;
+
+    private final PaymentOutboxRepository paymentOutboxRepository;
+    private final PaymentEventSerializer  paymentEventSerializer;
 
 
     @Transactional
@@ -97,8 +105,11 @@ public class PaymentService {
         switch (result.status()) {
 
             case SUCCESS -> {
+
+                // Payment 승인 상태 변경
                 payment.approve(paymentMethod, result.pgPaymentKey());
 
+                // 결제 이력 저장
                 paymentTransactionRepository.save(
                         PaymentTransaction.createApproveSuccess(
                                 payment,
@@ -109,6 +120,24 @@ public class PaymentService {
                                 requestedAt
                         )
                 );
+
+                // 결제 성공 이벤트 저장
+                PaymentSucceededEvent event =
+                        PaymentSucceededEvent.from(payment);
+
+                // 이벤트 -> JSON
+                String payload =
+                        paymentEventSerializer.serialize(event);
+
+                // Outbox 생성
+                PaymentOutbox outbox =
+                        PaymentOutbox.create(
+                                payment,
+                                event.eventType(),
+                                payload
+                        );
+                // Outbox 저장
+                paymentOutboxRepository.save(outbox);
             }
 
             case FAILED -> {
@@ -125,6 +154,21 @@ public class PaymentService {
                                 requestedAt
                         )
                 );
+
+                PaymentFailedEvent event =
+                        PaymentFailedEvent.from(payment);
+
+                String payload =
+                        paymentEventSerializer.serialize(event);
+
+                PaymentOutbox outbox =
+                        PaymentOutbox.create(
+                                payment,
+                                event.eventType(),
+                                payload
+                        );
+
+                paymentOutboxRepository.save(outbox);
             }
 
 
