@@ -2,6 +2,122 @@ name: tikitaka-local
 
 services:
   # ─────────────────────────────────────────────
+  # Applications
+  # ─────────────────────────────────────────────
+
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    container_name: tikitaka-gateway
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      JWT_SECRET: ${JWT_SECRET}
+      TZ: Asia/Seoul
+    healthcheck:
+      test: [CMD-SHELL, "wget --spider --quiet http://localhost:8000/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - tikitaka-network
+
+  platform-service:
+    build:
+      context: .
+      dockerfile: platform-service/Dockerfile
+    container_name: tikitaka-platform-service
+    ports:
+      - "127.0.0.1:8081:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      PLATFORM_DB_NAME: ${PLATFORM_DB_NAME}
+      PLATFORM_DB_USERNAME: ${PLATFORM_DB_USERNAME}
+      PLATFORM_DB_PASSWORD: ${PLATFORM_DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_TOKEN_EXPIRATION: ${JWT_ACCESS_TOKEN_EXPIRATION:-15m}
+      JWT_REFRESH_TOKEN_EXPIRATION: ${JWT_REFRESH_TOKEN_EXPIRATION:-14d}
+      TZ: Asia/Seoul
+    depends_on:
+      platform-postgres:
+        condition: service_healthy
+      platform-redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD-SHELL, "wget --spider --quiet http://localhost:8081/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - tikitaka-network
+
+  ticketing-service:
+    build:
+      context: .
+      dockerfile: ticketing-service/Dockerfile
+    container_name: tikitaka-ticketing-service
+    ports:
+      - "127.0.0.1:8082:8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      TICKETING_DB_NAME: ${TICKETING_DB_NAME}
+      TICKETING_DB_USERNAME: ${TICKETING_DB_USERNAME}
+      TICKETING_DB_PASSWORD: ${TICKETING_DB_PASSWORD}
+      TZ: Asia/Seoul
+    depends_on:
+      ticketing-postgres:
+        condition: service_healthy
+      ticketing-redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD-SHELL, "wget --spider --quiet http://localhost:8082/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - tikitaka-network
+
+  payment-notification-service:
+    build:
+      context: .
+      dockerfile: payment-notification-service/Dockerfile
+    container_name: tikitaka-payment-notification-service
+    ports:
+      - "127.0.0.1:8083:8083"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      PAYMENT_DB_NAME: ${PAYMENT_DB_NAME}
+      PAYMENT_DB_USERNAME: ${PAYMENT_DB_USERNAME}
+      PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD}
+      TZ: Asia/Seoul
+    depends_on:
+      payment-postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD-SHELL, "wget --spider --quiet http://localhost:8083/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - tikitaka-network
+
+  # ─────────────────────────────────────────────
   # PostgreSQL
   # ─────────────────────────────────────────────
 
@@ -130,6 +246,23 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
+    restart: unless-stopped
+    networks:
+      - tikitaka-network
+
+  # Platform/Ticketing Redis 데이터 확인 UI
+  redisinsight:
+    image: redis/redisinsight:3.2.0
+    container_name: tikitaka-redisinsight
+    ports:
+      - "127.0.0.1:5540:5540"
+    volumes:
+      - redisinsight-data:/data
+    depends_on:
+      platform-redis:
+        condition: service_healthy
+      ticketing-redis:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - tikitaka-network
@@ -269,6 +402,7 @@ volumes:
   payment-postgres-data:
   platform-redis-data:
   ticketing-redis-data:
+  redisinsight-data:
   kafka-data:
   prometheus-data:
   grafana-data:

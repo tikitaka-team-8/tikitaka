@@ -2,3 +2,11 @@ spring:
   config:
     activate:
       on-profile: local
+
+services:
+  platform:
+    url: http://localhost:8081
+  ticketing:
+    url: http://localhost:8082
+  payment-notification:
+    url: http://localhost:8083

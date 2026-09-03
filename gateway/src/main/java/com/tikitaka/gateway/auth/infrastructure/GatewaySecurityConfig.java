@@ -58,6 +58,7 @@ public class GatewaySecurityConfig {
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/reissue"
                         ).permitAll()
+                        .requestMatchers("/api/v1/internal/**").denyAll()
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
