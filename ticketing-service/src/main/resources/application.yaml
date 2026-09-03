@@ -29,6 +29,7 @@ queue:
   admission-token-ttl: PT10M
   retention-after-sales-close: PT1H
   admission-batch-size: 50
+  expiration-batch-size: 50
   admission-interval: PT1S
 
 management:
