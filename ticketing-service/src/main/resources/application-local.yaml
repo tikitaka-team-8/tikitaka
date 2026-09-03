@@ -3,12 +3,16 @@ spring:
     activate:
       on-profile: local
   datasource:
-    url: jdbc:postgresql://${TICKETING_DB_HOST:localhost}:${TICKETING_DB_PORT:5434}/${TICKETING_DB_NAME:tikitaka_ticketing}
-    username: ${TICKETING_DB_USERNAME:ticketing}
+    url: jdbc:postgresql://localhost:5434/${TICKETING_DB_NAME}
+    username: ${TICKETING_DB_USERNAME}
     password: ${TICKETING_DB_PASSWORD}
   data:
     redis:
-      host: ${TICKETING_REDIS_HOST:localhost}
-      port: ${TICKETING_REDIS_PORT:6381}
+      host: localhost
+      port: 6381
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    bootstrap-servers: localhost:9092
+
+clients:
+  platform-service:
+    url: http://localhost:8081
