@@ -170,10 +170,6 @@ class RedisQueueRepositoryTest {
                 .containsExactly(QueueStatus.EXPIRED, expirationTime);
         assertThat(redisTemplate.opsForZSet().score("queue:active:{" + sessionId + "}", "100")).isNull();
         assertThat(queueRepository.findAdmissionTokenReference(sessionId, 100L)).isEmpty();
-        assertThat(queueRepository.findAdmissionToken(sessionId, admissionToken.token()))
-                .get()
-                .extracting(AdmissionToken::status)
-                .isEqualTo(AdmissionTokenStatus.EXPIRED);
         assertThat(queueRepository.findActiveSessionIds()).doesNotContain(sessionId);
 
         QueueEntry reentered = queueRepository.createWaitingEntryIfAbsent(

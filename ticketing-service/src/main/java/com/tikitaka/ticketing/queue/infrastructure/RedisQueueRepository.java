@@ -179,11 +179,8 @@ public class RedisQueueRepository implements QueueRepository {
                         'expiresAt', ARGV[3])
                     redis.call('ZREM', KEYS[2], ARGV[1])
                     redis.call('DEL', KEYS[3])
-                    if redis.call('EXISTS', KEYS[4]) == 1 then
-                        redis.call('HSET', KEYS[4], 'status', 'EXPIRED')
-                    end
                     if redis.call('ZCARD', KEYS[2]) == 0 then
-                        redis.call('SREM', KEYS[5], ARGV[4])
+                        redis.call('SREM', KEYS[4], ARGV[4])
                     end
                     return 1
                     """,
@@ -416,17 +413,12 @@ public class RedisQueueRepository implements QueueRepository {
 
     @Override
     public boolean expireIfAdmitted(QueueEntry expiredEntry, Instant now) {
-        String token = findAdmissionTokenReference(expiredEntry.sessionId(), expiredEntry.userId()).orElse(null);
-        String tokenKey = token == null
-                ? expiredAdmissionTokenKey(expiredEntry.sessionId(), expiredEntry.userId())
-                : admissionTokenKey(expiredEntry.sessionId(), token);
         Long expired = redisTemplate.execute(
                 EXPIRE_IF_ADMITTED_SCRIPT,
                 List.of(
                         entryKey(expiredEntry.sessionId(), expiredEntry.userId()),
                         activeKey(expiredEntry.sessionId()),
                         admissionTokenReferenceKey(expiredEntry.sessionId(), expiredEntry.userId()),
-                        tokenKey,
                         activeSessionRegistryKey()
                 ),
                 String.valueOf(expiredEntry.userId()),
@@ -523,9 +515,5 @@ public class RedisQueueRepository implements QueueRepository {
 
     private String admissionTokenReferenceKey(UUID sessionId, long userId) {
         return "queue:admission-token-ref:{" + sessionId + "}:" + userId;
-    }
-
-    private String expiredAdmissionTokenKey(UUID sessionId, long userId) {
-        return "queue:admission-token:{" + sessionId + "}:expired-" + userId;
     }
 }
