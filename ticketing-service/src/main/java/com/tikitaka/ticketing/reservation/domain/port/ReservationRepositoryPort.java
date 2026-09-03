@@ -2,7 +2,7 @@ package com.tikitaka.ticketing.reservation.domain.port;
 
 import com.tikitaka.ticketing.reservation.domain.entity.Reservation;
 import com.tikitaka.ticketing.reservation.domain.enums.ReservationStatus;
-import com.tikitaka.ticketing.reservation.domain.model.ReservationSeatDetail;
+import com.tikitaka.ticketing.reservation.domain.model.ReservationSeatInfo;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -14,7 +14,7 @@ public interface ReservationRepositoryPort {
 
     Optional<Reservation> findById(UUID reservationId);
 
-    List<ReservationSeatDetail> findSeatDetailsByReservationId(UUID reservationId);
+    List<ReservationSeatInfo> findSeatDetailsByReservationId(UUID reservationId);
 
     Page<Reservation> searchReservations(Long ownerUserId, String eventTitle, ReservationStatus reservationStatus, Pageable pageable);
 }
