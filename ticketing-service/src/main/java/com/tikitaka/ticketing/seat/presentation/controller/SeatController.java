@@ -1,16 +1,13 @@
 package com.tikitaka.ticketing.seat.presentation.controller;
 
 import com.tikitaka.ticketing.global.response.ApiResponse;
-import com.tikitaka.ticketing.queue.application.QueueService;
 import com.tikitaka.ticketing.seat.application.service.SeatService;
 import com.tikitaka.ticketing.seat.presentation.dto.response.ScheduleSeatListResponse;
 import com.tikitaka.ticketing.seat.presentation.dto.response.ScheduleSeatResponse;
-import com.tikitaka.ticketing.seat.presentation.dto.response.SeatHoldResponse;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
