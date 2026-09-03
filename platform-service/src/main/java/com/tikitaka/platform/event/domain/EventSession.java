@@ -31,7 +31,6 @@ public class EventSession {
   )
   private Event event;
 
-
   @OneToMany(
       mappedBy = "eventSession",
       cascade = CascadeType.ALL,
@@ -152,6 +151,12 @@ public class EventSession {
     this.performanceEndAt = nextPerformanceEndAt;
     this.salesOpenAt = nextSalesOpenAt;
     this.salesCloseAt = nextSalesCloseAt;
+  }
+
+
+  // 공개 회차 CANCELED 상태 제외
+  public boolean isPubliclyVisible() {
+    return status != EventSessionStatus.CANCELED;
   }
 
   // 공연 검증

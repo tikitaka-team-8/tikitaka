@@ -124,6 +124,10 @@ public class Event {
     this.status = EventStatus.UPCOMING;
   }
 
+  public boolean isPubliclyVisible() {
+    return status.isPubliclyVisible();
+  }
+
   private void validateModifiableStatus() {
     if (this.status != EventStatus.DRAFT) {
       throw new BusinessException(EventErrorCode.EVENT_NOT_MODIFIABLE);

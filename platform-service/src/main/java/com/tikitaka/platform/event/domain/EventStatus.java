@@ -20,4 +20,8 @@ public enum EventStatus {
   public static Set<EventStatus> publicStatuses() {
     return PUBLIC_STATUSES;
   }
+
+  public boolean isPubliclyVisible() {
+    return PUBLIC_STATUSES.contains(this);
+  }
 }
