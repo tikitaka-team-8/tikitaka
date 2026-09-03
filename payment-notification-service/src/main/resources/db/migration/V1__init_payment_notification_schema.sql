@@ -19,14 +19,14 @@ CREATE TABLE p_payment (
     failure_reason TEXT,
     requested_at TIMESTAMPTZ NOT NULL,
     approved_at TIMESTAMPTZ,
-    cancelled_at TIMESTAMPTZ,
+    canceled_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT pk_payment PRIMARY KEY (payment_id),
     CONSTRAINT uq_payment_order_id UNIQUE (order_id),
     CONSTRAINT uq_payment_idempotency_key UNIQUE (idempotency_key),
     CONSTRAINT ck_payment_amount CHECK (amount >= 0),
-    CONSTRAINT ck_payment_status CHECK (status IN ('READY', 'PROCESSING', 'PAID', 'FAILED', 'UNKNOWN', 'CANCELLED'))
+    CONSTRAINT ck_payment_status CHECK (status IN ('READY', 'PROCESSING', 'APPROVED', 'FAILED', 'UNKNOWN', 'CANCELED'))
 );
 
 -- 결제 조회 인덱스
