@@ -2,6 +2,7 @@ package com.tikitaka.platform.event.application;
 
 import com.tikitaka.platform.event.domain.Event;
 import com.tikitaka.platform.event.domain.EventSession;
+import com.tikitaka.platform.event.domain.EventStatus;
 import com.tikitaka.platform.event.exception.EventErrorCode;
 import com.tikitaka.platform.event.infrastructure.EventRepository;
 import com.tikitaka.platform.event.infrastructure.EventSessionRepository;
@@ -44,12 +45,16 @@ public class EventSessionService {
   }
 
   // Queue 대기열
-  public QueueSalesStatusResponse getQueueSalseStatus(UUID sessionId) {
+  public QueueSalesStatusResponse getQueueSalesStatus(UUID sessionId) {
 
     EventSession eventSession = eventSessionRepository.findById(sessionId)
         .orElseThrow(() ->
             new BusinessException(EventErrorCode.EVENT_SESSION_NOT_FOUND)
         );
+
+    if (!eventSession.getEvent().getStatus().allowsQueueSale()) {
+      throw new BusinessException(EventErrorCode.EVENT_SESSION_NOT_FOUND);
+    }
 
     return QueueSalesStatusResponse.from(eventSession);
   }

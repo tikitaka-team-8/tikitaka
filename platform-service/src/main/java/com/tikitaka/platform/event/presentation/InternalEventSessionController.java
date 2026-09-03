@@ -26,7 +26,7 @@ public class InternalEventSessionController {
   ) {
 
     QueueSalesStatusResponse response =
-        eventSessionService.getQueueSalseStatus(sessionId);
+        eventSessionService.getQueueSalesStatus(sessionId);
 
     return ResponseEntity.ok(
         ApiResponse.success(

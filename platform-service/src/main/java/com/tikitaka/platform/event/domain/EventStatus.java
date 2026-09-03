@@ -17,11 +17,20 @@ public enum EventStatus {
       COMPLETED
   );
 
+  private static final Set<EventStatus> QUEUE_SALES_STATUSES = Set.of(
+      UPCOMING,
+      ON_SALE
+  );
+
   public static Set<EventStatus> publicStatuses() {
     return PUBLIC_STATUSES;
   }
 
   public boolean isPubliclyVisible() {
     return PUBLIC_STATUSES.contains(this);
+  }
+
+  public boolean allowsQueueSale() {
+    return QUEUE_SALES_STATUSES.contains(this);
   }
 }
