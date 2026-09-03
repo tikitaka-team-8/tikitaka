@@ -2,6 +2,7 @@ package com.tikitaka.paymentnotification.payment.application;
 
 import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGateway;
 import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGatewayResult;
+import com.tikitaka.paymentnotification.payment.application.result.PaymentApproveResult;
 import com.tikitaka.paymentnotification.payment.domain.payment.*;
 import com.tikitaka.paymentnotification.payment.domain.transaction.PaymentTransaction;
 import com.tikitaka.paymentnotification.payment.domain.transaction.PaymentTransactionRepository;
@@ -147,10 +148,11 @@ class PaymentServiceTest {
                 );
 
         // when
-        paymentService.approvePayment(
-                paymentId,
-                PaymentMethod.CARD
-        );
+        PaymentApproveResult result =
+                paymentService.approvePayment(
+                        paymentId,
+                        PaymentMethod.CARD
+                );
 
         // then
         assertThat(payment.getStatus())

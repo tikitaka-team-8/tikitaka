@@ -4,6 +4,7 @@ import com.tikitaka.paymentnotification.payment.application.command.PaymentCreat
 import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGatewayRequest;
 import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGateway;
 import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGatewayResult;
+import com.tikitaka.paymentnotification.payment.application.result.PaymentApproveResult;
 import com.tikitaka.paymentnotification.payment.application.result.PaymentCreateResult;
 import com.tikitaka.paymentnotification.payment.domain.payment.Payment;
 import com.tikitaka.paymentnotification.payment.domain.payment.PaymentMethod;
@@ -68,7 +69,7 @@ public class PaymentService {
 
 
     @Transactional
-    public void approvePayment(
+    public PaymentApproveResult approvePayment(
             UUID paymentId,
             PaymentMethod paymentMethod
     ) {
@@ -76,6 +77,7 @@ public class PaymentService {
                 .orElseThrow(() -> new PaymentException(
                         PaymentErrorCode.PAYMENT_NOT_FOUND
                 ));
+
         // READY - > PROCESSING
         payment.startProcessing();
 
@@ -95,12 +97,9 @@ public class PaymentService {
         switch (result.status()) {
 
             case SUCCESS -> {
-                payment.approve(
-                        paymentMethod,
-                        result.pgPaymentKey()
-                );
+                payment.approve(paymentMethod, result.pgPaymentKey());
 
-                PaymentTransaction transaction =
+                paymentTransactionRepository.save(
                         PaymentTransaction.createApproveSuccess(
                                 payment,
                                 payment.getPaymentProvider(),
@@ -108,18 +107,14 @@ public class PaymentService {
                                 payment.getAmount(),
                                 1,
                                 requestedAt
-                        );
-
-                paymentTransactionRepository.save(transaction);
+                        )
+                );
             }
 
             case FAILED -> {
-                payment.fail(
-                        result.failureCode(),
-                        result.failureReason()
-                );
+                payment.fail(result.failureCode(), result.failureReason());
 
-                PaymentTransaction transaction =
+                paymentTransactionRepository.save(
                         PaymentTransaction.createApproveFailed(
                                 payment,
                                 payment.getPaymentProvider(),
@@ -128,26 +123,26 @@ public class PaymentService {
                                 result.failureCode(),
                                 result.failureReason(),
                                 requestedAt
-                        );
-
-                paymentTransactionRepository.save(transaction);
+                        )
+                );
             }
+
 
             case UNKNOWN -> {
                 payment.markUnknown();
 
-                PaymentTransaction transaction =
+                paymentTransactionRepository.save(
                         PaymentTransaction.createApproveUnknown(
                                 payment,
                                 payment.getPaymentProvider(),
                                 payment.getAmount(),
                                 1,
                                 requestedAt
-                        );
-
-                paymentTransactionRepository.save(transaction);
+                        )
+                );
             }
         }
+        return PaymentApproveResult.from(payment);
     }
 
 
