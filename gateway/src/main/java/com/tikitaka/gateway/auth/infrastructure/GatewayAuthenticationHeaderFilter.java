@@ -14,10 +14,13 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 public class GatewayAuthenticationHeaderFilter extends OncePerRequestFilter {
 
+    private static final Logger log = LoggerFactory.getLogger(GatewayAuthenticationHeaderFilter.class);
     private static final String USER_ID_HEADER = "X-User-Id";
     private static final String USER_ROLE_HEADER = "X-User-Role";
     private static final String ROLE_CLAIM = "role";
@@ -40,6 +43,13 @@ public class GatewayAuthenticationHeaderFilter extends OncePerRequestFilter {
             Jwt jwt = jwtAuthentication.getToken();
             userId = jwt.getSubject();
             role = jwt.getClaimAsString(ROLE_CLAIM);
+            log.info(
+                    "Gateway 인증 성공: method={}, path={}, userId={}, role={}",
+                    request.getMethod(),
+                    request.getRequestURI(),
+                    userId,
+                    role
+            );
         }
 
         filterChain.doFilter(new AuthenticationHeaderRequest(request, userId, role), response);
