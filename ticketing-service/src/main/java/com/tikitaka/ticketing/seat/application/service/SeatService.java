@@ -3,22 +3,15 @@ package com.tikitaka.ticketing.seat.application.service;
 import com.tikitaka.ticketing.global.exception.BusinessException;
 import com.tikitaka.ticketing.queue.application.QueueService;
 import com.tikitaka.ticketing.seat.domain.entity.ScheduleSeat;
-import com.tikitaka.ticketing.seat.domain.entity.SeatHold;
 import com.tikitaka.ticketing.seat.domain.repository.ScheduleSeatRepository;
 import com.tikitaka.ticketing.seat.domain.repository.SeatHoldRepository;
 import com.tikitaka.ticketing.seat.exception.SeatErrorCode;
 import com.tikitaka.ticketing.seat.presentation.dto.response.ScheduleSeatListResponse;
 import com.tikitaka.ticketing.seat.presentation.dto.response.ScheduleSeatResponse;
-import com.tikitaka.ticketing.seat.presentation.dto.response.SeatHoldResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
-import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @Service
