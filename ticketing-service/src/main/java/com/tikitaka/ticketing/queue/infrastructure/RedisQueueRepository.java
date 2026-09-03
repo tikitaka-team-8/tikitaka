@@ -105,7 +105,8 @@ public class RedisQueueRepository implements QueueRepository {
                     if redis.call('EXISTS', KEYS[1]) == 0
                         or redis.call('EXISTS', KEYS[3]) == 0
                         or redis.call('HGET', KEYS[1], 'status') ~= 'ADMITTED'
-                        or redis.call('HGET', KEYS[3], 'status') ~= 'ACTIVE' then
+                        or redis.call('HGET', KEYS[3], 'status') ~= 'ACTIVE'
+                        or redis.call('HGET', KEYS[3], 'userId') ~= ARGV[5] then
                         return 0
                     end
 

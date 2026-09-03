@@ -8,6 +8,7 @@ import com.tikitaka.ticketing.global.exception.DownstreamErrorCode;
 import com.tikitaka.ticketing.global.response.ApiErrorResponse;
 import com.tikitaka.ticketing.queue.config.QueueProperties;
 import com.tikitaka.ticketing.queue.domain.AdmissionToken;
+import com.tikitaka.ticketing.queue.domain.AdmissionTokenStatus;
 import com.tikitaka.ticketing.queue.domain.QueueEntry;
 import com.tikitaka.ticketing.queue.domain.QueueStatus;
 import com.tikitaka.ticketing.queue.exception.QueueErrorCode;
@@ -26,7 +27,7 @@ import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.stereotype.Service;
 
 @Service
-public class QueueService {
+public class QueueService implements QueueAdmissionValidator {
     private final QueueRepository queueRepository;
     private final PlatformSalesStatusClient platformSalesStatusClient;
     private final QueueProperties queueProperties;
@@ -129,6 +130,81 @@ public class QueueService {
         } catch (RedisConnectionFailureException exception) {
             throw new BusinessException(QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE);
         }
+    }
+
+    @Override
+    public void validateAndEnter(UUID sessionId, long userId, String admissionToken) {
+        try {
+            validateAndEnterInternal(sessionId, userId, admissionToken);
+        } catch (RedisConnectionFailureException exception) {
+            throw new BusinessException(QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE);
+        }
+    }
+
+    private void validateAndEnterInternal(UUID sessionId, long userId, String admissionToken) {
+        if (admissionToken == null || admissionToken.isBlank()) {
+            throw new BusinessException(QueueErrorCode.QUEUE_ACCESS_DENIED);
+        }
+
+        QueueEntry entry = queueRepository.findEntry(sessionId, userId)
+                .orElseThrow(() -> new BusinessException(QueueErrorCode.QUEUE_ACCESS_DENIED));
+        AdmissionToken token = queueRepository.findAdmissionToken(sessionId, admissionToken)
+                .orElseThrow(() -> new BusinessException(QueueErrorCode.QUEUE_ACCESS_DENIED));
+
+        if (!isOwnedBy(token, sessionId, userId)) {
+            throw new BusinessException(QueueErrorCode.QUEUE_ACCESS_DENIED);
+        }
+
+        Instant now = Instant.now(clock);
+        // Preserve idempotency only when duplicate first-access requests use the still-valid token.
+        if (entry.status() == QueueStatus.ENTERED
+                && token.status() == AdmissionTokenStatus.USED
+                && token.expiresAt().isAfter(now)) {
+            return;
+        }
+
+        if (entry.status() != QueueStatus.ADMITTED
+                || token.status() != AdmissionTokenStatus.ACTIVE
+                || !token.expiresAt().isAfter(now)) {
+            throw new BusinessException(QueueErrorCode.QUEUE_ACCESS_DENIED);
+        }
+
+        if (queueRepository.enterIfAdmissionTokenActive(entry.enter(), token)) {
+            return;
+        }
+
+        // A simultaneous first Seat request may already have completed the transition.
+        if (isAlreadyEntered(sessionId, userId, admissionToken)) {
+            return;
+        }
+        throw new BusinessException(QueueErrorCode.QUEUE_ACCESS_DENIED);
+    }
+
+    @Override
+    public void validateEntered(UUID sessionId, long userId) {
+        try {
+            QueueEntry entry = queueRepository.findEntry(sessionId, userId)
+                    .orElseThrow(() -> new BusinessException(QueueErrorCode.QUEUE_ACCESS_DENIED));
+            if (entry.status() != QueueStatus.ENTERED) {
+                throw new BusinessException(QueueErrorCode.QUEUE_ACCESS_DENIED);
+            }
+        } catch (RedisConnectionFailureException exception) {
+            throw new BusinessException(QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE);
+        }
+    }
+
+    private boolean isOwnedBy(AdmissionToken token, UUID sessionId, long userId) {
+        return token.sessionId().equals(sessionId) && token.userId() == userId;
+    }
+
+    private boolean isAlreadyEntered(UUID sessionId, long userId, String admissionToken) {
+        Optional<QueueEntry> entry = queueRepository.findEntry(sessionId, userId);
+        Optional<AdmissionToken> token = queueRepository.findAdmissionToken(sessionId, admissionToken);
+        return entry.map(QueueEntry::status).filter(QueueStatus.ENTERED::equals).isPresent()
+                && token.filter(value -> isOwnedBy(value, sessionId, userId))
+                .map(AdmissionToken::status)
+                .filter(AdmissionTokenStatus.USED::equals)
+                .isPresent();
     }
 
     private PlatformSalesStatus getSalesStatus(UUID sessionId) {
