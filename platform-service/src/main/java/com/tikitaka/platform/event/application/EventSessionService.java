@@ -6,6 +6,7 @@ import com.tikitaka.platform.event.exception.EventErrorCode;
 import com.tikitaka.platform.event.infrastructure.EventRepository;
 import com.tikitaka.platform.event.infrastructure.EventSessionRepository;
 import com.tikitaka.platform.event.presentation.dto.PublicEventSessionDetailResponse;
+import com.tikitaka.platform.event.presentation.dto.QueueSalesStatusResponse;
 import com.tikitaka.platform.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -40,5 +41,16 @@ public class EventSessionService {
         );
 
     return PublicEventSessionDetailResponse.from(session);
+  }
+
+  // Queue 대기열
+  public QueueSalesStatusResponse getQueueSalseStatus(UUID sessionId) {
+
+    EventSession eventSession = eventSessionRepository.findById(sessionId)
+        .orElseThrow(() ->
+            new BusinessException(EventErrorCode.EVENT_SESSION_NOT_FOUND)
+        );
+
+    return QueueSalesStatusResponse.from(eventSession);
   }
 }
