@@ -62,7 +62,7 @@ class QueueServiceTest {
         queueService = new QueueService(
                 queueRepository,
                 platformSalesStatusClient,
-                new QueueProperties(Duration.ofMinutes(10), Duration.ofHours(1)),
+                new QueueProperties(Duration.ofMinutes(10), Duration.ofHours(1), 50),
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 new ObjectMapper()
         );
@@ -101,7 +101,7 @@ class QueueServiceTest {
         QueueService serviceWithAdvancingClock = new QueueService(
                 queueRepository,
                 platformSalesStatusClient,
-                new QueueProperties(Duration.ofMinutes(10), Duration.ofHours(1)),
+                new QueueProperties(Duration.ofMinutes(10), Duration.ofHours(1), 50),
                 advancingClock,
                 new ObjectMapper()
         );
@@ -258,6 +258,35 @@ class QueueServiceTest {
         QueueEntry result = queueService.getEntry(SESSION_ID, USER_ID);
 
         assertThat(result).isEqualTo(entry);
+    }
+
+    @Test
+    void WAITING_상태_조회는_현재_순번을_반환한다() {
+        QueueEntry entry = waitingEntry(5L);
+        when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.of(entry));
+        when(queueRepository.findWaitingPosition(SESSION_ID, USER_ID)).thenReturn(Optional.of(3L));
+
+        QueueStatusResult result = queueService.getQueueStatus(SESSION_ID, USER_ID);
+
+        assertThat(result.entry()).isEqualTo(entry);
+        assertThat(result.position()).isEqualTo(3L);
+        assertThat(result.admissionToken()).isNull();
+        verify(queueRepository, never()).admitIfWaiting(any(), any(), any(), any());
+    }
+
+    @Test
+    void ADMITTED_상태_조회는_입장_토큰을_반환한다() {
+        QueueEntry entry = waitingEntry(5L).admit(NOW.minusSeconds(1));
+        AdmissionToken token = activeAdmissionToken(USER_ID);
+        when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.of(entry));
+        when(queueRepository.findAdmissionTokenReference(SESSION_ID, USER_ID)).thenReturn(Optional.of(token.token()));
+        when(queueRepository.findAdmissionToken(SESSION_ID, token.token())).thenReturn(Optional.of(token));
+
+        QueueStatusResult result = queueService.getQueueStatus(SESSION_ID, USER_ID);
+
+        assertThat(result.position()).isNull();
+        assertThat(result.admissionToken()).isEqualTo(token);
+        verify(queueRepository, never()).admitIfWaiting(any(), any(), any(), any());
     }
 
     @Test
