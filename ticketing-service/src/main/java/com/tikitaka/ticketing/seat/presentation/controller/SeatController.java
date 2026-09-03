@@ -4,6 +4,8 @@ import com.tikitaka.ticketing.global.response.ApiResponse;
 import com.tikitaka.ticketing.seat.application.service.SeatService;
 import com.tikitaka.ticketing.seat.presentation.dto.response.ScheduleSeatListResponse;
 import com.tikitaka.ticketing.seat.presentation.dto.response.ScheduleSeatResponse;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -16,13 +18,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class SeatController {
 
-    // TODO 사용자 권한 검증
-    // - X-User-Id / X-User-Role 검증
-    // - USER / ADMIN 권한에 따른 조회 범위 제한
-
-    // TODO 대기열 검증
-    // - 대기열 검증 메서드 구현 완료 시 연동
-    // - 좌석 조회 시 대기열 검증 후 선점 진행
+    private static final String USER_ID_HEADER = "X-User-Id";
+    private static final String QUEUE_TOKEN_HEADER = "X-Queue-Token";
+    private static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
 
     private final SeatService seatService;
 
@@ -30,8 +28,16 @@ public class SeatController {
     public ApiResponse<ScheduleSeatListResponse> getSeatList(
             @PathVariable UUID eventSessionId,
             @RequestParam(required = false) String section,
-            @RequestParam(required = false) String grade){
-        ScheduleSeatListResponse response = seatService.getSeatList(eventSessionId,section,grade);
+            @RequestParam(required = false) String grade,
+            @RequestHeader(USER_ID_HEADER) @Positive Long userId,
+            @RequestHeader(QUEUE_TOKEN_HEADER) @NotBlank String queueToken){
+        ScheduleSeatListResponse response = seatService.getSeatList(
+                eventSessionId,
+                section,
+                grade,
+                userId,
+                queueToken
+        );
         return ApiResponse.success(
                 HttpStatus.OK,
                 "조회가 완료되었습니다.",
@@ -42,14 +48,39 @@ public class SeatController {
     @GetMapping("/{eventSessionId}/seats/{scheduleSeatId}")
     public ApiResponse<ScheduleSeatResponse> getSeatDetail(
             @PathVariable UUID eventSessionId,
-            @PathVariable UUID scheduleSeatId
+            @PathVariable UUID scheduleSeatId,
+            @RequestHeader(USER_ID_HEADER) @Positive Long userId
             ){
-        ScheduleSeatResponse response = seatService.getSeatDetail(eventSessionId,scheduleSeatId);
+        ScheduleSeatResponse response = seatService.getSeatDetail(
+                eventSessionId,
+                scheduleSeatId,
+                userId
+        );
         return ApiResponse.success(
                 HttpStatus.OK,
                 "조회가 완료되었습니다.",
                 response
         );
     }
+
+//    @PostMapping("/{eventSessionId}/seats/{scheduleSeatId}/hold")
+//    public ApiResponse<SeatHoldResponse> holdSeat(
+//            @PathVariable UUID eventSessionId,
+//            @PathVariable UUID scheduleSeatId,
+//            @RequestHeader(USER_ID_HEADER) @Positive Long userId,
+//            @RequestHeader(IDEMPOTENCY_KEY_HEADER) @NotBlank String idempotencyKey
+//    ) {
+//        SeatHoldResponse response = seatService.holdSeat(
+//                eventSessionId,
+//                scheduleSeatId,
+//                userId,
+//                idempotencyKey
+//        );
+//        return ApiResponse.success(
+//                        HttpStatus.CREATED,
+//                        "좌석 선점이 완료되었습니다.",
+//                        response
+//                );
+//    }
 
 }
