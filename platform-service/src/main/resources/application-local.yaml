@@ -3,12 +3,12 @@ spring:
     activate:
       on-profile: local
   datasource:
-    url: jdbc:postgresql://${PLATFORM_DB_HOST:localhost}:${PLATFORM_DB_PORT:5433}/${PLATFORM_DB_NAME:tikitaka_platform}
-    username: ${PLATFORM_DB_USERNAME:platform}
+    url: jdbc:postgresql://localhost:5433/${PLATFORM_DB_NAME}
+    username: ${PLATFORM_DB_USERNAME}
     password: ${PLATFORM_DB_PASSWORD}
   data:
     redis:
-      host: ${PLATFORM_REDIS_HOST:localhost}
-      port: ${PLATFORM_REDIS_PORT:6380}
+      host: localhost
+      port: 6380
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    bootstrap-servers: localhost:9092
