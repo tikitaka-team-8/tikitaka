@@ -12,6 +12,7 @@ import com.tikitaka.platform.user.presentation.dto.UserProfileResponse;
 import com.tikitaka.platform.user.presentation.dto.UserProfileUpdateRequest;
 import com.tikitaka.platform.user.presentation.dto.UserProfileUpdateResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -21,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+@Slf4j
 public class UserService {
 
     private static final String USER_NICKNAME_UNIQUE_CONSTRAINT = "uq_user_nickname";
@@ -32,6 +34,7 @@ public class UserService {
     public UserProfileResponse getMyProfile(Long authenticatedUserId) {
         User user = getActiveUser(authenticatedUserId);
 
+        log.debug("회원 정보 조회 완료: userId={}", authenticatedUserId);
         return UserProfileResponse.from(user);
     }
 
@@ -66,6 +69,7 @@ public class UserService {
 
         try {
             User savedUser = userRepository.saveAndFlush(user);
+            log.info("회원 정보 수정 완료: userId={}", authenticatedUserId);
             return UserProfileUpdateResponse.from(savedUser);
         } catch (DataIntegrityViolationException exception) {
             throw translateDataIntegrityViolation(exception);
@@ -96,6 +100,7 @@ public class UserService {
         user.changePassword(passwordEncoder.encode(request.newPassword()));
         userRepository.saveAndFlush(user);
         refreshTokenRepository.deleteAllByUserId(authenticatedUserId);
+        log.info("비밀번호 변경 및 Refresh Token 전체 폐기 완료: userId={}", authenticatedUserId);
     }
 
     private RuntimeException translateDataIntegrityViolation(
