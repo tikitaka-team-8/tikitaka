@@ -35,4 +35,35 @@ public class Venue {
 
   @Column(name = "active", nullable = false)
   private boolean active = true;
+
+  private Venue(
+      String name,
+      String postalCode,
+      String address,
+      String addressDetail,
+      String contactPhone
+  ) {
+
+    this.name = name;
+    this.postalCode = postalCode;
+    this.address = address;
+    this.addressDetail = addressDetail;
+    this.contactPhone = contactPhone;
+  }
+
+  public static Venue create(
+      String name,
+      String postalCode,
+      String address,
+      String addressDetail,
+      String contactPhone
+  ) {
+    return new Venue(
+        name,
+        postalCode,
+        address,
+        addressDetail,
+        contactPhone
+    );
+  }
 }
