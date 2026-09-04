@@ -1,0 +1,2 @@
+ALTER TABLE p_event_session
+  ADD COLUMN queue_enabled BOOLEAN NOT NULL DEFAULT FALSE;
