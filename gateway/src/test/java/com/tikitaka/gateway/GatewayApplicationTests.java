@@ -18,6 +18,9 @@ class GatewayApplicationTests {
 	@DynamicPropertySource
 	static void registerTestProperties(DynamicPropertyRegistry registry) {
 		registry.add("auth.token.secret", () -> TEST_ONLY_DUMMY_JWT_SECRET);
+		registry.add("services.platform.url", () -> "http://localhost:8081");
+		registry.add("services.ticketing.url", () -> "http://localhost:8082");
+		registry.add("services.payment-notification.url", () -> "http://localhost:8083");
 	}
 
 	@Test

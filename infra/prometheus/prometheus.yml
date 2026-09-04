@@ -1,4 +1,4 @@
-# 로컬에서 실행되는 각 Spring Boot 서비스의 Actuator 메트릭 수집
+# 호스트 또는 Docker Compose에서 실행되는 각 Spring Boot 서비스의 Actuator 메트릭 수집
 
 # 메트릭 수집 및 규칙 평가 기본 주기
 global:
