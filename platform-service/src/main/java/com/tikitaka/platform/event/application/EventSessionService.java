@@ -11,6 +11,7 @@ import com.tikitaka.platform.event.presentation.dto.QueueSalesStatusResponse;
 import com.tikitaka.platform.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
@@ -45,6 +46,7 @@ public class EventSessionService {
   }
 
   // Queue 대기열
+  @Transactional(readOnly = true)
   public QueueSalesStatusResponse getQueueSalesStatus(UUID sessionId) {
 
     EventSession eventSession = eventSessionRepository.findById(sessionId)
