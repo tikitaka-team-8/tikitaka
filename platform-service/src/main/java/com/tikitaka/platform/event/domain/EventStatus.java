@@ -22,6 +22,10 @@ public enum EventStatus {
       ON_SALE
   );
 
+  private static final Set<EventStatus> RESERVABLE_STATUSES = Set.of(
+      ON_SALE
+  );
+
   public static Set<EventStatus> publicStatuses() {
     return PUBLIC_STATUSES;
   }
@@ -32,5 +36,9 @@ public enum EventStatus {
 
   public boolean allowsQueueSale() {
     return QUEUE_SALES_STATUSES.contains(this);
+  }
+
+  public boolean isReservable() {
+    return RESERVABLE_STATUSES.contains(this);
   }
 }

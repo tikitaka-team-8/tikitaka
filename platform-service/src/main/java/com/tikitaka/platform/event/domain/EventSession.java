@@ -206,4 +206,12 @@ public class EventSession {
       throw new BusinessException(EventErrorCode.EVENT_SESSION_MODIFICATION_NOT_ALLOWED);
     }
   }
+
+
+  // 예매가 가능한 시간인지
+  public boolean isReservableAt(OffsetDateTime now) {
+    return status.isReservable()
+        && !now.isBefore(salesOpenAt)
+        && now.isBefore(salesCloseAt);
+  }
 }
