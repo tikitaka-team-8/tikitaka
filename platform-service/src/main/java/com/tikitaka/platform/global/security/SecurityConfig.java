@@ -1,4 +1,4 @@
-package com.tikitaka.platform.auth.infrastructure;
+package com.tikitaka.platform.global.security;
 
 import com.tikitaka.platform.auth.infrastructure.security.GatewayAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
@@ -14,7 +14,7 @@ import org.springframework.security.web.SecurityFilterChain;
 public class SecurityConfig {
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception { 
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 // JWT 기반 Stateless 인증 설정
                 .csrf(AbstractHttpConfigurer::disable)
