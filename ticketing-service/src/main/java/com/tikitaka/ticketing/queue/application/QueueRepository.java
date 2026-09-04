@@ -20,7 +20,11 @@ public interface QueueRepository {
 
     Set<UUID> findWaitingSessionIds();
 
+    Set<UUID> findActiveSessionIds();
+
     void registerWaitingSession(UUID sessionId);
+
+    boolean removeActiveSessionIfEmpty(UUID sessionId);
 
     boolean removeWaitingSessionIfEmpty(UUID sessionId);
 
@@ -46,6 +50,10 @@ public interface QueueRepository {
     );
 
     boolean enterIfAdmissionTokenActive(QueueEntry enteredEntry, AdmissionToken admissionToken);
+
+    List<QueueEntry> findExpiredAdmittedEntries(UUID sessionId, Instant now, int limit);
+
+    boolean expireIfAdmitted(QueueEntry expiredEntry, Instant now);
 
     void removeWaitingUser(UUID sessionId, long userId);
 

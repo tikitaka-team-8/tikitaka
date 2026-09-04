@@ -44,6 +44,50 @@ public class QueueAdmissionService {
         }
     }
 
+    public void expireAdmittedUsers() {
+        try {
+            for (UUID sessionId : queueRepository.findActiveSessionIds()) {
+                try {
+                    expireAdmittedUsers(sessionId);
+                } catch (RedisConnectionFailureException exception) {
+                    throw exception;
+                } catch (RuntimeException exception) {
+                    log.error("Queue expiration failed for sessionId={}", sessionId, exception);
+                }
+            }
+        } catch (RedisConnectionFailureException exception) {
+            log.warn("Queue expiration skipped because Redis is unavailable", exception);
+        }
+    }
+
+    private void expireAdmittedUsers(UUID sessionId) {
+        Instant now = Instant.now(clock);
+        var expiredEntries = queueRepository.findExpiredAdmittedEntries(
+                sessionId,
+                now,
+                queueProperties.expirationBatchSize()
+        );
+        if (expiredEntries.isEmpty()) {
+            queueRepository.removeActiveSessionIfEmpty(sessionId);
+            return;
+        }
+
+        for (QueueEntry entry : expiredEntries) {
+            try {
+                queueRepository.expireIfAdmitted(entry.expire(now), now);
+            } catch (RedisConnectionFailureException exception) {
+                throw exception;
+            } catch (RuntimeException exception) {
+                log.error(
+                        "Queue expiration failed for sessionId={}, userId={}",
+                        entry.sessionId(),
+                        entry.userId(),
+                        exception
+                );
+            }
+        }
+    }
+
     private void admitWaitingUsers(UUID sessionId) {
         var waitingEntries = queueRepository.findWaitingEntries(sessionId, queueProperties.admissionBatchSize());
         if (waitingEntries.isEmpty()) {
