@@ -74,10 +74,6 @@ public class QueueService implements QueueAdmissionValidator {
             }
             return existingEntry.get();
         }
-        if (existingEntry.isPresent() && existingEntry.get().status() == QueueStatus.EXPIRED) {
-            queueRepository.deleteEntry(sessionId, userId);
-        }
-
         PlatformSalesStatus salesStatus = getSalesStatus(sessionId);
         Instant now = Instant.now(clock);
         validateSellableSession(salesStatus, now);

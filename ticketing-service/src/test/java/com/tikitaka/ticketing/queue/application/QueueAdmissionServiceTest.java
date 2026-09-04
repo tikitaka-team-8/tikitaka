@@ -39,7 +39,7 @@ class QueueAdmissionServiceTest {
     void setUp() {
         queueAdmissionService = new QueueAdmissionService(
                 queueRepository,
-                new QueueProperties(Duration.ofMinutes(10), Duration.ofHours(1), 50),
+                new QueueProperties(Duration.ofMinutes(10), Duration.ofHours(1), 50, 50),
                 Clock.fixed(NOW, ZoneOffset.UTC)
         );
     }
@@ -113,6 +113,42 @@ class QueueAdmissionServiceTest {
                 eq(Duration.ofHours(2)),
                 eq(Duration.ofMinutes(10))
         );
+    }
+
+    @Test
+    void 만료된_ADMITTED_사용자를_EXPIRED로_전환한다() {
+        QueueEntry admittedEntry = waitingEntry(100L, 1L).admit(NOW.minus(Duration.ofMinutes(10)));
+        when(queueRepository.findActiveSessionIds()).thenReturn(Set.of(SESSION_ID));
+        when(queueRepository.findExpiredAdmittedEntries(SESSION_ID, NOW, 50)).thenReturn(List.of(admittedEntry));
+
+        queueAdmissionService.expireAdmittedUsers();
+
+        verify(queueRepository).expireIfAdmitted(admittedEntry.expire(NOW), NOW);
+    }
+
+    @Test
+    void 만료_대상이_없는_회차는_active_registry_정리를_시도한다() {
+        when(queueRepository.findActiveSessionIds()).thenReturn(Set.of(SESSION_ID));
+        when(queueRepository.findExpiredAdmittedEntries(SESSION_ID, NOW, 50)).thenReturn(List.of());
+
+        queueAdmissionService.expireAdmittedUsers();
+
+        verify(queueRepository).removeActiveSessionIfEmpty(SESSION_ID);
+    }
+
+    @Test
+    void 한_사용자_만료_처리_실패가_다른_사용자_처리를_막지_않는다() {
+        QueueEntry failedEntry = waitingEntry(100L, 1L).admit(NOW.minus(Duration.ofMinutes(10)));
+        QueueEntry succeedingEntry = waitingEntry(200L, 2L).admit(NOW.minus(Duration.ofMinutes(10)));
+        when(queueRepository.findActiveSessionIds()).thenReturn(Set.of(SESSION_ID));
+        when(queueRepository.findExpiredAdmittedEntries(SESSION_ID, NOW, 50))
+                .thenReturn(List.of(failedEntry, succeedingEntry));
+        when(queueRepository.expireIfAdmitted(failedEntry.expire(NOW), NOW))
+                .thenThrow(new IllegalStateException("invalid entry"));
+
+        queueAdmissionService.expireAdmittedUsers();
+
+        verify(queueRepository).expireIfAdmitted(succeedingEntry.expire(NOW), NOW);
     }
 
     private QueueEntry waitingEntry(long userId, long sequence) {
