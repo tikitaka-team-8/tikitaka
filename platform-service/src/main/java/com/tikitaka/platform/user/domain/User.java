@@ -85,6 +85,10 @@ public class User {
         this.phone = phone;
     }
 
+    public void changePassword(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
+
     @PrePersist
     private void prePersist() {
         Instant now = Instant.now();

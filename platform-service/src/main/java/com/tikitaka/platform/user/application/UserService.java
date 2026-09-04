@@ -1,17 +1,20 @@
 package com.tikitaka.platform.user.application;
 
 import com.tikitaka.platform.auth.exception.AuthErrorCode;
+import com.tikitaka.platform.auth.infrastructure.token.RefreshTokenRepository;
 import com.tikitaka.platform.global.exception.BusinessException;
 import com.tikitaka.platform.user.domain.User;
 import com.tikitaka.platform.user.domain.UserStatus;
 import com.tikitaka.platform.user.exception.UserErrorCode;
 import com.tikitaka.platform.user.infrastructure.UserRepository;
+import com.tikitaka.platform.user.presentation.dto.UserPasswordUpdateRequest;
 import com.tikitaka.platform.user.presentation.dto.UserProfileResponse;
 import com.tikitaka.platform.user.presentation.dto.UserProfileUpdateRequest;
 import com.tikitaka.platform.user.presentation.dto.UserProfileUpdateResponse;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +26,8 @@ public class UserService {
     private static final String USER_NICKNAME_UNIQUE_CONSTRAINT = "uq_user_nickname";
 
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final RefreshTokenRepository refreshTokenRepository;
 
     public UserProfileResponse getMyProfile(Long authenticatedUserId) {
         User user = getActiveUser(authenticatedUserId);
@@ -65,6 +70,32 @@ public class UserService {
         } catch (DataIntegrityViolationException exception) {
             throw translateDataIntegrityViolation(exception);
         }
+    }
+
+    @Transactional
+    public void changePassword(
+            Long authenticatedUserId,
+            UserPasswordUpdateRequest request
+    ) {
+        User user = getActiveUser(authenticatedUserId);
+
+        if (!passwordEncoder.matches(
+                request.currentPassword(),
+                user.getPasswordHash()
+        )) {
+            throw new BusinessException(UserErrorCode.CURRENT_PASSWORD_MISMATCH);
+        }
+
+        if (passwordEncoder.matches(
+                request.newPassword(),
+                user.getPasswordHash()
+        )) {
+            throw new BusinessException(UserErrorCode.INVALID_INPUT);
+        }
+
+        user.changePassword(passwordEncoder.encode(request.newPassword()));
+        userRepository.saveAndFlush(user);
+        refreshTokenRepository.deleteAllByUserId(authenticatedUserId);
     }
 
     private RuntimeException translateDataIntegrityViolation(

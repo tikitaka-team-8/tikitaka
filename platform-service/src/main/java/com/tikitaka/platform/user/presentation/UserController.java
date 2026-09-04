@@ -3,6 +3,7 @@ package com.tikitaka.platform.user.presentation;
 import com.tikitaka.platform.auth.infrastructure.security.AuthenticatedUser;
 import com.tikitaka.platform.global.response.ApiResponse;
 import com.tikitaka.platform.user.application.UserService;
+import com.tikitaka.platform.user.presentation.dto.UserPasswordUpdateRequest;
 import com.tikitaka.platform.user.presentation.dto.UserProfileResponse;
 import com.tikitaka.platform.user.presentation.dto.UserProfileUpdateRequest;
 import com.tikitaka.platform.user.presentation.dto.UserProfileUpdateResponse;
@@ -48,5 +49,15 @@ public class UserController {
                 PROFILE_UPDATE_SUCCESS_MESSAGE,
                 response
         ));
+    }
+
+    @PutMapping("/me/password")
+    public ResponseEntity<Void> changePassword(
+            @AuthenticationPrincipal AuthenticatedUser authenticatedUser,
+            @Valid @RequestBody UserPasswordUpdateRequest request
+    ) {
+        userService.changePassword(authenticatedUser.userId(), request);
+
+        return ResponseEntity.noContent().build();
     }
 }

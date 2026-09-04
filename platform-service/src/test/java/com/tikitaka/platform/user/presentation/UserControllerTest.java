@@ -32,6 +32,8 @@ import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -210,6 +212,83 @@ class UserControllerTest {
         mockMvc.perform(patch("/api/v1/users/me")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"수정 이름\"}"))
+                .andExpect(status().is4xxClientError());
+
+        then(userService).shouldHaveNoInteractions();
+    }
+
+    @Test
+    void 인증된_회원의_비밀번호를_변경한다() throws Exception {
+        Long userId = 1L;
+
+        mockMvc.perform(put("/api/v1/users/me/password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "currentPassword": "OldP@ssw0rd!",
+                                  "newPassword": "NewP@ssw0rd!"
+                                }
+                                """)
+                        .with(authentication(authenticationOf(userId))))
+                .andExpect(status().isNoContent())
+                .andExpect(content().string(""));
+
+        then(userService).should().changePassword(
+                eq(userId),
+                argThat(request ->
+                        request.currentPassword().equals("OldP@ssw0rd!")
+                                && request.newPassword().equals("NewP@ssw0rd!")
+                )
+        );
+    }
+
+    @Test
+    void 새_비밀번호_형식이_올바르지_않으면_C_002가_발생한다() throws Exception {
+        Long userId = 1L;
+
+        mockMvc.perform(put("/api/v1/users/me/password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "currentPassword": "OldP@ssw0rd!",
+                                  "newPassword": "password"
+                                }
+                                """)
+                        .with(authentication(authenticationOf(userId))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("C-002"))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.errors.newPassword").exists());
+
+        then(userService).shouldHaveNoInteractions();
+    }
+
+    @Test
+    void 현재_비밀번호가_누락되면_C_002가_발생한다() throws Exception {
+        Long userId = 1L;
+
+        mockMvc.perform(put("/api/v1/users/me/password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"newPassword\":\"NewP@ssw0rd!\"}")
+                        .with(authentication(authenticationOf(userId))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("C-002"))
+                .andExpect(jsonPath("$.errors.currentPassword")
+                        .value("현재 비밀번호는 필수입니다."));
+
+        then(userService).shouldHaveNoInteractions();
+    }
+
+    @Test
+    void 인증되지_않은_비밀번호_변경_요청은_거부된다() throws Exception {
+        mockMvc.perform(put("/api/v1/users/me/password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "currentPassword": "OldP@ssw0rd!",
+                                  "newPassword": "NewP@ssw0rd!"
+                                }
+                                """))
                 .andExpect(status().is4xxClientError());
 
         then(userService).shouldHaveNoInteractions();

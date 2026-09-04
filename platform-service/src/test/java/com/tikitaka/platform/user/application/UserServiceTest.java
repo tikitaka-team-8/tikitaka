@@ -5,11 +5,13 @@ import java.time.Instant;
 import java.util.Optional;
 
 import com.tikitaka.platform.auth.exception.AuthErrorCode;
+import com.tikitaka.platform.auth.infrastructure.token.RefreshTokenRepository;
 import com.tikitaka.platform.global.exception.BusinessException;
 import com.tikitaka.platform.user.domain.User;
 import com.tikitaka.platform.user.domain.UserStatus;
 import com.tikitaka.platform.user.exception.UserErrorCode;
 import com.tikitaka.platform.user.infrastructure.UserRepository;
+import com.tikitaka.platform.user.presentation.dto.UserPasswordUpdateRequest;
 import com.tikitaka.platform.user.presentation.dto.UserProfileResponse;
 import com.tikitaka.platform.user.presentation.dto.UserProfileUpdateRequest;
 import com.tikitaka.platform.user.presentation.dto.UserProfileUpdateResponse;
@@ -20,6 +22,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -27,12 +30,19 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
 class UserServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private PasswordEncoder passwordEncoder;
+
+    @Mock
+    private RefreshTokenRepository refreshTokenRepository;
 
     @InjectMocks
     private UserService userService;
@@ -171,6 +181,91 @@ class UserServiceTest {
 
         assertThat(exception.getErrorCode())
                 .isEqualTo(UserErrorCode.NICKNAME_ALREADY_EXISTS);
+    }
+
+    @Test
+    void 현재_비밀번호가_일치하면_암호화된_새_비밀번호로_변경한다() {
+        Long userId = 1L;
+        User user = createUser(
+                userId,
+                UserStatus.ACTIVE,
+                Instant.parse("2026-09-04T02:00:00Z")
+        );
+        UserPasswordUpdateRequest request = new UserPasswordUpdateRequest(
+                "OldP@ssw0rd!",
+                "NewP@ssw0rd!"
+        );
+        given(userRepository.findById(userId)).willReturn(Optional.of(user));
+        given(passwordEncoder.matches("OldP@ssw0rd!", "encoded-password"))
+                .willReturn(true);
+        given(passwordEncoder.matches("NewP@ssw0rd!", "encoded-password"))
+                .willReturn(false);
+        given(passwordEncoder.encode("NewP@ssw0rd!"))
+                .willReturn("encoded-new-password");
+        given(userRepository.saveAndFlush(user)).willReturn(user);
+
+        userService.changePassword(userId, request);
+
+        assertThat(user.getPasswordHash()).isEqualTo("encoded-new-password");
+        assertThat(user.getPasswordHash()).isNotEqualTo("NewP@ssw0rd!");
+        then(userRepository).should().saveAndFlush(user);
+        then(refreshTokenRepository).should().deleteAllByUserId(userId);
+    }
+
+    @Test
+    void 현재_비밀번호가_일치하지_않으면_U_005가_발생한다() {
+        Long userId = 1L;
+        User user = createUser(
+                userId,
+                UserStatus.ACTIVE,
+                Instant.parse("2026-09-04T02:00:00Z")
+        );
+        UserPasswordUpdateRequest request = new UserPasswordUpdateRequest(
+                "WrongP@ssw0rd!",
+                "NewP@ssw0rd!"
+        );
+        given(userRepository.findById(userId)).willReturn(Optional.of(user));
+        given(passwordEncoder.matches("WrongP@ssw0rd!", "encoded-password"))
+                .willReturn(false);
+
+        BusinessException exception = catchThrowableOfType(
+                () -> userService.changePassword(userId, request),
+                BusinessException.class
+        );
+
+        assertThat(exception.getErrorCode())
+                .isEqualTo(UserErrorCode.CURRENT_PASSWORD_MISMATCH);
+        assertThat(user.getPasswordHash()).isEqualTo("encoded-password");
+        then(userRepository).should(never()).saveAndFlush(any(User.class));
+        then(refreshTokenRepository).shouldHaveNoInteractions();
+    }
+
+    @Test
+    void 새_비밀번호가_현재_비밀번호와_같으면_U_003이_발생한다() {
+        Long userId = 1L;
+        User user = createUser(
+                userId,
+                UserStatus.ACTIVE,
+                Instant.parse("2026-09-04T02:00:00Z")
+        );
+        UserPasswordUpdateRequest request = new UserPasswordUpdateRequest(
+                "SameP@ssw0rd!",
+                "SameP@ssw0rd!"
+        );
+        given(userRepository.findById(userId)).willReturn(Optional.of(user));
+        given(passwordEncoder.matches("SameP@ssw0rd!", "encoded-password"))
+                .willReturn(true);
+
+        BusinessException exception = catchThrowableOfType(
+                () -> userService.changePassword(userId, request),
+                BusinessException.class
+        );
+
+        assertThat(exception.getErrorCode()).isEqualTo(UserErrorCode.INVALID_INPUT);
+        assertThat(user.getPasswordHash()).isEqualTo("encoded-password");
+        then(passwordEncoder).should(never()).encode(any());
+        then(userRepository).should(never()).saveAndFlush(any(User.class));
+        then(refreshTokenRepository).shouldHaveNoInteractions();
     }
 
     private void assertInactiveAccount(UserStatus status) {
