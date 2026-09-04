@@ -24,4 +24,15 @@ public interface EventSessionRepository extends JpaRepository<EventSession,UUID>
       @Param("sessionId") UUID sessionId,
       @Param("eventId") UUID eventId
   );
+
+  @Query("""
+      SELECT es
+      FROM EventSession es
+      JOIN FETCH es.event
+      WHERE es.id = :eventSessionId
+      
+  """)
+  Optional<EventSession> findByIdWithEvent(
+      @Param("eventSessionId") UUID eventSessionId
+  );
 }

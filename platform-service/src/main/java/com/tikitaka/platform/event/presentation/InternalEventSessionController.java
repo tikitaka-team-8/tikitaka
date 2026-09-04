@@ -1,11 +1,9 @@
 package com.tikitaka.platform.event.presentation;
 
 import com.tikitaka.platform.event.application.EventSessionService;
+import com.tikitaka.platform.event.presentation.dto.EventSessionInfoResponse;
 import com.tikitaka.platform.event.presentation.dto.QueueSalesStatusResponse;
-import com.tikitaka.platform.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -25,5 +23,12 @@ public class InternalEventSessionController {
       @PathVariable UUID sessionId
   ) {
     return eventSessionService.getQueueSalesStatus(sessionId);
+  }
+
+  @GetMapping("/{eventSessionId}/reservation-info")
+  public EventSessionInfoResponse getReservationInfo(
+      @PathVariable UUID eventSessionId
+  ) {
+    return eventSessionService.getReservationInfo(eventSessionId);
   }
 }

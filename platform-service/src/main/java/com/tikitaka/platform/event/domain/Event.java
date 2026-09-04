@@ -124,6 +124,17 @@ public class Event {
     this.status = EventStatus.UPCOMING;
   }
 
+  // 공연 예매중
+  public void openSales() {
+
+    // TODO: 검증 필요
+    if (status != EventStatus.UPCOMING) {
+      throw new BusinessException(EventErrorCode.INVALID_EVENT_STATUS);
+    }
+
+    status = EventStatus.ON_SALE;
+  }
+
   public boolean isPubliclyVisible() {
     return status.isPubliclyVisible();
   }
@@ -139,4 +150,7 @@ public class Event {
       throw new BusinessException(EventErrorCode.INVALID_EVENT_STATUS);
     }
   }
+
+
+
 }
