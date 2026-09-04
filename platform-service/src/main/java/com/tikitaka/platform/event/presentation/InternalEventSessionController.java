@@ -21,19 +21,9 @@ public class InternalEventSessionController {
   private final EventSessionService eventSessionService;
 
   @GetMapping("/{sessionId}/sales-status")
-  public ResponseEntity<ApiResponse<QueueSalesStatusResponse>> getQueueSalseStatus(
+  public QueueSalesStatusResponse getQueueSalseStatus(
       @PathVariable UUID sessionId
   ) {
-
-    QueueSalesStatusResponse response =
-        eventSessionService.getQueueSalesStatus(sessionId);
-
-    return ResponseEntity.ok(
-        ApiResponse.success(
-            HttpStatus.OK,
-            "대기열 진입 회차 정보를 조회했습니다.",
-            response
-        )
-    );
+    return eventSessionService.getQueueSalesStatus(sessionId);
   }
 }
