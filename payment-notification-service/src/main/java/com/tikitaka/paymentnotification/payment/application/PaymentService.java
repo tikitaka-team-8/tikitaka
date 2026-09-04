@@ -2,11 +2,12 @@ package com.tikitaka.paymentnotification.payment.application;
 
 import com.tikitaka.paymentnotification.payment.application.command.PaymentCreateCommand;
 import com.tikitaka.paymentnotification.payment.application.gateway.PaymentEventSerializer;
-import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGatewayRequest;
 import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGateway;
+import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGatewayRequest;
 import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGatewayResult;
 import com.tikitaka.paymentnotification.payment.application.result.PaymentApproveResult;
 import com.tikitaka.paymentnotification.payment.application.result.PaymentCreateResult;
+import com.tikitaka.paymentnotification.payment.application.result.PaymentDetailResult;
 import com.tikitaka.paymentnotification.payment.domain.event.PaymentFailedEvent;
 import com.tikitaka.paymentnotification.payment.domain.event.PaymentSucceededEvent;
 import com.tikitaka.paymentnotification.payment.domain.outbox.PaymentOutbox;
@@ -36,6 +37,29 @@ public class PaymentService {
 
     private final PaymentOutboxRepository paymentOutboxRepository;
     private final PaymentEventSerializer  paymentEventSerializer;
+
+
+    // 결제 정보 단건 조회
+    public PaymentDetailResult getPaymentById(UUID payment_id){
+        Payment payment = paymentRepository.findById(payment_id).orElseThrow(()->
+                new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
+
+        return PaymentDetailResult.from(payment);
+    }
+
+    // 예매별 결제 조회
+    public PaymentDetailResult getPaymentByReservationId(UUID reservationId){
+        Payment payment = paymentRepository.findByReservationId(reservationId).orElseThrow(()->
+                new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
+
+        return PaymentDetailResult.from(payment);
+    }
+
+
+
+
+
+
 
 
     @Transactional

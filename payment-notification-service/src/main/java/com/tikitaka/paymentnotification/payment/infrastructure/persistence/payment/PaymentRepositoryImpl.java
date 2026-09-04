@@ -28,4 +28,9 @@ public class PaymentRepositoryImpl implements PaymentRepository {
         return paymentJpaRepository.findByIdempotencyKey(idempotencyKey);
     }
 
+    @Override
+    public Optional<Payment> findByReservationId(UUID reservationId) {
+        return paymentJpaRepository.findByReservationId(reservationId);
+    }
+
 }

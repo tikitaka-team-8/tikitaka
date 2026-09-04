@@ -6,11 +6,9 @@ import com.tikitaka.paymentnotification.payment.application.PaymentService;
 import com.tikitaka.paymentnotification.payment.application.command.PaymentCreateCommand;
 import com.tikitaka.paymentnotification.payment.application.result.PaymentApproveResult;
 import com.tikitaka.paymentnotification.payment.application.result.PaymentCreateResult;
+import com.tikitaka.paymentnotification.payment.application.result.PaymentDetailResult;
 import com.tikitaka.paymentnotification.payment.domain.payment.PaymentProvider;
-import com.tikitaka.paymentnotification.payment.presentation.dto.PaymentApproveRequest;
-import com.tikitaka.paymentnotification.payment.presentation.dto.PaymentApproveResponse;
-import com.tikitaka.paymentnotification.payment.presentation.dto.PaymentCreateRequest;
-import com.tikitaka.paymentnotification.payment.presentation.dto.PaymentCreateResponse;
+import com.tikitaka.paymentnotification.payment.presentation.dto.*;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -26,6 +24,43 @@ public class PaymentController {
 
 
     private final PaymentService paymentService;
+
+
+    //-------------------------------------------------------------------//
+
+
+    @GetMapping("/{paymentId}")
+    public ResponseEntity<ApiResponse<PaymentDetailResponse>> getPaymentById(@PathVariable UUID  paymentId){
+
+        PaymentDetailResult result = paymentService.getPaymentById(paymentId);
+
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        HttpStatus.OK,
+                        "결제 단건 조회성공.",
+                        PaymentDetailResponse.from(result)
+                )
+        );
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    //-------------------------------------------------------------------//
 
     @PostMapping
     public ResponseEntity<ApiResponse<PaymentCreateResponse>> createPayment(
