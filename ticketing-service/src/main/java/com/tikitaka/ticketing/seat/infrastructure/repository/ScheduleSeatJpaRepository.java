@@ -1,8 +1,12 @@
 package com.tikitaka.ticketing.seat.infrastructure.repository;
 
 import com.tikitaka.ticketing.seat.domain.entity.ScheduleSeat;
+import jakarta.persistence.LockModeType;
+import jakarta.persistence.QueryHint;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
@@ -33,6 +37,24 @@ public interface ScheduleSeatJpaRepository extends JpaRepository<ScheduleSeat, U
           AND s.scheduleSeatId = :scheduleSeatId
     """)
     Optional<ScheduleSeat> findSeatDetail(
+            @Param("eventSessionId") UUID eventSessionId,
+            @Param("scheduleSeatId") UUID scheduleSeatId
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @QueryHints(
+            @QueryHint(
+                    name = "jakarta.persistence.lock.timeout",
+                    value = "3000"
+            )
+    )
+    @Query("""
+        SELECT s
+        FROM ScheduleSeat s
+        WHERE s.eventSessionId = :eventSessionId
+          AND s.scheduleSeatId = :scheduleSeatId
+    """)
+    Optional<ScheduleSeat> findByIdForUpdate(
             @Param("eventSessionId") UUID eventSessionId,
             @Param("scheduleSeatId") UUID scheduleSeatId
     );

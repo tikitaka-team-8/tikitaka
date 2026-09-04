@@ -29,4 +29,9 @@ public class ScheduleSeatRepositoryAdapter implements ScheduleSeatRepository {
     public Optional<ScheduleSeat> findSeatDetail(UUID eventSessionId, UUID scheduleSeatId) {
         return jpaRepository.findSeatDetail(eventSessionId,scheduleSeatId);
     }
+
+    @Override
+    public Optional<ScheduleSeat> findByIdForUpdate(UUID eventSessionId, UUID scheduleSeatId) {
+        return jpaRepository.findByIdForUpdate(eventSessionId, scheduleSeatId);
+    }
 }
