@@ -2,6 +2,7 @@ package com.tikitaka.ticketing.reservation.application;
 
 import com.tikitaka.ticketing.global.exception.BusinessException;
 import com.tikitaka.ticketing.global.exception.CommonErrorCode;
+import com.tikitaka.ticketing.reservation.application.command.CreateReservationCommand;
 import com.tikitaka.ticketing.reservation.application.command.GetReservationCommand;
 import com.tikitaka.ticketing.reservation.application.command.PaymentValidationCommand;
 import com.tikitaka.ticketing.reservation.application.command.SearchReservationsCommand;
@@ -10,6 +11,7 @@ import com.tikitaka.ticketing.reservation.application.result.ReservationResult;
 import com.tikitaka.ticketing.reservation.application.result.ReservationSearchResult;
 import com.tikitaka.ticketing.reservation.domain.entity.Reservation;
 import com.tikitaka.ticketing.reservation.domain.enums.ReservationStatus;
+import com.tikitaka.ticketing.reservation.domain.model.ReservationCreationSeatInfo;
 import com.tikitaka.ticketing.reservation.domain.model.ReservationSeatInfo;
 import com.tikitaka.ticketing.reservation.domain.model.SeatHoldValidationInfo;
 import com.tikitaka.ticketing.reservation.domain.port.ReservationRepositoryPort;
@@ -102,6 +104,22 @@ public class ReservationService {
         return new PaymentValidationResult(reservation);
     }
 
+    @Transactional
+    public void createReservation(CreateReservationCommand command) {
+
+        // 예매 생성용 좌석 정보 조회 및 검증
+        List<ReservationCreationSeatInfo> seatInfos =
+                findValidatedCreationSeats(command.getLoginUserId(), command.getSeatHoldIds());
+
+        // 예매 생성에 사용할 공연 회차, 좌석 수, 총금액 확정
+        UUID eventSessionId = resolveEventSessionId(seatInfos);
+        int seatCount = seatInfos.size();
+        long totalAmount = calculateTotalAmount(seatInfos);
+
+        // TODO: 공연 회차 정보 조회 내부 API 호출 (Reservation -> Platform Service)
+            // 응답 값 바탕으로 예매 엔티티 생성 흐름 작성
+    }
+
     private void validateReadAuthority(GetReservationCommand command, Reservation reservation) {
         if (ADMIN_ROLE.equals(command.getUserRole())) {
             return;
@@ -139,6 +157,84 @@ public class ReservationService {
         if (seatHolds.stream().anyMatch(seatHold -> !seatHold.expiresAt().isAfter(now))) {
             throw new BusinessException(ReservationErrorCode.SEAT_HOLD_EXPIRED);
         }
+    }
+
+    // 예매 생성 요청에 포함된 좌석 선점 ID 검증
+    private void validateRequestedSeatHoldIds(List<UUID> seatHoldIds) {
+        if (seatHoldIds == null || seatHoldIds.isEmpty() || seatHoldIds.stream().anyMatch(seatHoldId -> seatHoldId == null)) {
+            throw new BusinessException(ReservationErrorCode.INVALID_INPUT);
+        }
+        if (seatHoldIds.stream().distinct().count() != seatHoldIds.size()) {
+            throw new BusinessException(ReservationErrorCode.INVALID_INPUT);
+        }
+    }
+
+    // 예매 생성용 좌석 정보를 조회하고 검증
+    private List<ReservationCreationSeatInfo> findValidatedCreationSeats(Long loginUserId, List<UUID> seatHoldIds) {
+        validateRequestedSeatHoldIds(seatHoldIds);
+
+        List<ReservationCreationSeatInfo> seatInfos =
+                seatHoldQueryPort.findCreationInfosBySeatHoldIds(seatHoldIds);
+        validateCreationSeats(loginUserId, seatHoldIds, seatInfos);
+
+        return seatInfos;
+    }
+
+    // 조회된 좌석 정보가 예매 생성 조건을 충족하는지 검증
+    private void validateCreationSeats(Long loginUserId, List<UUID> seatHoldIds, List<ReservationCreationSeatInfo> seatInfos) {
+
+        // 요청한 좌석 선점 정보가 모두 조회되었는지 검증
+        Set<UUID> foundSeatHoldIds = seatInfos.stream()
+                .map(ReservationCreationSeatInfo::seatHoldId).collect(Collectors.toSet());
+
+        if (foundSeatHoldIds.size() != seatHoldIds.size() || !foundSeatHoldIds.containsAll(seatHoldIds)) {
+            throw new BusinessException(ReservationErrorCode.SEAT_HOLD_NOT_FOUND);
+        }
+
+        // 좌석 선점 소유자 검증
+        if (seatInfos.stream().anyMatch(seatInfo -> !Objects.equals(seatInfo.userId(), loginUserId))) {
+            throw new BusinessException(ReservationErrorCode.SEAT_HOLD_OWNERSHIP_REQUIRED);
+        }
+
+        // 좌석 선점 상태 검증
+        if (seatInfos.stream().anyMatch(seatInfo -> seatInfo.holdStatus() != HoldStatus.HOLDING)) {
+            throw new BusinessException(ReservationErrorCode.INVALID_SEAT_HOLD_STATUS);
+        }
+
+        // 좌석 선점 만료 여부 검증
+        OffsetDateTime now = OffsetDateTime.now();
+        if (seatInfos.stream().anyMatch(seatInfo -> !seatInfo.expiresAt().isAfter(now))) {
+            throw new BusinessException(ReservationErrorCode.SEAT_HOLD_EXPIRED);
+        }
+
+        // 모든 좌석이 동일한 공연 회차인지 검증
+        validateSingleEventSession(seatInfos);
+
+        // 이미 예매에 사용된 좌석 선점인지 검증
+        List<UUID> usedSeatHoldIds = reservationRepositoryPort.findUsedSeatHoldIds(seatHoldIds);
+        if (!usedSeatHoldIds.isEmpty()) {
+            throw new BusinessException(ReservationErrorCode.RESERVATION_ALREADY_EXISTS);
+        }
+    }
+
+    // 조회된 좌석이 하나의 공연 회차에 속하는지 검증
+    private void validateSingleEventSession(List<ReservationCreationSeatInfo> seatInfos) {
+        Set<UUID> eventSessionIds = seatInfos.stream()
+                .map(ReservationCreationSeatInfo::eventSessionId).collect(Collectors.toSet());
+
+        if (eventSessionIds.size() != 1 || eventSessionIds.contains(null)) {
+            throw new BusinessException(ReservationErrorCode.INVALID_INPUT);
+        }
+    }
+
+    // 예매 대상 공연 회차 ID 추출
+    private UUID resolveEventSessionId(List<ReservationCreationSeatInfo> seatInfos) {
+        return seatInfos.get(0).eventSessionId();
+    }
+
+    // 예매 총금액 계산
+    private long calculateTotalAmount(List<ReservationCreationSeatInfo> seatInfos) {
+        return seatInfos.stream().mapToLong(ReservationCreationSeatInfo::price).sum();
     }
 
     private Long resolveOwnerUserId(SearchReservationsCommand command) {

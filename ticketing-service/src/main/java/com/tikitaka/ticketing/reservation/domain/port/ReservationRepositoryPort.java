@@ -16,6 +16,8 @@ public interface ReservationRepositoryPort {
 
     Optional<Reservation> findByUserIdAndIdempotencyKey(Long userId, String idempotencyKey);
 
+    List<UUID> findUsedSeatHoldIds(List<UUID> seatHoldIds);
+
     List<ReservationSeatInfo> findSeatDetailsByReservationId(UUID reservationId);
 
     Page<Reservation> searchReservations(Long ownerUserId, String eventTitle, ReservationStatus reservationStatus, Pageable pageable);

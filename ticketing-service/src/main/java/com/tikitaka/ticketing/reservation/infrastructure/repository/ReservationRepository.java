@@ -31,6 +31,13 @@ public interface ReservationRepository extends JpaRepository<Reservation, UUID> 
     List<ReservationCreationSeatInfo> findCreationInfosBySeatHoldIds(List<UUID> seatHoldIds);
 
     @Query("""
+            SELECT rs.seatHoldId
+            FROM ReservationSeat rs
+            WHERE rs.seatHoldId IN :seatHoldIds
+            """)
+    List<UUID> findUsedSeatHoldIds(List<UUID> seatHoldIds);
+
+    @Query("""
             SELECT new com.tikitaka.ticketing.reservation.domain.model.ReservationSeatInfo(
                     ss.scheduleSeatId, ss.section, ss.rowLabel, ss.seatNumber, ss.seatGrade, rs.price
             )
