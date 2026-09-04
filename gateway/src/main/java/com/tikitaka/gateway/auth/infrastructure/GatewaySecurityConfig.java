@@ -47,18 +47,29 @@ public class GatewaySecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
+                        // 모니터링 엔드포인트 - 인증 없이 접근 허용
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/actuator/health",
                                 "/actuator/health/**",
                                 "/actuator/prometheus"
                         ).permitAll()
+                        // Auth API - 비로그인 사용자 접근 허용
                         .requestMatchers(HttpMethod.POST,
                                 "/api/v1/auth/signup",
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/reissue"
                         ).permitAll()
+                        // Event 조회 API - 비로그인 사용자 접근 허용
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/events",
+                                "/api/v1/events/*",
+                                "/api/v1/events/*/sessions/*"
+                        ).permitAll()
+                        // 내부 API - Gateway 외부 요청 차단
                         .requestMatchers("/api/v1/internal/**").denyAll()
+                        // 그 외 API - 인증된 사용자만 접근 허용
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
