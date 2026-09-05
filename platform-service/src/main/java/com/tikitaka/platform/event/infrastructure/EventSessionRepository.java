@@ -35,4 +35,12 @@ public interface EventSessionRepository extends JpaRepository<EventSession,UUID>
   Optional<EventSession> findByIdWithEvent(
       @Param("eventSessionId") UUID eventSessionId
   );
+
+  @Query("""
+      select coalesce(max(es.sessionNumber), 0)
+      FROM EventSession  es
+      WHERE es.event.id = :eventId
+  """)
+  int findMaxSessionNumber(
+      @Param("eventId") UUID eventId);
 }

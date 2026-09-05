@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/organizer/me/events")
+@RequestMapping("/api/v1/organizers/me/events")
 public class OrganizerEventController {
 
   private final EventService eventService;
@@ -20,7 +20,7 @@ public class OrganizerEventController {
   @PostMapping
   // TODO 인가처리
   public ResponseEntity<ApiResponse<EventCreateResponse>> createEvent(
-      @RequestHeader("X-User_Id") Long userId,
+      @RequestHeader("X-User-Id") Long userId,
       @Valid @RequestBody EventCreateRequest request
   ) {
 
@@ -30,7 +30,7 @@ public class OrganizerEventController {
         .status(HttpStatus.CREATED)
         .body(ApiResponse.success(
             HttpStatus.CREATED,
-            "공연 등록외 완료되었습니다.",
+            "공연 등록 완료되었습니다.",
             response
         ));
   }

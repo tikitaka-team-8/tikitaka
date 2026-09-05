@@ -73,9 +73,7 @@ public class EventService {
         );
 
     // Active 상태인지
-    if (!organizer.isActive()) {
-      throw new BusinessException(OrganizerErrorCode.INACTIVE_ORGANIZER);
-    }
+    organizer.validateActive();
 
     Venue venue = venueRepository.findById(request.venueId())
         .orElseThrow(() ->

@@ -5,10 +5,11 @@ import com.tikitaka.platform.event.domain.EventSession;
 import com.tikitaka.platform.event.exception.EventErrorCode;
 import com.tikitaka.platform.event.infrastructure.EventRepository;
 import com.tikitaka.platform.event.infrastructure.EventSessionRepository;
-import com.tikitaka.platform.event.presentation.dto.EventSessionInfoResponse;
-import com.tikitaka.platform.event.presentation.dto.PublicEventSessionDetailResponse;
-import com.tikitaka.platform.event.presentation.dto.QueueSalesStatusResponse;
+import com.tikitaka.platform.event.presentation.dto.*;
 import com.tikitaka.platform.global.exception.BusinessException;
+import com.tikitaka.platform.organizer.domain.Organizer;
+import com.tikitaka.platform.organizer.exception.OrganizerErrorCode;
+import com.tikitaka.platform.organizer.infrastructure.OrganizerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +24,7 @@ public class EventSessionService {
 
   private final EventRepository eventRepository;
   private final EventSessionRepository eventSessionRepository;
+  private final OrganizerRepository organizerRepository;
 
   public PublicEventSessionDetailResponse getPublicEventSession(
       UUID eventId,
@@ -72,6 +74,62 @@ public class EventSessionService {
     // 예매가 가능한지 검증
     validateReservable(eventSession);
     return EventSessionInfoResponse.from(eventSession);
+  }
+
+  // 회차 생성
+  @Transactional
+  public EventSessionCreateResponse createEventSession(
+      Long userId,
+      UUID eventId,
+      EventSessionCreateRequest request
+  ) {
+
+    Organizer organizer = organizerRepository.findByUserId(userId)
+        .orElseThrow(() ->
+            new BusinessException(OrganizerErrorCode.ORGANIZER_NOT_FOUND)
+        );
+
+    Event event = eventRepository.findByIdAndOrganizerId(eventId, organizer.getId())
+        .orElseThrow(() ->
+          new BusinessException(EventErrorCode.EVENT_NOT_FOUND)
+        );
+
+    // Active 상태인지
+    organizer.validateActive();
+
+    // DRAFT 상태에서만 가능
+    event.validateSessionCreatable();
+    // 시간 검증
+    validateTime(request);
+
+    // number 확인
+    int nextSessionNumber =
+        eventSessionRepository.findMaxSessionNumber(eventId) + 1;
+
+    EventSession eventSession = EventSession.create(
+        event,
+        nextSessionNumber,
+        request.performanceStartAt(),
+        request.performanceEndAt(),
+        request.salesOpenAt(),
+        request.salesCloseAt(),
+        request.queueEnabled()
+    );
+    EventSession savedSession = eventSessionRepository.save(eventSession);
+
+    return EventSessionCreateResponse.from(savedSession);
+  }
+
+  private void validateTime(EventSessionCreateRequest request) {
+    boolean invalid =
+        !request.performanceStartAt().isBefore(request.performanceEndAt())
+            || !request.salesOpenAt().isBefore(request.salesCloseAt())
+            || request.salesCloseAt().isAfter(request.performanceStartAt())
+            || !OffsetDateTime.now().isBefore(request.salesOpenAt());
+
+    if (invalid) {
+      throw new BusinessException(EventErrorCode.INVALID_EVENT_SCHEDULE);
+    }
   }
 
   private void validateReservable(EventSession eventSession) {

@@ -135,6 +135,16 @@ public class Organizer {
     }
   }
 
+  public boolean isActive() {
+    return this.status == OrganizerStatus.ACTIVE;
+  }
+
+  public void validateActive() {
+    if (!isActive()) {
+      throw new BusinessException(OrganizerErrorCode.INACTIVE_ORGANIZER);
+    }
+  }
+
   private void validateTransition(OrganizerStatus targetStatus) {
     boolean allowed = switch (this.status) {
       case PENDING -> targetStatus == OrganizerStatus.ACTIVE
@@ -148,9 +158,5 @@ public class Organizer {
     if (!allowed) {
       throw new BusinessException(OrganizerErrorCode.INVALID_STATUS_TRANSITION);
     }
-  }
-
-  public boolean isActive() {
-    return this.status == OrganizerStatus.ACTIVE;
   }
 }
