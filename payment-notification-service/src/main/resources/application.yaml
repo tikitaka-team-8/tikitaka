@@ -23,3 +23,10 @@ management:
     health:
       probes:
         enabled: true
+
+service:
+  ticketing:
+    url: ${TICKETING_SERVICE_URL:http://localhost:8082}
+
+internal:
+  ticketing-service-key: ${TICKETING_SERVICE_KEY:test-service-key}
