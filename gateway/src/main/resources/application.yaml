@@ -4,6 +4,75 @@ server:
 spring:
   application:
     name: gateway
+  cloud:
+    gateway:
+      server:
+        webmvc:
+          routes:
+            - id: platform-auth
+              uri: ${services.platform.url}
+              predicates:
+                - Path=/api/v1/auth/**
+            - id: platform-users
+              uri: ${services.platform.url}
+              predicates:
+                - Path=/api/v1/users/**
+            - id: platform-admin-users
+              uri: ${services.platform.url}
+              predicates:
+                - Path=/api/v1/admin/users/**
+            - id: platform-organizers
+              uri: ${services.platform.url}
+              predicates:
+                - Path=/api/v1/organizers/**
+            - id: platform-events
+              uri: ${services.platform.url}
+              predicates:
+                - Path=/api/v1/events/**
+            - id: platform-event-sessions
+              uri: ${services.platform.url}
+              predicates:
+                - Path=/api/v1/event-sessions/*,/api/v1/event-sessions/*/status,/api/v1/event-sessions/*/section-prices
+            - id: platform-venues
+              uri: ${services.platform.url}
+              predicates:
+                - Path=/api/v1/venues/**
+            - id: platform-venue-sections
+              uri: ${services.platform.url}
+              predicates:
+                - Path=/api/v1/venue-sections/**
+            - id: platform-venue-seats
+              uri: ${services.platform.url}
+              predicates:
+                - Path=/api/v1/venue-seats/**
+            - id: ticketing-queue
+              uri: ${services.ticketing.url}
+              predicates:
+                - Path=/api/v1/event-sessions/*/queue/**
+            - id: ticketing-schedules
+              uri: ${services.ticketing.url}
+              predicates:
+                - Path=/api/v1/schedules/**
+            - id: ticketing-reservations
+              uri: ${services.ticketing.url}
+              predicates:
+                - Path=/api/v1/reservations/**
+            - id: ticketing-seat-holds
+              uri: ${services.ticketing.url}
+              predicates:
+                - Path=/api/v1/seat-holds/**
+            - id: payment
+              uri: ${services.payment-notification.url}
+              predicates:
+                - Path=/api/v1/payments/**
+            - id: notifications
+              uri: ${services.payment-notification.url}
+              predicates:
+                - Path=/api/v1/notifications/**
+
+auth:
+  token:
+    secret: ${JWT_SECRET}
 
 management:
   endpoints:

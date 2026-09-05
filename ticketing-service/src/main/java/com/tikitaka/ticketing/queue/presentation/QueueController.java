@@ -2,7 +2,7 @@ package com.tikitaka.ticketing.queue.presentation;
 
 import com.tikitaka.ticketing.global.response.ApiResponse;
 import com.tikitaka.ticketing.queue.application.QueueService;
-import com.tikitaka.ticketing.queue.domain.QueueEntry;
+import com.tikitaka.ticketing.queue.application.QueueStatusResult;
 import jakarta.validation.constraints.Positive;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -24,21 +24,22 @@ public class QueueController {
         this.queueService = queueService;
     }
 
-    @PostMapping("/queues/sessions/{sessionId}/entries")
+    @PostMapping("/event-sessions/{sessionId}/queue")
     public ApiResponse<QueueEntryResponse> enterQueue(
             @PathVariable UUID sessionId,
             @RequestHeader("X-User-Id") @Positive long userId
     ) {
-        QueueEntry entry = queueService.enterQueue(sessionId, userId);
-        return ApiResponse.success(HttpStatus.OK, "대기열에 진입했습니다.", QueueEntryResponse.from(entry));
+        queueService.enterQueue(sessionId, userId);
+        QueueStatusResult result = queueService.getQueueStatus(sessionId, userId);
+        return ApiResponse.success(HttpStatus.OK, "대기열에 진입했습니다.", QueueEntryResponse.from(result));
     }
 
-    @GetMapping("/queues/sessions/{sessionId}/entries/me")
+    @GetMapping("/event-sessions/{sessionId}/queue/me")
     public ApiResponse<QueueEntryResponse> getMyQueueEntry(
             @PathVariable UUID sessionId,
             @RequestHeader("X-User-Id") @Positive long userId
     ) {
-        QueueEntry entry = queueService.getEntry(sessionId, userId);
-        return ApiResponse.success(HttpStatus.OK, "대기열 상태를 조회했습니다.", QueueEntryResponse.from(entry));
+        QueueStatusResult result = queueService.getQueueStatus(sessionId, userId);
+        return ApiResponse.success(HttpStatus.OK, "대기열 상태를 조회했습니다.", QueueEntryResponse.from(result));
     }
 }

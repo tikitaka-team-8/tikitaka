@@ -6,11 +6,27 @@ import com.tikitaka.ticketing.queue.domain.QueueEntry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 public interface QueueRepository {
 
     Optional<QueueEntry> findEntry(UUID sessionId, long userId);
+
+    List<QueueEntry> findWaitingEntries(UUID sessionId, int limit);
+
+    Optional<Long> findWaitingPosition(UUID sessionId, long userId);
+
+    Set<UUID> findWaitingSessionIds();
+
+    Set<UUID> findActiveSessionIds();
+
+    void registerWaitingSession(UUID sessionId);
+
+    boolean removeActiveSessionIfEmpty(UUID sessionId);
+
+    boolean removeWaitingSessionIfEmpty(UUID sessionId);
 
     Optional<AdmissionToken> findAdmissionToken(UUID sessionId, String token);
 
@@ -34,6 +50,10 @@ public interface QueueRepository {
     );
 
     boolean enterIfAdmissionTokenActive(QueueEntry enteredEntry, AdmissionToken admissionToken);
+
+    List<QueueEntry> findExpiredAdmittedEntries(UUID sessionId, Instant now, int limit);
+
+    boolean expireIfAdmitted(QueueEntry expiredEntry, Instant now);
 
     void removeWaitingUser(UUID sessionId, long userId);
 

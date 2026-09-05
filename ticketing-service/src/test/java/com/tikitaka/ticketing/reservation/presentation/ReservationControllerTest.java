@@ -4,6 +4,7 @@ import com.tikitaka.ticketing.reservation.application.ReservationService;
 import com.tikitaka.ticketing.reservation.application.command.SearchReservationsCommand;
 import com.tikitaka.ticketing.reservation.application.result.ReservationSearchResult;
 import com.tikitaka.ticketing.reservation.domain.entity.Reservation;
+import com.tikitaka.ticketing.reservation.presentation.controller.ReservationController;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;

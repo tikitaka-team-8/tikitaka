@@ -15,6 +15,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tikitaka.ticketing.global.exception.BusinessException;
 import com.tikitaka.ticketing.global.exception.CommonErrorCode;
 import com.tikitaka.ticketing.queue.config.QueueProperties;
+import com.tikitaka.ticketing.queue.domain.AdmissionToken;
+import com.tikitaka.ticketing.queue.domain.AdmissionTokenStatus;
 import com.tikitaka.ticketing.queue.domain.QueueEntry;
 import com.tikitaka.ticketing.queue.domain.QueueStatus;
 import com.tikitaka.ticketing.queue.exception.QueueErrorCode;
@@ -35,6 +37,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.RedisConnectionFailureException;
@@ -58,7 +62,7 @@ class QueueServiceTest {
         queueService = new QueueService(
                 queueRepository,
                 platformSalesStatusClient,
-                new QueueProperties(Duration.ofMinutes(10), Duration.ofHours(1)),
+                new QueueProperties(Duration.ofMinutes(10), Duration.ofHours(1), 50, 50),
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 new ObjectMapper()
         );
@@ -90,6 +94,22 @@ class QueueServiceTest {
     }
 
     @Test
+    void 만료된_입장_권한은_새_WAITING_엔트리로_원자적으로_교체한다() {
+        QueueEntry expiredEntry = waitingEntry(5L).admit(NOW.minus(Duration.ofMinutes(10))).expire(NOW);
+        QueueEntry reenteredEntry = waitingEntry(6L);
+        when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.of(expiredEntry));
+        when(platformSalesStatusClient.getSalesStatus(SESSION_ID)).thenReturn(openSalesStatus());
+        when(queueRepository.createWaitingEntryIfAbsent(
+                eq(SESSION_ID), eq(USER_ID), eq(NOW), eq(NOW.plus(Duration.ofHours(2))), eq(Duration.ofHours(2))))
+                .thenReturn(Optional.of(reenteredEntry));
+
+        QueueEntry result = queueService.enterQueue(SESSION_ID, USER_ID);
+
+        assertThat(result).isEqualTo(reenteredEntry);
+        verify(queueRepository, never()).deleteEntry(SESSION_ID, USER_ID);
+    }
+
+    @Test
     void 판매_검증과_엔트리_생성에_동일한_시각을_사용한다() {
         Instant justBeforeSalesClose = NOW.minusMillis(1);
         Clock advancingClock = mock(Clock.class);
@@ -97,7 +117,7 @@ class QueueServiceTest {
         QueueService serviceWithAdvancingClock = new QueueService(
                 queueRepository,
                 platformSalesStatusClient,
-                new QueueProperties(Duration.ofMinutes(10), Duration.ofHours(1)),
+                new QueueProperties(Duration.ofMinutes(10), Duration.ofHours(1), 50, 50),
                 advancingClock,
                 new ObjectMapper()
         );
@@ -111,7 +131,7 @@ class QueueServiceTest {
         when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.empty());
         when(platformSalesStatusClient.getSalesStatus(SESSION_ID)).thenReturn(new PlatformSalesStatus(
                 SESSION_ID,
-                "ON_SALE",
+                "SCHEDULED",
                 OffsetDateTime.parse("2026-09-01T09:00:00+09:00"),
                 OffsetDateTime.parse("2026-09-01T10:00:00+09:00"),
                 true
@@ -148,7 +168,7 @@ class QueueServiceTest {
         when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.empty());
         when(platformSalesStatusClient.getSalesStatus(SESSION_ID)).thenReturn(new PlatformSalesStatus(
                 SESSION_ID,
-                "ON_SALE",
+                "SCHEDULED",
                 OffsetDateTime.parse("2026-09-01T11:00:00+09:00"),
                 OffsetDateTime.parse("2026-09-01T12:00:00+09:00"),
                 true
@@ -163,7 +183,7 @@ class QueueServiceTest {
         when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.empty());
         when(platformSalesStatusClient.getSalesStatus(SESSION_ID)).thenReturn(new PlatformSalesStatus(
                 SESSION_ID,
-                "ON_SALE",
+                "SCHEDULED",
                 OffsetDateTime.parse("2026-09-01T09:00:00+09:00"),
                 OffsetDateTime.parse("2026-09-01T10:00:00+09:00"),
                 true
@@ -178,10 +198,26 @@ class QueueServiceTest {
         when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.empty());
         when(platformSalesStatusClient.getSalesStatus(SESSION_ID)).thenReturn(new PlatformSalesStatus(
                 SESSION_ID,
-                "ON_SALE",
+                "SCHEDULED",
                 OffsetDateTime.parse("2026-09-01T09:00:00+09:00"),
                 OffsetDateTime.parse("2026-09-01T11:00:00+09:00"),
                 false
+        ));
+
+        assertQueueError(() -> queueService.enterQueue(SESSION_ID, USER_ID), QueueErrorCode.QUEUE_SESSION_NOT_OPEN);
+        verify(queueRepository, never()).createWaitingEntryIfAbsent(any(), anyLong(), any(), any(), any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"COMPLETED", "CANCELED"})
+    void 판매_시간_내여도_진행할_수_없는_회차_상태는_대기열_진입을_막는다(String sessionStatus) {
+        when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.empty());
+        when(platformSalesStatusClient.getSalesStatus(SESSION_ID)).thenReturn(new PlatformSalesStatus(
+                SESSION_ID,
+                sessionStatus,
+                OffsetDateTime.parse("2026-09-01T09:00:00+09:00"),
+                OffsetDateTime.parse("2026-09-01T11:00:00+09:00"),
+                true
         ));
 
         assertQueueError(() -> queueService.enterQueue(SESSION_ID, USER_ID), QueueErrorCode.QUEUE_SESSION_NOT_OPEN);
@@ -240,14 +276,213 @@ class QueueServiceTest {
         assertThat(result).isEqualTo(entry);
     }
 
+    @Test
+    void WAITING_상태_조회는_현재_순번을_반환한다() {
+        QueueEntry entry = waitingEntry(5L);
+        when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.of(entry));
+        when(queueRepository.findWaitingPosition(SESSION_ID, USER_ID)).thenReturn(Optional.of(3L));
+
+        QueueStatusResult result = queueService.getQueueStatus(SESSION_ID, USER_ID);
+
+        assertThat(result.entry()).isEqualTo(entry);
+        assertThat(result.position()).isEqualTo(3L);
+        assertThat(result.admissionToken()).isNull();
+        verify(queueRepository, never()).admitIfWaiting(any(), any(), any(), any());
+    }
+
+    @Test
+    void ADMITTED_상태_조회는_입장_토큰을_반환한다() {
+        QueueEntry entry = waitingEntry(5L).admit(NOW.minusSeconds(1));
+        AdmissionToken token = activeAdmissionToken(USER_ID);
+        when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.of(entry));
+        when(queueRepository.findAdmissionTokenReference(SESSION_ID, USER_ID)).thenReturn(Optional.of(token.token()));
+        when(queueRepository.findAdmissionToken(SESSION_ID, token.token())).thenReturn(Optional.of(token));
+
+        QueueStatusResult result = queueService.getQueueStatus(SESSION_ID, USER_ID);
+
+        assertThat(result.position()).isNull();
+        assertThat(result.admissionToken()).isEqualTo(token);
+        verify(queueRepository, never()).admitIfWaiting(any(), any(), any(), any());
+    }
+
+    @Test
+    void EXPIRED_상태_조회는_순번과_입장_토큰을_반환하지_않는다() {
+        QueueEntry expiredEntry = waitingEntry(5L).admit(NOW.minus(Duration.ofMinutes(10))).expire(NOW);
+        when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.of(expiredEntry));
+
+        QueueStatusResult result = queueService.getQueueStatus(SESSION_ID, USER_ID);
+
+        assertThat(result.entry()).isEqualTo(expiredEntry);
+        assertThat(result.position()).isNull();
+        assertThat(result.admissionToken()).isNull();
+        verify(queueRepository, never()).findWaitingPosition(SESSION_ID, USER_ID);
+        verify(queueRepository, never()).findAdmissionTokenReference(SESSION_ID, USER_ID);
+    }
+
+    @Test
+    void ADMITTED_사용자가_본인의_유효한_입장_토큰으로_좌석_영역에_진입한다() {
+        QueueEntry admittedEntry = waitingEntry(5L).admit(NOW.minusSeconds(1));
+        AdmissionToken token = activeAdmissionToken(USER_ID);
+        when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.of(admittedEntry));
+        when(queueRepository.findAdmissionToken(SESSION_ID, token.token())).thenReturn(Optional.of(token));
+        when(queueRepository.enterIfAdmissionTokenActive(admittedEntry.enter(), token)).thenReturn(true);
+
+        queueService.validateAndEnter(SESSION_ID, USER_ID, token.token());
+
+        verify(queueRepository).enterIfAdmissionTokenActive(admittedEntry.enter(), token);
+    }
+
+    @Test
+    void WAITING_사용자의_좌석_영역_접근을_거부한다() {
+        AdmissionToken token = activeAdmissionToken(USER_ID);
+        when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.of(waitingEntry(5L)));
+        when(queueRepository.findAdmissionToken(SESSION_ID, token.token())).thenReturn(Optional.of(token));
+
+        assertQueueError(
+                () -> queueService.validateAndEnter(SESSION_ID, USER_ID, token.token()),
+                QueueErrorCode.QUEUE_ACCESS_DENIED
+        );
+        verify(queueRepository, never()).enterIfAdmissionTokenActive(any(), any());
+    }
+
+    @Test
+    void 대기열_참여_정보가_없으면_좌석_영역_접근을_거부한다() {
+        when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.empty());
+
+        assertQueueError(
+                () -> queueService.validateAndEnter(SESSION_ID, USER_ID, "admission-token"),
+                QueueErrorCode.QUEUE_ACCESS_DENIED
+        );
+        verify(queueRepository, never()).findAdmissionToken(any(), any());
+    }
+
+    @Test
+    void 존재하지_않는_입장_토큰으로는_좌석_영역에_진입할_수_없다() {
+        QueueEntry admittedEntry = waitingEntry(5L).admit(NOW.minusSeconds(1));
+        when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.of(admittedEntry));
+        when(queueRepository.findAdmissionToken(SESSION_ID, "admission-token")).thenReturn(Optional.empty());
+
+        assertQueueError(
+                () -> queueService.validateAndEnter(SESSION_ID, USER_ID, "admission-token"),
+                QueueErrorCode.QUEUE_ACCESS_DENIED
+        );
+        verify(queueRepository, never()).enterIfAdmissionTokenActive(any(), any());
+    }
+
+    @Test
+    void 다른_사용자에게_발급된_입장_토큰으로는_좌석_영역에_진입할_수_없다() {
+        QueueEntry admittedEntry = waitingEntry(5L).admit(NOW.minusSeconds(1));
+        AdmissionToken otherUsersToken = activeAdmissionToken(USER_ID + 1);
+        when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.of(admittedEntry));
+        when(queueRepository.findAdmissionToken(SESSION_ID, otherUsersToken.token()))
+                .thenReturn(Optional.of(otherUsersToken));
+
+        assertQueueError(
+                () -> queueService.validateAndEnter(SESSION_ID, USER_ID, otherUsersToken.token()),
+                QueueErrorCode.QUEUE_ACCESS_DENIED
+        );
+        verify(queueRepository, never()).enterIfAdmissionTokenActive(any(), any());
+    }
+
+    @Test
+    void 다른_회차에_발급된_입장_토큰으로는_좌석_영역에_진입할_수_없다() {
+        QueueEntry admittedEntry = waitingEntry(5L).admit(NOW.minusSeconds(1));
+        AdmissionToken otherSessionToken = new AdmissionToken(
+                "admission-token",
+                UUID.randomUUID(),
+                USER_ID,
+                NOW.plus(Duration.ofMinutes(10)),
+                AdmissionTokenStatus.ACTIVE
+        );
+        when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.of(admittedEntry));
+        when(queueRepository.findAdmissionToken(SESSION_ID, otherSessionToken.token()))
+                .thenReturn(Optional.of(otherSessionToken));
+
+        assertQueueError(
+                () -> queueService.validateAndEnter(SESSION_ID, USER_ID, otherSessionToken.token()),
+                QueueErrorCode.QUEUE_ACCESS_DENIED
+        );
+        verify(queueRepository, never()).enterIfAdmissionTokenActive(any(), any());
+    }
+
+    @Test
+    void 만료된_입장_토큰으로는_좌석_영역에_진입할_수_없다() {
+        QueueEntry admittedEntry = waitingEntry(5L).admit(NOW.minusSeconds(1));
+        AdmissionToken expiredToken = new AdmissionToken(
+                "admission-token", SESSION_ID, USER_ID, NOW, AdmissionTokenStatus.ACTIVE
+        );
+        when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.of(admittedEntry));
+        when(queueRepository.findAdmissionToken(SESSION_ID, expiredToken.token())).thenReturn(Optional.of(expiredToken));
+
+        assertQueueError(
+                () -> queueService.validateAndEnter(SESSION_ID, USER_ID, expiredToken.token()),
+                QueueErrorCode.QUEUE_ACCESS_DENIED
+        );
+        verify(queueRepository, never()).enterIfAdmissionTokenActive(any(), any());
+    }
+
+    @Test
+    void 동시에_입장한_요청이_이미_ENTERED로_전환된_경우는_성공으로_처리한다() {
+        QueueEntry admittedEntry = waitingEntry(5L).admit(NOW.minusSeconds(1));
+        AdmissionToken activeToken = activeAdmissionToken(USER_ID);
+        AdmissionToken usedToken = activeToken.use();
+        when(queueRepository.findEntry(SESSION_ID, USER_ID))
+                .thenReturn(Optional.of(admittedEntry), Optional.of(admittedEntry.enter()));
+        when(queueRepository.findAdmissionToken(SESSION_ID, activeToken.token()))
+                .thenReturn(Optional.of(activeToken), Optional.of(usedToken));
+        when(queueRepository.enterIfAdmissionTokenActive(admittedEntry.enter(), activeToken)).thenReturn(false);
+
+        queueService.validateAndEnter(SESSION_ID, USER_ID, activeToken.token());
+    }
+
+    @Test
+    void ENTERED_사용자의_후속_좌석_요청을_허용한다() {
+        QueueEntry enteredEntry = waitingEntry(5L).admit(NOW.minusSeconds(1)).enter();
+        when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.of(enteredEntry));
+
+        queueService.validateEntered(SESSION_ID, USER_ID);
+    }
+
+    @Test
+    void 아직_ENTERED가_아닌_사용자의_후속_좌석_요청을_거부한다() {
+        QueueEntry admittedEntry = waitingEntry(5L).admit(NOW.minusSeconds(1));
+        when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.of(admittedEntry));
+
+        assertQueueError(
+                () -> queueService.validateEntered(SESSION_ID, USER_ID),
+                QueueErrorCode.QUEUE_ACCESS_DENIED
+        );
+    }
+
+    @Test
+    void ENTERED_검증_중_Redis_장애가_발생하면_좌석_접근을_차단한다() {
+        when(queueRepository.findEntry(SESSION_ID, USER_ID))
+                .thenThrow(new RedisConnectionFailureException("Redis connection failed"));
+
+        assertQueueError(
+                () -> queueService.validateEntered(SESSION_ID, USER_ID),
+                QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE
+        );
+    }
+
     private QueueEntry waitingEntry(long sequence) {
         return QueueEntry.waiting(SESSION_ID, USER_ID, sequence, NOW, NOW.plus(Duration.ofHours(2)));
+    }
+
+    private AdmissionToken activeAdmissionToken(long userId) {
+        return new AdmissionToken(
+                "admission-token",
+                SESSION_ID,
+                userId,
+                NOW.plus(Duration.ofMinutes(10)),
+                AdmissionTokenStatus.ACTIVE
+        );
     }
 
     private PlatformSalesStatus openSalesStatus() {
         return new PlatformSalesStatus(
                 SESSION_ID,
-                "ON_SALE",
+                "SCHEDULED",
                 OffsetDateTime.parse("2026-09-01T09:00:00+09:00"),
                 OffsetDateTime.parse("2026-09-01T11:00:00+09:00"),
                 true
