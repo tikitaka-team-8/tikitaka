@@ -12,7 +12,6 @@ import com.tikitaka.ticketing.seat.exception.SeatErrorCode;
 import com.tikitaka.ticketing.seat.presentation.dto.response.ScheduleSeatListResponse;
 import com.tikitaka.ticketing.seat.presentation.dto.response.ScheduleSeatResponse;
 import com.tikitaka.ticketing.seat.presentation.dto.response.SeatHoldResponse;
-import com.tikitaka.ticketing.seat.presentation.dto.response.SeatReleaseResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
