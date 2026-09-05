@@ -44,48 +44,9 @@ public class PaymentController {
     }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     //-------------------------------------------------------------------//
 
-    @PostMapping
-    public ResponseEntity<ApiResponse<PaymentCreateResponse>> createPayment(
-            @RequestHeader("Idempotency-Key") String idempotencyKey,
-            @Valid @RequestBody PaymentCreateRequest request
-    ) {
-        PaymentCreateCommand command = new PaymentCreateCommand(
-                request.reservationId(),
-                request.userId(),
-                idempotencyKey,
-                request.totalAmount()
-        );
 
-        PaymentCreateResult result = paymentService.createPayment(command);
-
-        PaymentCreateResponse response = PaymentCreateResponse.from(result);
-
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(ApiResponse.success(
-                        HttpStatus.CREATED,
-                        "결제가 생성되었습니다.",
-                        response
-                ));
-    }
 
     @PostMapping("/{paymentId}/approve")
     public ResponseEntity<ApiResponse<PaymentApproveResponse>> approvePayment(
