@@ -7,7 +7,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 
 @FeignClient(
         name = "platformSalesStatusClient",
-        url = "${clients.platform-service.url}"
+        url = "${clients.platform-service.url}",
+        configuration = PlatformSalesStatusClientConfiguration.class
 )
 public interface PlatformSalesStatusClient {
 

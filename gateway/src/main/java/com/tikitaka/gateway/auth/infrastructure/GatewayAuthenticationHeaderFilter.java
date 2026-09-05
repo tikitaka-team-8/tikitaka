@@ -23,6 +23,7 @@ public class GatewayAuthenticationHeaderFilter extends OncePerRequestFilter {
     private static final Logger log = LoggerFactory.getLogger(GatewayAuthenticationHeaderFilter.class);
     private static final String USER_ID_HEADER = "X-User-Id";
     private static final String USER_ROLE_HEADER = "X-User-Role";
+    private static final String SERVICE_KEY_HEADER = "X-Service-Key";
     private static final String ROLE_CLAIM = "role";
 
     @Override
@@ -31,6 +32,8 @@ public class GatewayAuthenticationHeaderFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
+
+        // JWT 인증 성공 시 SecurityContext에서 사용자 정보 조회
         Authentication authentication = org.springframework.security.core.context.SecurityContextHolder
                 .getContext()
                 .getAuthentication();
@@ -38,6 +41,7 @@ public class GatewayAuthenticationHeaderFilter extends OncePerRequestFilter {
         String userId = null;
         String role = null;
 
+        // JWT에서 사용자 ID 및 ROLE 추출
         if (authentication instanceof JwtAuthenticationToken jwtAuthentication
                 && authentication.isAuthenticated()) {
             Jwt jwt = jwtAuthentication.getToken();
@@ -52,6 +56,7 @@ public class GatewayAuthenticationHeaderFilter extends OncePerRequestFilter {
             );
         }
 
+        // 신뢰 가능한 사용자 헤더로 재구성하여 하위 서비스에 전달
         filterChain.doFilter(new AuthenticationHeaderRequest(request, userId, role), response);
     }
 
@@ -74,6 +79,9 @@ public class GatewayAuthenticationHeaderFilter extends OncePerRequestFilter {
             if (USER_ROLE_HEADER.equalsIgnoreCase(name)) {
                 return role;
             }
+            if (SERVICE_KEY_HEADER.equalsIgnoreCase(name)) {
+                return null;
+            }
             return super.getHeader(name);
         }
 
@@ -89,6 +97,9 @@ public class GatewayAuthenticationHeaderFilter extends OncePerRequestFilter {
                         ? Collections.emptyEnumeration()
                         : Collections.enumeration(Set.of(role));
             }
+            if (SERVICE_KEY_HEADER.equalsIgnoreCase(name)) {
+                return Collections.emptyEnumeration();
+            }
             return super.getHeaders(name);
         }
 
@@ -100,7 +111,8 @@ public class GatewayAuthenticationHeaderFilter extends OncePerRequestFilter {
             while (originalHeaderNames != null && originalHeaderNames.hasMoreElements()) {
                 String headerName = originalHeaderNames.nextElement();
                 if (!USER_ID_HEADER.equalsIgnoreCase(headerName)
-                        && !USER_ROLE_HEADER.equalsIgnoreCase(headerName)) {
+                        && !USER_ROLE_HEADER.equalsIgnoreCase(headerName)
+                        && !SERVICE_KEY_HEADER.equalsIgnoreCase(headerName)) {
                     headerNames.add(headerName);
                 }
             }
