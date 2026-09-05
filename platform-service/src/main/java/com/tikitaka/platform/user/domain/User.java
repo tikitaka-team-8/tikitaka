@@ -75,6 +75,20 @@ public class User {
         return user;
     }
 
+    public void updateProfile(
+            String name,
+            String nickname,
+            String phone
+    ) {
+        this.name = name;
+        this.nickname = nickname;
+        this.phone = phone;
+    }
+
+    public void changePassword(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
+
     @PrePersist
     private void prePersist() {
         Instant now = Instant.now();
