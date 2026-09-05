@@ -52,6 +52,9 @@ public class SeatHold extends BaseEntity {
     @Column(name = "idempotency_key", nullable = false, length = 100, updatable = false)
     private String idempotencyKey;
 
+    @Column(name = "extended_at")
+    private Instant extendedAt;
+
     private SeatHold(Long userId) {
         super(userId);
     }
@@ -93,7 +96,6 @@ public class SeatHold extends BaseEntity {
         }
     }
 
-
     public void release(ReleaseReason reason, Instant releasedAt) {
         validateStatusTransition(HoldStatus.RELEASED);
         this.holdStatus = HoldStatus.RELEASED;
@@ -109,6 +111,11 @@ public class SeatHold extends BaseEntity {
         }
     }
 
-
-
+    public void extendExpiry(Instant now, Duration extension) {
+        if (extendedAt != null) {
+            return;
+        }
+        this.expiresAt = now.plus(extension);
+        this.extendedAt = now;
+    }
 }
