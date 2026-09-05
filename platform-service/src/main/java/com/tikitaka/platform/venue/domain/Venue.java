@@ -66,4 +66,8 @@ public class Venue {
         contactPhone
     );
   }
+
+  public void deactivate() {
+    this.active = false;
+  }
 }

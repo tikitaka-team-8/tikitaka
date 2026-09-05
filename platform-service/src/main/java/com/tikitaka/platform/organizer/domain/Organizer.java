@@ -149,4 +149,8 @@ public class Organizer {
       throw new BusinessException(OrganizerErrorCode.INVALID_STATUS_TRANSITION);
     }
   }
+
+  public boolean isActive() {
+    return this.status == OrganizerStatus.ACTIVE;
+  }
 }
