@@ -8,6 +8,7 @@ import com.tikitaka.ticketing.seat.exception.SeatErrorCode;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -55,7 +56,6 @@ public class SeatHold extends BaseEntity {
         super(userId);
     }
 
-
     public static SeatHold hold(
             Long userId,
             UUID scheduleSeatId,
@@ -93,6 +93,14 @@ public class SeatHold extends BaseEntity {
         }
     }
 
+
+    public void release(ReleaseReason reason, Instant releasedAt) {
+        validateStatusTransition(HoldStatus.RELEASED);
+        this.holdStatus = HoldStatus.RELEASED;
+        this.releasedAt = releasedAt;
+        this.releaseReason = reason;
+    }
+
     private void validateStatusTransition(HoldStatus nextStatus) {
         if (!holdStatus.canTransitionTo(nextStatus)) {
             throw new BusinessException(
@@ -100,5 +108,7 @@ public class SeatHold extends BaseEntity {
             );
         }
     }
+
+
 
 }

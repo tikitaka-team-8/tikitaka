@@ -2,9 +2,14 @@ package com.tikitaka.ticketing.seat.presentation.controller;
 
 import com.tikitaka.ticketing.global.response.ApiResponse;
 import com.tikitaka.ticketing.seat.application.service.SeatService;
+import com.tikitaka.ticketing.seat.domain.enums.ReleaseReason;
+import com.tikitaka.ticketing.seat.presentation.dto.request.SeatReleaseRequest;
 import com.tikitaka.ticketing.seat.presentation.dto.response.ScheduleSeatListResponse;
 import com.tikitaka.ticketing.seat.presentation.dto.response.ScheduleSeatResponse;
 import com.tikitaka.ticketing.seat.presentation.dto.response.SeatHoldResponse;
+import com.tikitaka.ticketing.seat.presentation.dto.response.SeatReleaseResponse;
+import com.tikitaka.ticketing.seat.presentation.security.InternalAuthValidator;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
@@ -83,5 +88,16 @@ public class SeatController {
                         response
                 );
     }
+
+    @DeleteMapping("/seat-holds/{seatHoldId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void cancelHold(
+            @PathVariable UUID seatHoldId,
+            @RequestHeader(USER_ID_HEADER) @Positive Long userId
+    ) {
+        seatService.cancelHold(seatHoldId, userId);
+
+    }
+
 
 }
