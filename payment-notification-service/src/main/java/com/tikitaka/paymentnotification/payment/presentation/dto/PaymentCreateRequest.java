@@ -15,10 +15,7 @@ public record PaymentCreateRequest(
 
         @NotNull
         @Positive
-        Long amount,
-
-        @NotNull
-        String currency
+        Long totalAmount
 
 ) {
 }

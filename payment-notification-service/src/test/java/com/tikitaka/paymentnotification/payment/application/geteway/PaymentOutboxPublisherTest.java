@@ -45,7 +45,6 @@ class PaymentOutboxPublisherTest {
                 "PAY-test-order",
                 "test-idempotency-key",
                 150000L,
-                "KRW",
                 PaymentProvider.MOCK
         );
 

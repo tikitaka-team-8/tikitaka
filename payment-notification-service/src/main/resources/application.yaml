@@ -23,3 +23,10 @@ management:
     health:
       probes:
         enabled: true
+
+service:
+  ticketing:
+    url: ${TICKETING_SERVICE_URL}
+
+internal:
+  ticketing-service-key: ${TICKETING_SERVICE_KEY}

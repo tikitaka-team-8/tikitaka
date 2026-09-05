@@ -71,9 +71,7 @@ public class PaymentController {
                 request.reservationId(),
                 request.userId(),
                 idempotencyKey,
-                request.amount(),
-                request.currency(),
-                PaymentProvider.MOCK
+                request.totalAmount()
         );
 
         PaymentCreateResult result = paymentService.createPayment(command);
