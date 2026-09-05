@@ -5,7 +5,8 @@ import com.tikitaka.ticketing.queue.application.QueueAdmissionValidator;
 import com.tikitaka.ticketing.queue.application.QueueService;
 import com.tikitaka.ticketing.seat.domain.entity.ScheduleSeat;
 import com.tikitaka.ticketing.seat.domain.entity.SeatHold;
-import com.tikitaka.ticketing.seat.domain.enums.SeatStatus;
+import com.tikitaka.ticketing.seat.domain.enums.HoldStatus;
+import com.tikitaka.ticketing.seat.domain.enums.ReleaseReason;
 import com.tikitaka.ticketing.seat.domain.repository.ScheduleSeatRepository;
 import com.tikitaka.ticketing.seat.domain.repository.SeatHoldRepository;
 import com.tikitaka.ticketing.seat.exception.SeatErrorCode;
@@ -17,8 +18,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -50,6 +53,7 @@ class SeatServiceTest {
 
     private UUID eventSessionId;
     private UUID scheduleSeatId;
+    private UUID seatHoldId;
     private Long userId;
     private String admissionToken;
     private String idempotencyKey;
@@ -60,6 +64,7 @@ class SeatServiceTest {
     void setUp() {
         eventSessionId = UUID.randomUUID();
         scheduleSeatId = UUID.randomUUID();
+        seatHoldId = UUID.randomUUID();
         userId = 1L;
         admissionToken = "admission-token";
         idempotencyKey = "test-idempotency-key";
@@ -290,4 +295,166 @@ class SeatServiceTest {
                         scheduleSeatId
                 );
     }
+
+    @Test
+    void 선점을_정상적으로_취소한다() {
+        // given
+        SeatHold seatHold = SeatHold.hold(
+                userId, scheduleSeatId, idempotencyKey,
+                Instant.parse("2026-09-04T03:00:00Z"),
+                Instant.parse("2026-09-04T03:10:00Z")
+        );
+        ScheduleSeat seat = mock(ScheduleSeat.class);
+        Instant releasedAt = Instant.parse("2026-09-04T03:05:00Z");
+
+        given(seatHoldRepository.findById(seatHoldId)).willReturn(Optional.of(seatHold));
+        given(scheduleSeatRepository.findByIdForUpdate(scheduleSeatId)).willReturn(Optional.of(seat));
+        given(clock.instant()).willReturn(releasedAt);
+
+        // when
+        seatService.cancelHold(seatHoldId, userId);
+
+        // then
+        assertThat(seatHold.getHoldStatus()).isEqualTo(HoldStatus.RELEASED);
+        assertThat(seatHold.getReleasedAt()).isEqualTo(releasedAt);
+        assertThat(seatHold.getReleaseReason()).isEqualTo(ReleaseReason.USER_CANCEL);
+        then(seat).should().release();
+    }
+
+    @Test
+    void 존재하지_않는_선점을_취소하려하면_예외가_발생한다() {
+
+        given(seatHoldRepository.findById(seatHoldId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> seatService.cancelHold(seatHoldId, userId))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(SeatErrorCode.SEAT_HOLD_NOT_FOUND);
+    }
+
+    @Test
+    void 소유자가_다르면_선점_취소시_예외가_발생한다() {
+
+        SeatHold seatHold = SeatHold.hold(
+                999L, scheduleSeatId, idempotencyKey,
+                Instant.parse("2026-09-04T03:00:00Z"),
+                Instant.parse("2026-09-04T03:10:00Z")
+        );
+        given(seatHoldRepository.findById(seatHoldId)).willReturn(Optional.of(seatHold));
+
+        assertThatThrownBy(() -> seatService.cancelHold(seatHoldId, userId))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(SeatErrorCode.SEAT_HOLD_OWNERSHIP_REQUIRED);
+
+        then(scheduleSeatRepository).should(never()).findByIdForUpdate(any(UUID.class));
+    }
+
+    @Test
+    void 이미_RELEASED된_선점을_취소하면_아무_처리_없이_성공한다() {
+
+        SeatHold seatHold = SeatHold.hold(
+                userId, scheduleSeatId, idempotencyKey,
+                Instant.parse("2026-09-04T03:00:00Z"),
+                Instant.parse("2026-09-04T03:10:00Z")
+        );
+        seatHold.release(ReleaseReason.USER_CANCEL, Instant.parse("2026-09-04T03:01:00Z"));
+
+        given(seatHoldRepository.findById(seatHoldId)).willReturn(Optional.of(seatHold));
+
+        seatService.cancelHold(seatHoldId, userId);
+
+        then(scheduleSeatRepository).should(never()).findByIdForUpdate(any(UUID.class));
+    }
+
+    @Test
+    void CONFIRMED_상태의_선점을_취소하려하면_예외가_발생한다() {
+
+        SeatHold seatHold = SeatHold.hold(
+                userId, scheduleSeatId, idempotencyKey,
+                Instant.parse("2026-09-04T03:00:00Z"),
+                Instant.parse("2026-09-04T03:10:00Z")
+        );
+        ReflectionTestUtils.setField(seatHold, "holdStatus", HoldStatus.CONFIRMED);
+        ScheduleSeat seat = mock(ScheduleSeat.class);
+
+        given(seatHoldRepository.findById(seatHoldId)).willReturn(Optional.of(seatHold));
+        given(scheduleSeatRepository.findByIdForUpdate(scheduleSeatId)).willReturn(Optional.of(seat));
+
+        assertThatThrownBy(() -> seatService.cancelHold(seatHoldId, userId))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(SeatErrorCode.SEAT_HOLD_ALREADY_CLOSED);
+
+        then(seat).should(never()).release();
+    }
+
+    @Test
+    void HOLDING_상태의_선점을_결제를_위해_연장한다() {
+
+        SeatHold seatHold = SeatHold.hold(
+                userId, scheduleSeatId, idempotencyKey,
+                Instant.parse("2026-09-04T03:00:00Z"),
+                Instant.parse("2026-09-04T03:10:00Z")
+        );
+        Instant now = Instant.parse("2026-09-04T03:05:00Z");
+
+        given(seatHoldRepository.findById(seatHoldId)).willReturn(Optional.of(seatHold));
+        given(clock.instant()).willReturn(now);
+
+        seatService.validateAndExtend(seatHoldId);
+
+        assertThat(seatHold.getExpiresAt()).isEqualTo(now.plus(Duration.ofMinutes(10)));
+        assertThat(seatHold.getHoldStatus()).isEqualTo(HoldStatus.HOLDING);
+    }
+
+    @Test
+    void 존재하지_않는_선점은_연장할_수_없다() {
+
+        given(seatHoldRepository.findById(seatHoldId)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> seatService.validateAndExtend(seatHoldId))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(SeatErrorCode.SEAT_HOLD_NOT_FOUND);
+    }
+
+    @Test
+    void HOLDING이_아닌_선점은_연장할_수_없다() {
+
+        SeatHold seatHold = SeatHold.hold(
+                userId, scheduleSeatId, idempotencyKey,
+                Instant.parse("2026-09-04T03:00:00Z"),
+                Instant.parse("2026-09-04T03:10:00Z")
+        );
+        ReflectionTestUtils.setField(seatHold, "holdStatus", HoldStatus.CONFIRMED);
+
+        given(seatHoldRepository.findById(seatHoldId)).willReturn(Optional.of(seatHold));
+
+        assertThatThrownBy(() -> seatService.validateAndExtend(seatHoldId))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(SeatErrorCode.SEAT_STATUS_CONFLICT);
+    }
+
+    @Test
+    void 이미_연장된_선점은_다시_연장을_요청해도_그대로_유지된다() {
+
+        SeatHold seatHold = SeatHold.hold(
+                userId, scheduleSeatId, idempotencyKey,
+                Instant.parse("2026-09-04T03:00:00Z"),
+                Instant.parse("2026-09-04T03:10:00Z")
+        );
+        Instant firstExtendAt = Instant.parse("2026-09-04T03:01:00Z");
+        seatHold.extendExpiry(firstExtendAt, Duration.ofMinutes(10));
+        Instant expiresAfterFirstExtension = seatHold.getExpiresAt();
+
+        given(seatHoldRepository.findById(seatHoldId)).willReturn(Optional.of(seatHold));
+        given(clock.instant()).willReturn(Instant.parse("2026-09-04T03:05:00Z"));
+
+        seatService.validateAndExtend(seatHoldId);
+
+        assertThat(seatHold.getExpiresAt()).isEqualTo(expiresAfterFirstExtension);
+    }
+
 }
