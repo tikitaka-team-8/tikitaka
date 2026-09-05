@@ -58,4 +58,20 @@ public interface ScheduleSeatJpaRepository extends JpaRepository<ScheduleSeat, U
             @Param("eventSessionId") UUID eventSessionId,
             @Param("scheduleSeatId") UUID scheduleSeatId
     );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @QueryHints(
+            @QueryHint(
+                    name = "jakarta.persistence.lock.timeout",
+                    value = "3000"
+            )
+    )
+    @Query("""
+        SELECT s
+        FROM ScheduleSeat s
+        WHERE s.scheduleSeatId = :scheduleSeatId
+    """)
+    Optional<ScheduleSeat> findByIdForUpdate(
+            @Param("scheduleSeatId") UUID scheduleSeatId
+    );
 }

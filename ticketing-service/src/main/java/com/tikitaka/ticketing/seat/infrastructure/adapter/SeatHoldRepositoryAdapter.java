@@ -6,13 +6,20 @@ import com.tikitaka.ticketing.seat.infrastructure.repository.SeatHoldJpaReposito
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
 @RequiredArgsConstructor
 public class SeatHoldRepositoryAdapter implements SeatHoldRepository {
 
     private final SeatHoldJpaRepository jpaRepository;
+
+    @Override
+    public Optional<SeatHold> findById(UUID seatHoldId) {
+        return jpaRepository.findById(seatHoldId);
+    }
 
     @Override
     public Optional<SeatHold> findByUserIdAndIdempotencyKey(Long userId, String idempotencyKey) {

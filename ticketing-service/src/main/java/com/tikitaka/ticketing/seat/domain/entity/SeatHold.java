@@ -8,6 +8,7 @@ import com.tikitaka.ticketing.seat.exception.SeatErrorCode;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -51,10 +52,12 @@ public class SeatHold extends BaseEntity {
     @Column(name = "idempotency_key", nullable = false, length = 100, updatable = false)
     private String idempotencyKey;
 
+    @Column(name = "extended_at")
+    private Instant extendedAt;
+
     private SeatHold(Long userId) {
         super(userId);
     }
-
 
     public static SeatHold hold(
             Long userId,
@@ -93,6 +96,13 @@ public class SeatHold extends BaseEntity {
         }
     }
 
+    public void release(ReleaseReason reason, Instant releasedAt) {
+        validateStatusTransition(HoldStatus.RELEASED);
+        this.holdStatus = HoldStatus.RELEASED;
+        this.releasedAt = releasedAt;
+        this.releaseReason = reason;
+    }
+
     private void validateStatusTransition(HoldStatus nextStatus) {
         if (!holdStatus.canTransitionTo(nextStatus)) {
             throw new BusinessException(
@@ -101,4 +111,11 @@ public class SeatHold extends BaseEntity {
         }
     }
 
+    public void extendExpiry(Instant now, Duration extension) {
+        if (extendedAt != null) {
+            return;
+        }
+        this.expiresAt = now.plus(extension);
+        this.extendedAt = now;
+    }
 }
