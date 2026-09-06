@@ -137,6 +137,32 @@ public class Reservation extends BaseEntity {
         updateStatus(ReservationStatus.PAYMENT_PROCESSING, userId);
     }
 
+    public boolean applyPaymentSucceeded(Instant paymentCompletedAt, Long userId) {
+        if (isPaymentResultFinalized()) {
+            return false;
+        }
+        if (reservationStatus != ReservationStatus.PAYMENT_PROCESSING) {
+            throw new BusinessException(ReservationErrorCode.INVALID_RESERVATION_STATUS_TRANSITION);
+        }
+
+        this.paymentCompletedAt = paymentCompletedAt;
+        updateStatus(ReservationStatus.CONFIRMED, userId);
+        return true;
+    }
+
+    public boolean applyPaymentFailed(ReservationFailureReason failureReason, Long userId) {
+        if (isPaymentResultFinalized()) {
+            return false;
+        }
+        if (reservationStatus != ReservationStatus.PAYMENT_PROCESSING) {
+            throw new BusinessException(ReservationErrorCode.INVALID_RESERVATION_STATUS_TRANSITION);
+        }
+
+        this.failureReason = failureReason;
+        updateStatus(ReservationStatus.FAILED, userId);
+        return true;
+    }
+
     public void updateStatus(ReservationStatus nextStatus, Long userId) {
         if (reservationStatus == nextStatus) {
             return;
@@ -167,6 +193,13 @@ public class Reservation extends BaseEntity {
             case CONFIRMED -> nextStatus == ReservationStatus.CANCEL_PENDING;
             case CANCEL_PENDING -> nextStatus == ReservationStatus.CANCELLED;
             case FAILED, CANCELLED -> false;
+        };
+    }
+
+    private boolean isPaymentResultFinalized() {
+        return switch (reservationStatus) {
+            case CONFIRMED, FAILED, CANCELLED -> true;
+            case PAYMENT_PENDING, CANCEL_PENDING, PAYMENT_PROCESSING -> false;
         };
     }
 
