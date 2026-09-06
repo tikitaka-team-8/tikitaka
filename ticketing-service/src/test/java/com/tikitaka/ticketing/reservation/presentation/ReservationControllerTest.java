@@ -1,7 +1,9 @@
 package com.tikitaka.ticketing.reservation.presentation;
 
 import com.tikitaka.ticketing.reservation.application.ReservationService;
+import com.tikitaka.ticketing.reservation.application.command.CreateReservationCommand;
 import com.tikitaka.ticketing.reservation.application.command.SearchReservationsCommand;
+import com.tikitaka.ticketing.reservation.application.result.CreateReservationResult;
 import com.tikitaka.ticketing.reservation.application.result.ReservationSearchResult;
 import com.tikitaka.ticketing.reservation.domain.entity.Reservation;
 import com.tikitaka.ticketing.reservation.presentation.controller.ReservationController;
@@ -28,22 +30,85 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.http.MediaType.APPLICATION_JSON;
 
 @WebMvcTest(ReservationController.class)
 @AutoConfigureMockMvc(addFilters = false)
 class ReservationControllerTest {
 
     private static final UUID RESERVATION_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
+    private static final UUID PAYMENT_ID = UUID.fromString("60000000-0000-0000-0000-000000000001");
     private static final Long USER_ID = 1L;
     private static final Long ADMIN_ID = 2L;
+    private static final String IDEMPOTENCY_KEY = "reservation-request-1";
 
     @Autowired
     private MockMvc mockMvc;
 
     @MockitoBean
     private ReservationService reservationService;
+
+    @Test
+    void 신규_예매를_생성하면_201을_반환한다() throws Exception {
+        // given
+        given(reservationService.createReservation(any(CreateReservationCommand.class)))
+                .willReturn(createReservationResult(true));
+
+        // when
+        mockMvc.perform(post("/api/v1/reservations")
+                        .header("X-User-Id", USER_ID)
+                        .header("X-User-Role", "USER")
+                        .header("Idempotency-Key", IDEMPOTENCY_KEY)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"seatHoldIds":["50000000-0000-0000-0000-000000000001"]}
+                                """))
+
+                // then
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.status").value(201))
+                .andExpect(jsonPath("$.data.reservationId").value(RESERVATION_ID.toString()))
+                .andExpect(jsonPath("$.data.paymentId").value(PAYMENT_ID.toString()))
+                .andExpect(jsonPath("$.data.reservationStatus").value("PAYMENT_PROCESSING"))
+                .andExpect(jsonPath("$.data.seatCount").value(1))
+                .andExpect(jsonPath("$.data.totalAmount").value(50_000));
+
+        ArgumentCaptor<CreateReservationCommand> commandCaptor =
+                ArgumentCaptor.forClass(CreateReservationCommand.class);
+        verify(reservationService).createReservation(commandCaptor.capture());
+        CreateReservationCommand command = commandCaptor.getValue();
+        assertThat(command.getLoginUserId()).isEqualTo(USER_ID);
+        assertThat(command.getUserRole()).isEqualTo("USER");
+        assertThat(command.getIdempotencyKey()).isEqualTo(IDEMPOTENCY_KEY);
+        assertThat(command.getSeatHoldIds()).containsExactly(
+                UUID.fromString("50000000-0000-0000-0000-000000000001"));
+    }
+
+    @Test
+    void 동일한_멱등_요청이면_기존_예매와_200을_반환한다() throws Exception {
+        // given
+        given(reservationService.createReservation(any(CreateReservationCommand.class)))
+                .willReturn(createReservationResult(false));
+
+        // when
+        mockMvc.perform(post("/api/v1/reservations")
+                        .header("X-User-Id", USER_ID)
+                        .header("X-User-Role", "USER")
+                        .header("Idempotency-Key", IDEMPOTENCY_KEY)
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"seatHoldIds":["50000000-0000-0000-0000-000000000001"]}
+                                """))
+
+                // then
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.data.reservationId").value(RESERVATION_ID.toString()));
+    }
 
     @Test
     void 사용자의_검색조건과_페이징으로_예매_목록을_조회한다() throws Exception {
@@ -176,5 +241,24 @@ class ReservationControllerTest {
         );
         ReflectionTestUtils.setField(reservation, "reservationId", RESERVATION_ID);
         return new ReservationSearchResult(reservation);
+    }
+
+    private CreateReservationResult createReservationResult(boolean created) {
+        Reservation reservation = Reservation.create(
+                USER_ID,
+                UUID.fromString("20000000-0000-0000-0000-000000000001"),
+                UUID.fromString("30000000-0000-0000-0000-000000000001"),
+                "RSV-260901-8F3A91C2D7E4",
+                "테스트 공연",
+                Instant.parse("2026-09-01T10:00:00Z"),
+                1,
+                50_000L,
+                IDEMPOTENCY_KEY,
+                List.of()
+        );
+        ReflectionTestUtils.setField(reservation, "reservationId", RESERVATION_ID);
+        ReflectionTestUtils.setField(reservation, "createdAt", Instant.parse("2026-09-01T09:50:00Z"));
+        reservation.markAsPaymentProcessing(PAYMENT_ID, USER_ID);
+        return new CreateReservationResult(reservation, created);
     }
 }
