@@ -12,7 +12,7 @@ public class PaymentOutboxScheduler {
 
     private final PaymentOutboxPublisher paymentOutboxPublisher;
 
-    @Scheduled(fixedDelayString = "${outbox.payment.publish-interval-ms:1000}")
+    @Scheduled(fixedDelayString = "${payment.outbox.publish-delay-ms:1000}")
     public void publishPendingOutboxes(){
         paymentOutboxPublisher.publishPendingOutboxes();
     }

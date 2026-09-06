@@ -14,6 +14,7 @@ public record PaymentFailedEvent (
         UUID paymentId,
         UUID reservationId,
         Long userId,
+        Long amount,
         String failureCode,
         OffsetDateTime failedAt
 
@@ -33,6 +34,7 @@ public record PaymentFailedEvent (
                 payment.getPaymentId(),
                 payment.getReservationId(),
                 payment.getUserId(),
+                payment.getAmount(),
                 payment.getFailureCode(),
                 now
         );
