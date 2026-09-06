@@ -15,6 +15,14 @@ spring:
     hibernate:
       ddl-auto: validate
     open-in-view: false
+  kafka:
+    consumer:
+      group-id: ticketing-payment-group
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      ack-mode: record
   flyway:
     enabled: true
     validate-on-migrate: true

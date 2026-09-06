@@ -79,7 +79,7 @@ public class ReservationPaymentEventService {
         // 결제 실패 결과를 예매에 반영
         boolean statusChanged = reservation.applyPaymentFailed(ReservationFailureReason.PAYMENT_FAILED, SYSTEM_USER_ID);
         if (statusChanged) {
-            // TODO Seat 담당 기능 연결 후 SeatHold를 해제하고 ScheduleSeat 상태를 AVAILABLE로 변경
+            // TODO: Seat 기능 연결 - SeatHold 상태를 RELEASED, ScheduleSeat 상태를 AVAILABLE로 변경
         }
 
         // 예매 상태 변경과 동일한 트랜잭션에서 처리 완료 이벤트 기록
