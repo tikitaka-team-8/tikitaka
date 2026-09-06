@@ -41,6 +41,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_ACCESS_TOKEN_EXPIRATION: ${JWT_ACCESS_TOKEN_EXPIRATION:-15m}
       JWT_REFRESH_TOKEN_EXPIRATION: ${JWT_REFRESH_TOKEN_EXPIRATION:-14d}
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY}
       TZ: Asia/Seoul
     depends_on:
       platform-postgres:
@@ -71,6 +72,7 @@ services:
       TICKETING_DB_NAME: ${TICKETING_DB_NAME}
       TICKETING_DB_USERNAME: ${TICKETING_DB_USERNAME}
       TICKETING_DB_PASSWORD: ${TICKETING_DB_PASSWORD}
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY}
       TZ: Asia/Seoul
     depends_on:
       ticketing-postgres:
@@ -101,6 +103,7 @@ services:
       PAYMENT_DB_NAME: ${PAYMENT_DB_NAME}
       PAYMENT_DB_USERNAME: ${PAYMENT_DB_USERNAME}
       PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD}
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY}
       TZ: Asia/Seoul
     depends_on:
       payment-postgres:

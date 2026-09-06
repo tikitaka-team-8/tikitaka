@@ -14,3 +14,7 @@ auth:
     secret: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
     access-token-expiration: 15m
     refresh-token-expiration: 14d
+
+internal:
+  service:
+    key: platform-internal-service-key-for-tests

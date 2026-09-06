@@ -37,3 +37,7 @@ management:
     health:
       probes:
         enabled: true
+
+clients:
+  platform-service:
+    service-key: ${INTERNAL_SERVICE_KEY}

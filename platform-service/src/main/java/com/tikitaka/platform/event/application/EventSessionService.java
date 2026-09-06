@@ -47,6 +47,7 @@ public class EventSessionService {
   }
 
   // Queue 대기열
+  @Transactional(readOnly = true)
   public QueueSalesStatusResponse getQueueSalesStatus(UUID sessionId) {
 
     EventSession eventSession = eventSessionRepository.findById(sessionId)

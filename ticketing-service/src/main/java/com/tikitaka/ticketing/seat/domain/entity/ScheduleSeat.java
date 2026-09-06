@@ -1,6 +1,7 @@
 package com.tikitaka.ticketing.seat.domain.entity;
 
 import com.tikitaka.ticketing.global.exception.BusinessException;
+import com.tikitaka.ticketing.global.persistence.entity.BaseEntity;
 import com.tikitaka.ticketing.seat.domain.enums.SeatStatus;
 import com.tikitaka.ticketing.seat.exception.SeatErrorCode;
 import jakarta.persistence.*;
@@ -12,7 +13,7 @@ import java.util.UUID;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
 @Table(name = "p_schedule_seat")
-public class ScheduleSeat  {
+public class ScheduleSeat extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -44,6 +45,19 @@ public class ScheduleSeat  {
     @Column(name = "seat_status", nullable = false, length = 20)
     private SeatStatus seatStatus = SeatStatus.AVAILABLE;
 
+
+//   좌석을 선점 상태(HELD)로 전이
+    public void hold() {
+        if (seatStatus == SeatStatus.EXCLUDED) {
+            throw new BusinessException(SeatErrorCode.SEAT_NOT_FOR_SALE);
+        }
+        if (seatStatus != SeatStatus.AVAILABLE) {
+            throw new BusinessException(SeatErrorCode.SEAT_UNAVAILABLE);
+        }
+
+        validateStatusTransition(SeatStatus.HELD);
+        this.seatStatus = SeatStatus.HELD;
+    }
 
     private void validateStatusTransition(SeatStatus nextStatus) {
         if (!seatStatus.canTransitionTo(nextStatus)) {
