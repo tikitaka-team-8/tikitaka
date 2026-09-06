@@ -20,7 +20,7 @@ public class PaymentCreationAdapter implements PaymentCreationPort {
     private final PaymentCreationClient paymentCreationClient;
     private final String internalServiceKey;
 
-    public PaymentCreationAdapter(PaymentCreationClient paymentCreationClient, @Value("${INTERNAL_SERVICE_KEY}") String internalServiceKey) {
+    public PaymentCreationAdapter(PaymentCreationClient paymentCreationClient, @Value("${clients.payment-notification-service.service-key}") String internalServiceKey) {
         this.paymentCreationClient = paymentCreationClient;
         this.internalServiceKey = internalServiceKey;
     }

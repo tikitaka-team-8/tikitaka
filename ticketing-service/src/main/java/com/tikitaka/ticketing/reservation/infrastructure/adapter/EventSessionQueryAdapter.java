@@ -18,7 +18,7 @@ public class EventSessionQueryAdapter implements EventSessionQueryPort {
     private final PlatformEventSessionClient platformEventSessionClient;
     private final String internalServiceKey;
 
-    public EventSessionQueryAdapter(PlatformEventSessionClient platformEventSessionClient, @Value("${INTERNAL_SERVICE_KEY}") String internalServiceKey) {
+    public EventSessionQueryAdapter(PlatformEventSessionClient platformEventSessionClient, @Value("${clients.platform-service.service-key}") String internalServiceKey) {
         this.platformEventSessionClient = platformEventSessionClient;
         this.internalServiceKey = internalServiceKey;
     }
