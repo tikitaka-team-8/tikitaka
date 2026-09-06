@@ -4,6 +4,7 @@ import com.tikitaka.ticketing.global.exception.BusinessException;
 import com.tikitaka.ticketing.global.persistence.entity.BaseEntity;
 import com.tikitaka.ticketing.reservation.domain.enums.ReservationFailureReason;
 import com.tikitaka.ticketing.reservation.domain.enums.ReservationStatus;
+import com.tikitaka.ticketing.reservation.domain.model.ReservationSeatCreationData;
 import com.tikitaka.ticketing.reservation.exception.ReservationErrorCode;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -27,7 +28,7 @@ public class Reservation extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID reservationId;
 
-    /* TODO: flyway v2 추가 후 주석 해제
+    /* TODO: flyway v3 추가 후 주석 해제
     @Version
     @Column(nullable = false)
     private Long version;*/
@@ -82,7 +83,8 @@ public class Reservation extends BaseEntity {
     }
 
     public static Reservation create(Long userId, UUID eventId, UUID eventSessionId, String reservationNumber, String eventTitle,
-            Instant sessionStartAt, Integer seatCount, Long totalAmount, String idempotencyKey, List<ReservationSeat> reservationSeats) {
+            Instant sessionStartAt, Integer seatCount, Long totalAmount, String idempotencyKey,
+            List<ReservationSeatCreationData> reservationSeatCreationData) {
 
         validateCoreInvariants(reservationNumber, seatCount, totalAmount, idempotencyKey);
 
@@ -97,7 +99,7 @@ public class Reservation extends BaseEntity {
         reservation.totalAmount = totalAmount;
         reservation.reservationStatus = ReservationStatus.PAYMENT_PENDING;
         reservation.idempotencyKey = idempotencyKey;
-        reservation.addReservationSeats(reservationSeats);
+        reservation.initializeReservationSeats(reservationSeatCreationData);
 
         return reservation;
     }
@@ -110,8 +112,12 @@ public class Reservation extends BaseEntity {
         }
     }
 
-    public void addReservationSeats(List<ReservationSeat> reservationSeats) {
-        // TODO: 예매 생성 로직 구현 시 예매-예매좌석 관련된 필드 채우는 내용 작성 예정
+    private void initializeReservationSeats(List<ReservationSeatCreationData> reservationSeatCreationData) {
+        reservationSeatCreationData.forEach(
+                seatData -> reservationSeats.add(
+                        ReservationSeat.create(this, userId, seatData.seatHoldId(), seatData.scheduleSeatId(), seatData.price())
+                )
+        );
     }
 
     public void validatePaymentAvailability() {

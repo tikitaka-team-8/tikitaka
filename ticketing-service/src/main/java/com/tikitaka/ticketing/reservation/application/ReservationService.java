@@ -6,14 +6,19 @@ import com.tikitaka.ticketing.reservation.application.command.CreateReservationC
 import com.tikitaka.ticketing.reservation.application.command.GetReservationCommand;
 import com.tikitaka.ticketing.reservation.application.command.PaymentValidationCommand;
 import com.tikitaka.ticketing.reservation.application.command.SearchReservationsCommand;
+import com.tikitaka.ticketing.reservation.application.result.CreateReservationResult;
 import com.tikitaka.ticketing.reservation.application.result.PaymentValidationResult;
 import com.tikitaka.ticketing.reservation.application.result.ReservationResult;
 import com.tikitaka.ticketing.reservation.application.result.ReservationSearchResult;
 import com.tikitaka.ticketing.reservation.domain.entity.Reservation;
+import com.tikitaka.ticketing.reservation.domain.entity.ReservationSeat;
 import com.tikitaka.ticketing.reservation.domain.enums.ReservationStatus;
 import com.tikitaka.ticketing.reservation.domain.model.ReservationCreationSeatInfo;
+import com.tikitaka.ticketing.reservation.domain.model.ReservationEventSessionInfo;
+import com.tikitaka.ticketing.reservation.domain.model.ReservationSeatCreationData;
 import com.tikitaka.ticketing.reservation.domain.model.ReservationSeatInfo;
 import com.tikitaka.ticketing.reservation.domain.model.SeatHoldValidationInfo;
+import com.tikitaka.ticketing.reservation.domain.port.EventSessionQueryPort;
 import com.tikitaka.ticketing.reservation.domain.port.ReservationRepositoryPort;
 import com.tikitaka.ticketing.reservation.domain.port.SeatHoldQueryPort;
 import com.tikitaka.ticketing.reservation.exception.ReservationErrorCode;
@@ -49,10 +54,13 @@ public class ReservationService {
 
     private final ReservationRepositoryPort reservationRepositoryPort;
     private final SeatHoldQueryPort seatHoldQueryPort;
+    private final EventSessionQueryPort eventSessionQueryPort;
 
-    public ReservationService(ReservationRepositoryPort reservationRepositoryPort, SeatHoldQueryPort seatHoldQueryPort) {
+    public ReservationService(ReservationRepositoryPort reservationRepositoryPort, SeatHoldQueryPort seatHoldQueryPort,
+            EventSessionQueryPort eventSessionQueryPort) {
         this.reservationRepositoryPort = reservationRepositoryPort;
         this.seatHoldQueryPort = seatHoldQueryPort;
+        this.eventSessionQueryPort = eventSessionQueryPort;
     }
 
     public ReservationResult getReservation(GetReservationCommand command) {
@@ -105,7 +113,19 @@ public class ReservationService {
     }
 
     @Transactional
-    public void createReservation(CreateReservationCommand command) {
+    public CreateReservationResult createReservation(CreateReservationCommand command) {
+
+        // 요청 좌석 선점 ID 형식 검증
+        validateRequestedSeatHoldIds(command.getSeatHoldIds());
+
+        // 동일 멱등 요청이면 기존 예매 반환
+        Reservation existingReservation = reservationRepositoryPort
+                .findByUserIdAndIdempotencyKey(command.getLoginUserId(), command.getIdempotencyKey())
+                .orElse(null);
+        if (existingReservation != null) {
+            validateIdempotentRequest(existingReservation, command.getSeatHoldIds());
+            return new CreateReservationResult(existingReservation, false);
+        }
 
         // 예매 생성용 좌석 정보 조회 및 검증
         List<ReservationCreationSeatInfo> seatInfos =
@@ -116,8 +136,29 @@ public class ReservationService {
         int seatCount = seatInfos.size();
         long totalAmount = calculateTotalAmount(seatInfos);
 
-        // TODO: 공연 회차 정보 조회 내부 API 호출 (Reservation -> Platform Service)
-            // 응답 값 바탕으로 예매 엔티티 생성 흐름 작성
+        // Reservation이 자식 엔티티를 생성할 수 있도록 좌석별 생성 데이터 구성
+        List<ReservationSeatCreationData> reservationSeatCreationData =
+                seatInfos.stream().map(
+                        seatInfo -> new ReservationSeatCreationData(
+                        seatInfo.seatHoldId(), seatInfo.scheduleSeatId(), seatInfo.price()
+                )).toList();
+
+        // Platform Service에서 예매 스냅샷용 공연 회차 정보 조회
+        ReservationEventSessionInfo eventSessionInfo = eventSessionQueryPort.getReservationInfo(eventSessionId);
+        validateEventSessionInfo(eventSessionId, eventSessionInfo);
+
+        // 검증·조회한 값으로 예매 생성 및 저장
+        Reservation reservation = Reservation.create(
+                command.getLoginUserId(), eventSessionInfo.eventId(), eventSessionId, generateReservationNumber(),
+                eventSessionInfo.eventTitle(), eventSessionInfo.sessionStartAt().toInstant(), seatCount, totalAmount,
+                command.getIdempotencyKey(), reservationSeatCreationData
+        );
+        Reservation savedReservation = reservationRepositoryPort.save(reservation);
+
+        // TODO: SeatHold 만료 시각 연장
+        // TODO: Payment 결제 생성 API 호출
+
+        return new CreateReservationResult(savedReservation, true);
     }
 
     private void validateReadAuthority(GetReservationCommand command, Reservation reservation) {
@@ -171,13 +212,33 @@ public class ReservationService {
 
     // 예매 생성용 좌석 정보를 조회하고 검증
     private List<ReservationCreationSeatInfo> findValidatedCreationSeats(Long loginUserId, List<UUID> seatHoldIds) {
-        validateRequestedSeatHoldIds(seatHoldIds);
-
         List<ReservationCreationSeatInfo> seatInfos =
                 seatHoldQueryPort.findCreationInfosBySeatHoldIds(seatHoldIds);
         validateCreationSeats(loginUserId, seatHoldIds, seatInfos);
 
         return seatInfos;
+    }
+
+    // 기존 예매와 동일한 좌석 선점 목록을 사용한 멱등 요청인지 검증
+    private void validateIdempotentRequest(Reservation existingReservation, List<UUID> seatHoldIds) {
+        Set<UUID> existingSeatHoldIds = existingReservation.getReservationSeats().stream()
+                .map(ReservationSeat::getSeatHoldId).collect(Collectors.toSet());
+
+        if (existingSeatHoldIds.size() != seatHoldIds.size() || !existingSeatHoldIds.containsAll(seatHoldIds)) {
+            throw new BusinessException(ReservationErrorCode.IDEMPOTENCY_KEY_REUSED);
+        }
+    }
+
+    // Platform Service 응답이 요청한 공연 회차 정보인지 검증
+    private void validateEventSessionInfo(UUID eventSessionId, ReservationEventSessionInfo eventSessionInfo) {
+        if (eventSessionInfo == null
+                || !Objects.equals(eventSessionId, eventSessionInfo.eventSessionId())
+                || eventSessionInfo.eventId() == null
+                || eventSessionInfo.eventTitle() == null
+                || eventSessionInfo.eventTitle().isBlank()
+                || eventSessionInfo.sessionStartAt() == null) {
+            throw new BusinessException(CommonErrorCode.DOWNSTREAM_SERVICE_FAILURE);
+        }
     }
 
     // 조회된 좌석 정보가 예매 생성 조건을 충족하는지 검증

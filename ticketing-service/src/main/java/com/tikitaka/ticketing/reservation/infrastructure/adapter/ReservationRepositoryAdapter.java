@@ -32,6 +32,11 @@ public class ReservationRepositoryAdapter implements ReservationRepositoryPort {
     }
 
     @Override
+    public Reservation save(Reservation reservation) {
+        return reservationRepository.save(reservation);
+    }
+
+    @Override
     public List<UUID> findUsedSeatHoldIds(List<UUID> seatHoldIds) {
         return reservationRepository.findUsedSeatHoldIds(seatHoldIds);
     }
