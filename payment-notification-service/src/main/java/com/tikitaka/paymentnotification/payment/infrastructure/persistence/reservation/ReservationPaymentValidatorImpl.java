@@ -22,7 +22,7 @@ public class ReservationPaymentValidatorImpl implements ReservationPaymentValida
 
     private final ReservationFeignClient reservationFeignClient;
 
-    @Value("${internal.ticketing-service-key}")
+    @Value("${clients.ticketing-service.service-key}")
     private String ticketingServiceKey;
 
     @Override

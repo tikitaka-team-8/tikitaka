@@ -12,7 +12,7 @@ import java.util.UUID;
 
 @FeignClient(
         name = "ticketing-service",
-        url = "${service.ticketing.url}"
+        url = "${clients.ticketing-service.url}"
 )
 
 public interface ReservationFeignClient {

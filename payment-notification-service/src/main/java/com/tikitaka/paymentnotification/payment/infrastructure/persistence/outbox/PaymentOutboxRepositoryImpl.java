@@ -2,9 +2,7 @@ package com.tikitaka.paymentnotification.payment.infrastructure.persistence.outb
 
 import com.tikitaka.paymentnotification.payment.domain.outbox.PaymentOutbox;
 import com.tikitaka.paymentnotification.payment.domain.outbox.PaymentOutboxRepository;
-import com.tikitaka.paymentnotification.payment.domain.outbox.PaymentOutboxStatus;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;

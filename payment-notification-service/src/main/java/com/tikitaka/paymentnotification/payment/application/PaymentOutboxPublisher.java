@@ -1,6 +1,7 @@
-package com.tikitaka.paymentnotification.payment.application.gateway;
+package com.tikitaka.paymentnotification.payment.application;
 
 
+import com.tikitaka.paymentnotification.payment.application.gateway.PaymentEventPublisher;
 import com.tikitaka.paymentnotification.payment.domain.outbox.PaymentOutbox;
 import com.tikitaka.paymentnotification.payment.domain.outbox.PaymentOutboxRepository;
 import com.tikitaka.paymentnotification.payment.exception.PaymentEventPublishException;
