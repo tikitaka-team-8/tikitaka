@@ -9,7 +9,7 @@ import java.security.MessageDigest;
 
 @Component
 public class ReservationInternalServiceKeyValidator {
-
+    // TODO: 추후 Ticketing Service 내 공통 필터 방식으로 변경 적용 검토
     private final byte[] expectedServiceKey;
 
     public ReservationInternalServiceKeyValidator(ReservationInternalServiceKeyProperties properties) {
