@@ -22,6 +22,7 @@ import com.tikitaka.ticketing.reservation.domain.port.EventSessionQueryPort;
 import com.tikitaka.ticketing.reservation.domain.port.ReservationRepositoryPort;
 import com.tikitaka.ticketing.reservation.domain.port.SeatHoldQueryPort;
 import com.tikitaka.ticketing.reservation.exception.ReservationErrorCode;
+import com.tikitaka.ticketing.seat.application.service.SeatHoldExtensionValidator;
 import com.tikitaka.ticketing.seat.domain.enums.HoldStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -55,12 +56,14 @@ public class ReservationService {
     private final ReservationRepositoryPort reservationRepositoryPort;
     private final SeatHoldQueryPort seatHoldQueryPort;
     private final EventSessionQueryPort eventSessionQueryPort;
+    private final SeatHoldExtensionValidator seatHoldExtensionValidator;
 
     public ReservationService(ReservationRepositoryPort reservationRepositoryPort, SeatHoldQueryPort seatHoldQueryPort,
-            EventSessionQueryPort eventSessionQueryPort) {
+            EventSessionQueryPort eventSessionQueryPort, SeatHoldExtensionValidator seatHoldExtensionValidator) {
         this.reservationRepositoryPort = reservationRepositoryPort;
         this.seatHoldQueryPort = seatHoldQueryPort;
         this.eventSessionQueryPort = eventSessionQueryPort;
+        this.seatHoldExtensionValidator = seatHoldExtensionValidator;
     }
 
     public ReservationResult getReservation(GetReservationCommand command) {
@@ -155,7 +158,11 @@ public class ReservationService {
         );
         Reservation savedReservation = reservationRepositoryPort.save(reservation);
 
-        // TODO: SeatHold 만료 시각 연장
+        // 예매에 포함된 SeatHold 만료 시각 연장
+        savedReservation.getReservationSeats().forEach(
+                reservationSeat -> seatHoldExtensionValidator.validateAndExtend(reservationSeat.getSeatHoldId())
+        );
+
         // TODO: Payment 결제 생성 API 호출
 
         return new CreateReservationResult(savedReservation, true);
