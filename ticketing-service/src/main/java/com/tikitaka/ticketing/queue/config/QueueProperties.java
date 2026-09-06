@@ -8,11 +8,12 @@ import java.time.Duration;
 public record QueueProperties(
         Duration admissionTokenTtl,
         Duration retentionAfterSalesClose,
-        int admissionBatchSize
+        int admissionBatchSize,
+        int expirationBatchSize
 ) {
     public QueueProperties {
-        if (admissionBatchSize <= 0) {
-            throw new IllegalArgumentException("admissionBatchSize must be positive");
+        if (admissionBatchSize <= 0 || expirationBatchSize <= 0) {
+            throw new IllegalArgumentException("Queue batch sizes must be positive");
         }
     }
 }

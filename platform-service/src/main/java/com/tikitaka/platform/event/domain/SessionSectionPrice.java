@@ -1,5 +1,6 @@
 package com.tikitaka.platform.event.domain;
 
+import com.tikitaka.platform.venue.domain.VenueSection;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -22,8 +23,9 @@ public class SessionSectionPrice {
   @JoinColumn(name = "event_session_id", nullable = false)
   private EventSession eventSession;
 
-  @Column(name = "venue_section_id", nullable = false)
-  private UUID venueSectionId;
+  @ManyToOne(fetch = FetchType.LAZY, optional = false)
+  @JoinColumn(name = "venue_section_id", nullable = false, updatable = false)
+  private VenueSection venueSection;
 
   @Column(name = "seat_grade", nullable = false, length = 30)
   private String seatGrade;
@@ -36,14 +38,14 @@ public class SessionSectionPrice {
 
   private SessionSectionPrice(
       EventSession eventSession,
-      UUID venueSectionId,
+      VenueSection venueSection,
       String seatGrade,
       long priceAmount
   ) {
 
     // TODO: 검증 필요
     this.eventSession = eventSession;
-    this.venueSectionId = venueSectionId;
+    this.venueSection = venueSection;
     this.seatGrade = seatGrade;
     this.priceAmount = priceAmount;
     this.salesEnabled = true;
@@ -51,13 +53,13 @@ public class SessionSectionPrice {
 
   public static SessionSectionPrice create(
       EventSession eventSession,
-      UUID venueSectionId,
+      VenueSection venueSection,
       String seatGrade,
       long priceAmount
   ) {
     return new SessionSectionPrice(
         eventSession,
-        venueSectionId,
+        venueSection,
         seatGrade,
         priceAmount
     );

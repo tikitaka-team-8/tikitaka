@@ -8,3 +8,7 @@ spring:
     validate-on-migrate: true
     out-of-order: false
     clean-disabled: true
+
+clients:
+  platform-service:
+    service-key: platform-internal-service-key-for-tests

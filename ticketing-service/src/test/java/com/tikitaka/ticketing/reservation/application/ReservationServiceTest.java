@@ -30,7 +30,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -294,7 +296,7 @@ class ReservationServiceTest {
         Reservation reservation = createPaymentProcessingReservation();
         PaymentValidationCommand command = new PaymentValidationCommand(RESERVATION_ID, OWNER_ID);
         SeatHoldValidationInfo seatHold = createSeatHoldValidationInfo(
-                OWNER_ID, HoldStatus.HOLDING, Instant.now().plusSeconds(600));
+                OWNER_ID, HoldStatus.HOLDING, Instant.now().plus(Duration.ofMinutes(10)));
 
         given(reservationRepositoryPort.findById(RESERVATION_ID)).willReturn(Optional.of(reservation));
         given(seatHoldQueryPort.findAllByIds(List.of(SEAT_HOLD_ID))).willReturn(List.of(seatHold));
@@ -385,7 +387,7 @@ class ReservationServiceTest {
         Reservation reservation = createPaymentProcessingReservation();
         PaymentValidationCommand command = new PaymentValidationCommand(RESERVATION_ID, OWNER_ID);
         SeatHoldValidationInfo seatHold = createSeatHoldValidationInfo(
-                OTHER_USER_ID, HoldStatus.HOLDING, Instant.now().plusSeconds(600));
+                OTHER_USER_ID, HoldStatus.HOLDING, Instant.now().plus(Duration.ofMinutes(10)));
 
         given(reservationRepositoryPort.findById(RESERVATION_ID)).willReturn(Optional.of(reservation));
         given(seatHoldQueryPort.findAllByIds(List.of(SEAT_HOLD_ID))).willReturn(List.of(seatHold));
@@ -406,7 +408,7 @@ class ReservationServiceTest {
         Reservation reservation = createPaymentProcessingReservation();
         PaymentValidationCommand command = new PaymentValidationCommand(RESERVATION_ID, OWNER_ID);
         SeatHoldValidationInfo seatHold = createSeatHoldValidationInfo(
-                OWNER_ID, HoldStatus.CONFIRMED, Instant.now().plusSeconds(600));
+                OWNER_ID, HoldStatus.CONFIRMED, Instant.now().plus(Duration.ofMinutes(10)));
 
         given(reservationRepositoryPort.findById(RESERVATION_ID)).willReturn(Optional.of(reservation));
         given(seatHoldQueryPort.findAllByIds(List.of(SEAT_HOLD_ID))).willReturn(List.of(seatHold));
@@ -427,7 +429,7 @@ class ReservationServiceTest {
         Reservation reservation = createPaymentProcessingReservation();
         PaymentValidationCommand command = new PaymentValidationCommand(RESERVATION_ID, OWNER_ID);
         SeatHoldValidationInfo seatHold = createSeatHoldValidationInfo(
-                OWNER_ID, HoldStatus.HOLDING, Instant.now().minusSeconds(1));
+                OWNER_ID, HoldStatus.HOLDING,Instant.now().minusSeconds(1));
 
         given(reservationRepositoryPort.findById(RESERVATION_ID)).willReturn(Optional.of(reservation));
         given(seatHoldQueryPort.findAllByIds(List.of(SEAT_HOLD_ID))).willReturn(List.of(seatHold));

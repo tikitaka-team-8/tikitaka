@@ -29,7 +29,8 @@ public class RedisQueueRepository implements QueueRepository {
     private static final String TOKEN_STATUS_FIELD = "status";
     private static final DefaultRedisScript<Long> CREATE_WAITING_ENTRY_SCRIPT = new DefaultRedisScript<>(
             """
-                    if redis.call('EXISTS', KEYS[1]) == 1 then
+                    if redis.call('EXISTS', KEYS[1]) == 1
+                        and redis.call('HGET', KEYS[1], 'status') ~= 'EXPIRED' then
                         return 0
                     end
 
@@ -89,6 +90,7 @@ public class RedisQueueRepository implements QueueRepository {
                     redis.call('ZREM', KEYS[2], ARGV[5])
                     redis.call('ZADD', KEYS[3], ARGV[6], ARGV[5])
                     redis.call('PEXPIRE', KEYS[3], ARGV[10])
+                    redis.call('SADD', KEYS[6], ARGV[7])
                     redis.call('HSET', KEYS[4],
                         'sessionId', ARGV[7],
                         'userId', ARGV[5],
@@ -117,6 +119,9 @@ public class RedisQueueRepository implements QueueRepository {
                         'admittedAt', ARGV[3],
                         'expiresAt', ARGV[4])
                     redis.call('ZREM', KEYS[2], ARGV[5])
+                    if redis.call('ZCARD', KEYS[2]) == 0 then
+                        redis.call('SREM', KEYS[4], ARGV[6])
+                    end
                     redis.call('HSET', KEYS[3], 'status', 'USED')
                     return 1
                     """,
@@ -144,6 +149,39 @@ public class RedisQueueRepository implements QueueRepository {
                     end
 
                     redis.call('SREM', KEYS[2], ARGV[1])
+                    return 1
+                    """,
+            Long.class
+    );
+    private static final DefaultRedisScript<Long> REMOVE_ACTIVE_SESSION_IF_EMPTY_SCRIPT = new DefaultRedisScript<>(
+            """
+                    if redis.call('ZCARD', KEYS[1]) ~= 0 then
+                        return 0
+                    end
+
+                    redis.call('SREM', KEYS[2], ARGV[1])
+                    return 1
+                    """,
+            Long.class
+    );
+    private static final DefaultRedisScript<Long> EXPIRE_IF_ADMITTED_SCRIPT = new DefaultRedisScript<>(
+            """
+                    local activeExpiresAt = redis.call('ZSCORE', KEYS[2], ARGV[1])
+                    if redis.call('EXISTS', KEYS[1]) == 0
+                        or redis.call('HGET', KEYS[1], 'status') ~= 'ADMITTED'
+                        or not activeExpiresAt
+                        or tonumber(activeExpiresAt) > tonumber(ARGV[2]) then
+                        return 0
+                    end
+
+                    redis.call('HSET', KEYS[1],
+                        'status', 'EXPIRED',
+                        'expiresAt', ARGV[3])
+                    redis.call('ZREM', KEYS[2], ARGV[1])
+                    redis.call('DEL', KEYS[3])
+                    if redis.call('ZCARD', KEYS[2]) == 0 then
+                        redis.call('SREM', KEYS[4], ARGV[4])
+                    end
                     return 1
                     """,
             Long.class
@@ -207,6 +245,15 @@ public class RedisQueueRepository implements QueueRepository {
     }
 
     @Override
+    public Set<UUID> findActiveSessionIds() {
+        Set<String> sessionIds = redisTemplate.opsForSet().members(activeSessionRegistryKey());
+        if (sessionIds == null || sessionIds.isEmpty()) {
+            return Set.of();
+        }
+        return sessionIds.stream().map(UUID::fromString).collect(java.util.stream.Collectors.toUnmodifiableSet());
+    }
+
+    @Override
     public void registerWaitingSession(UUID sessionId) {
         redisTemplate.opsForSet().add(waitingSessionRegistryKey(), sessionId.toString());
     }
@@ -216,6 +263,16 @@ public class RedisQueueRepository implements QueueRepository {
         Long removed = redisTemplate.execute(
                 REMOVE_WAITING_SESSION_IF_EMPTY_SCRIPT,
                 List.of(waitingKey(sessionId), waitingSessionRegistryKey()),
+                sessionId.toString()
+        );
+        return removed != null && removed == 1L;
+    }
+
+    @Override
+    public boolean removeActiveSessionIfEmpty(UUID sessionId) {
+        Long removed = redisTemplate.execute(
+                REMOVE_ACTIVE_SESSION_IF_EMPTY_SCRIPT,
+                List.of(activeKey(sessionId), activeSessionRegistryKey()),
                 sessionId.toString()
         );
         return removed != null && removed == 1L;
@@ -292,7 +349,8 @@ public class RedisQueueRepository implements QueueRepository {
                         waitingKey(admittedEntry.sessionId()),
                         activeKey(admittedEntry.sessionId()),
                         admissionTokenKey(admittedEntry.sessionId(), admissionToken.token()),
-                        admissionTokenReferenceKey(admittedEntry.sessionId(), admittedEntry.userId())
+                        admissionTokenReferenceKey(admittedEntry.sessionId(), admittedEntry.userId()),
+                        activeSessionRegistryKey()
                 ),
                 String.valueOf(admittedEntry.sequence()),
                 admittedEntry.joinedAt().toString(),
@@ -316,15 +374,59 @@ public class RedisQueueRepository implements QueueRepository {
                 List.of(
                         entryKey(enteredEntry.sessionId(), enteredEntry.userId()),
                         activeKey(enteredEntry.sessionId()),
-                        admissionTokenKey(enteredEntry.sessionId(), admissionToken.token())
+                        admissionTokenKey(enteredEntry.sessionId(), admissionToken.token()),
+                        activeSessionRegistryKey()
                 ),
                 String.valueOf(enteredEntry.sequence()),
                 enteredEntry.joinedAt().toString(),
                 optionalInstantValue(enteredEntry.admittedAt()),
                 optionalInstantValue(enteredEntry.expiresAt()),
-                String.valueOf(enteredEntry.userId())
+                String.valueOf(enteredEntry.userId()),
+                enteredEntry.sessionId().toString()
         );
         return entered != null && entered == 1L;
+    }
+
+    @Override
+    public List<QueueEntry> findExpiredAdmittedEntries(UUID sessionId, Instant now, int limit) {
+        if (limit <= 0) {
+            return List.of();
+        }
+
+        var userIds = redisTemplate.opsForZSet().rangeByScore(
+                activeKey(sessionId),
+                Double.NEGATIVE_INFINITY,
+                now.toEpochMilli(),
+                0,
+                limit
+        );
+        if (userIds == null || userIds.isEmpty()) {
+            return List.of();
+        }
+        return userIds.stream()
+                .map(Long::parseLong)
+                .map(userId -> findEntry(sessionId, userId))
+                .flatMap(Optional::stream)
+                .filter(entry -> entry.status() == QueueStatus.ADMITTED)
+                .toList();
+    }
+
+    @Override
+    public boolean expireIfAdmitted(QueueEntry expiredEntry, Instant now) {
+        Long expired = redisTemplate.execute(
+                EXPIRE_IF_ADMITTED_SCRIPT,
+                List.of(
+                        entryKey(expiredEntry.sessionId(), expiredEntry.userId()),
+                        activeKey(expiredEntry.sessionId()),
+                        admissionTokenReferenceKey(expiredEntry.sessionId(), expiredEntry.userId()),
+                        activeSessionRegistryKey()
+                ),
+                String.valueOf(expiredEntry.userId()),
+                String.valueOf(now.toEpochMilli()),
+                optionalInstantValue(expiredEntry.expiresAt()),
+                expiredEntry.sessionId().toString()
+        );
+        return expired != null && expired == 1L;
     }
 
     @Override
@@ -336,6 +438,7 @@ public class RedisQueueRepository implements QueueRepository {
     @Override
     public void removeActiveUser(UUID sessionId, long userId) {
         redisTemplate.opsForZSet().remove(activeKey(sessionId), String.valueOf(userId));
+        removeActiveSessionIfEmpty(sessionId);
     }
 
     @Override
@@ -392,6 +495,10 @@ public class RedisQueueRepository implements QueueRepository {
 
     private String waitingSessionRegistryKey() {
         return "queue:waiting-sessions";
+    }
+
+    private String activeSessionRegistryKey() {
+        return "queue:active-sessions";
     }
 
     private String entryKey(UUID sessionId, long userId) {

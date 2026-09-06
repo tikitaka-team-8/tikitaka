@@ -39,7 +39,8 @@ class EventSessionTest {
         changedPerformanceStartAt,
         changedPerformanceEndAt,
         null,
-        changedSalesCloseAt
+        changedSalesCloseAt,
+        false
     );
 
     assertThat(eventSession.getSessionNumber()).isEqualTo(2);
@@ -49,6 +50,8 @@ class EventSessionTest {
         .isEqualTo(changedPerformanceEndAt);
     assertThat(eventSession.getSalesCloseAt())
         .isEqualTo(changedSalesCloseAt);
+    assertThat(eventSession.isQueueEnabled())
+        .isFalse();
   }
 
   private EventSession createEventSession() {
@@ -58,7 +61,8 @@ class EventSessionTest {
         OffsetDateTime.parse("2026-09-10T19:00:00+09:00"),
         OffsetDateTime.parse("2026-09-10T21:00:00+09:00"),
         OffsetDateTime.parse("2026-09-01T10:00:00+09:00"),
-        OffsetDateTime.parse("2026-09-10T17:00:00+09:00")
+        OffsetDateTime.parse("2026-09-10T17:00:00+09:00"),
+        true
     );
   }
 

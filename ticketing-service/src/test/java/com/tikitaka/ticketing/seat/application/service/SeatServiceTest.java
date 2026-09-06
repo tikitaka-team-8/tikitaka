@@ -1,8 +1,11 @@
 package com.tikitaka.ticketing.seat.application.service;
 
 import com.tikitaka.ticketing.global.exception.BusinessException;
+import com.tikitaka.ticketing.queue.application.QueueAdmissionValidator;
 import com.tikitaka.ticketing.queue.application.QueueService;
 import com.tikitaka.ticketing.seat.domain.entity.ScheduleSeat;
+import com.tikitaka.ticketing.seat.domain.entity.SeatHold;
+import com.tikitaka.ticketing.seat.domain.enums.SeatStatus;
 import com.tikitaka.ticketing.seat.domain.repository.ScheduleSeatRepository;
 import com.tikitaka.ticketing.seat.domain.repository.SeatHoldRepository;
 import com.tikitaka.ticketing.seat.exception.SeatErrorCode;
@@ -15,12 +18,16 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -33,7 +40,10 @@ class SeatServiceTest {
     private SeatHoldRepository seatHoldRepository;
 
     @Mock
-    private QueueService queueService;
+    private  QueueAdmissionValidator queueAdmissionValidator;
+
+    @Mock
+    private Clock clock;
 
     @InjectMocks
     private SeatService seatService;
@@ -42,6 +52,9 @@ class SeatServiceTest {
     private UUID scheduleSeatId;
     private Long userId;
     private String admissionToken;
+    private String idempotencyKey;
+
+
 
     @BeforeEach
     void setUp() {
@@ -49,6 +62,7 @@ class SeatServiceTest {
         scheduleSeatId = UUID.randomUUID();
         userId = 1L;
         admissionToken = "admission-token";
+        idempotencyKey = "test-idempotency-key";
     }
 
     @Test
@@ -61,7 +75,7 @@ class SeatServiceTest {
         List<ScheduleSeat> seats =
                 List.of(seat1, seat2, seat3);
 
-        doNothing().when(queueService)
+        doNothing().when(queueAdmissionValidator)
                 .validateAndEnter(
                         eventSessionId,
                         userId,
@@ -85,7 +99,7 @@ class SeatServiceTest {
 
         assertThat(response).isNotNull();
 
-        verify(queueService)
+        verify(queueAdmissionValidator)
                 .validateAndEnter(
                         eventSessionId,
                         userId,
@@ -123,7 +137,7 @@ class SeatServiceTest {
 
         assertThat(response).isNotNull();
 
-        verify(queueService)
+        verify(queueAdmissionValidator)
                 .validateAndEnter(
                         eventSessionId,
                         userId,
@@ -156,7 +170,7 @@ class SeatServiceTest {
                 );
 
         assertThat(response).isNotNull();
-        verify(queueService)
+        verify(queueAdmissionValidator)
                 .validateEntered(
                         eventSessionId,
                         userId
@@ -188,7 +202,7 @@ class SeatServiceTest {
                         ((BusinessException) exception).getErrorCode()
                 )
                 .isEqualTo(SeatErrorCode.SESSION_OR_SEAT_NOT_FOUND);
-        verify(queueService)
+        verify(queueAdmissionValidator)
                 .validateEntered(
                         eventSessionId,
                         userId
@@ -204,7 +218,7 @@ class SeatServiceTest {
     void 대기열_검증에_실패하면_좌석을_조회하지_않는다() {
 
         doThrow(new BusinessException(SeatErrorCode.SESSION_OR_SEAT_NOT_FOUND))
-                .when(queueService)
+                .when(queueAdmissionValidator)
                 .validateAndEnter(
                         eventSessionId,
                         userId,
@@ -220,7 +234,7 @@ class SeatServiceTest {
                 )
         )
                 .isInstanceOf(BusinessException.class);
-        verify(queueService)
+        verify(queueAdmissionValidator)
                 .validateAndEnter(
                         eventSessionId,
                         userId,
@@ -231,6 +245,49 @@ class SeatServiceTest {
                         eventSessionId,
                         null,
                         null
+                );
+    }
+
+    @Test
+    void 좌석_선점시_비관적락_조회_메서드를_호출한다() {
+        // given
+        ScheduleSeat seat = mock(ScheduleSeat.class);
+        SeatHold savedHold = mock(SeatHold.class);
+
+        Instant heldAt = Instant.parse("2026-09-04T03:00:00Z");
+
+        given(seatHoldRepository.findByUserIdAndIdempotencyKey(
+                userId,
+                idempotencyKey
+        )).willReturn(Optional.empty());
+
+        given(scheduleSeatRepository.findByIdForUpdate(
+                eventSessionId,
+                scheduleSeatId
+        )).willReturn(Optional.of(seat));
+
+        given(seat.getScheduleSeatId())
+                .willReturn(scheduleSeatId);
+
+        given(clock.instant())
+                .willReturn(heldAt);
+
+        given(seatHoldRepository.save(any(SeatHold.class)))
+                .willReturn(savedHold);
+
+        // when
+        seatService.holdSeat(
+                eventSessionId,
+                scheduleSeatId,
+                userId,
+                idempotencyKey
+        );
+
+        // then
+        then(scheduleSeatRepository).should()
+                .findByIdForUpdate(
+                        eventSessionId,
+                        scheduleSeatId
                 );
     }
 }

@@ -11,4 +11,6 @@ public interface ScheduleSeatRepository {
     List<ScheduleSeat> findSeats(UUID eventSessionId, String section, String grade);
 
     Optional<ScheduleSeat> findSeatDetail(UUID eventSessionId, UUID scheduleSeatId);
+
+    Optional<ScheduleSeat> findByIdForUpdate(UUID eventSessionId, UUID scheduleSeatId);
 }

@@ -4,6 +4,7 @@ import com.tikitaka.ticketing.global.response.ApiResponse;
 import com.tikitaka.ticketing.seat.application.service.SeatService;
 import com.tikitaka.ticketing.seat.presentation.dto.response.ScheduleSeatListResponse;
 import com.tikitaka.ticketing.seat.presentation.dto.response.ScheduleSeatResponse;
+import com.tikitaka.ticketing.seat.presentation.dto.response.SeatHoldResponse;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
@@ -63,24 +64,24 @@ public class SeatController {
         );
     }
 
-//    @PostMapping("/{eventSessionId}/seats/{scheduleSeatId}/hold")
-//    public ApiResponse<SeatHoldResponse> holdSeat(
-//            @PathVariable UUID eventSessionId,
-//            @PathVariable UUID scheduleSeatId,
-//            @RequestHeader(USER_ID_HEADER) @Positive Long userId,
-//            @RequestHeader(IDEMPOTENCY_KEY_HEADER) @NotBlank String idempotencyKey
-//    ) {
-//        SeatHoldResponse response = seatService.holdSeat(
-//                eventSessionId,
-//                scheduleSeatId,
-//                userId,
-//                idempotencyKey
-//        );
-//        return ApiResponse.success(
-//                        HttpStatus.CREATED,
-//                        "좌석 선점이 완료되었습니다.",
-//                        response
-//                );
-//    }
+    @PostMapping("/{eventSessionId}/seats/{scheduleSeatId}/hold")
+    public ApiResponse<SeatHoldResponse> holdSeat(
+            @PathVariable UUID eventSessionId,
+            @PathVariable UUID scheduleSeatId,
+            @RequestHeader(USER_ID_HEADER) @Positive Long userId,
+            @RequestHeader(IDEMPOTENCY_KEY_HEADER) @NotBlank String idempotencyKey
+    ) {
+        SeatHoldResponse response = seatService.holdSeat(
+                eventSessionId,
+                scheduleSeatId,
+                userId,
+                idempotencyKey
+        );
+        return ApiResponse.success(
+                        HttpStatus.CREATED,
+                        "좌석 선점이 완료되었습니다.",
+                        response
+                );
+    }
 
 }

@@ -62,7 +62,7 @@ class QueueServiceTest {
         queueService = new QueueService(
                 queueRepository,
                 platformSalesStatusClient,
-                new QueueProperties(Duration.ofMinutes(10), Duration.ofHours(1), 50),
+                new QueueProperties(Duration.ofMinutes(10), Duration.ofHours(1), 50, 50),
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 new ObjectMapper()
         );
@@ -94,6 +94,22 @@ class QueueServiceTest {
     }
 
     @Test
+    void 만료된_입장_권한은_새_WAITING_엔트리로_원자적으로_교체한다() {
+        QueueEntry expiredEntry = waitingEntry(5L).admit(NOW.minus(Duration.ofMinutes(10))).expire(NOW);
+        QueueEntry reenteredEntry = waitingEntry(6L);
+        when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.of(expiredEntry));
+        when(platformSalesStatusClient.getSalesStatus(SESSION_ID)).thenReturn(openSalesStatus());
+        when(queueRepository.createWaitingEntryIfAbsent(
+                eq(SESSION_ID), eq(USER_ID), eq(NOW), eq(NOW.plus(Duration.ofHours(2))), eq(Duration.ofHours(2))))
+                .thenReturn(Optional.of(reenteredEntry));
+
+        QueueEntry result = queueService.enterQueue(SESSION_ID, USER_ID);
+
+        assertThat(result).isEqualTo(reenteredEntry);
+        verify(queueRepository, never()).deleteEntry(SESSION_ID, USER_ID);
+    }
+
+    @Test
     void 판매_검증과_엔트리_생성에_동일한_시각을_사용한다() {
         Instant justBeforeSalesClose = NOW.minusMillis(1);
         Clock advancingClock = mock(Clock.class);
@@ -101,7 +117,7 @@ class QueueServiceTest {
         QueueService serviceWithAdvancingClock = new QueueService(
                 queueRepository,
                 platformSalesStatusClient,
-                new QueueProperties(Duration.ofMinutes(10), Duration.ofHours(1), 50),
+                new QueueProperties(Duration.ofMinutes(10), Duration.ofHours(1), 50, 50),
                 advancingClock,
                 new ObjectMapper()
         );
@@ -287,6 +303,20 @@ class QueueServiceTest {
         assertThat(result.position()).isNull();
         assertThat(result.admissionToken()).isEqualTo(token);
         verify(queueRepository, never()).admitIfWaiting(any(), any(), any(), any());
+    }
+
+    @Test
+    void EXPIRED_상태_조회는_순번과_입장_토큰을_반환하지_않는다() {
+        QueueEntry expiredEntry = waitingEntry(5L).admit(NOW.minus(Duration.ofMinutes(10))).expire(NOW);
+        when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.of(expiredEntry));
+
+        QueueStatusResult result = queueService.getQueueStatus(SESSION_ID, USER_ID);
+
+        assertThat(result.entry()).isEqualTo(expiredEntry);
+        assertThat(result.position()).isNull();
+        assertThat(result.admissionToken()).isNull();
+        verify(queueRepository, never()).findWaitingPosition(SESSION_ID, USER_ID);
+        verify(queueRepository, never()).findAdmissionTokenReference(SESSION_ID, USER_ID);
     }
 
     @Test

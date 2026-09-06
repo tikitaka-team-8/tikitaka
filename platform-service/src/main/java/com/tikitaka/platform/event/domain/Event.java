@@ -9,6 +9,8 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -34,6 +36,9 @@ public class Event {
   @ManyToOne(fetch = FetchType.LAZY, optional = false)
   @JoinColumn(name = "venue_id", nullable = false)
   private Venue venue;
+
+  @OneToMany(mappedBy = "event", fetch = FetchType.LAZY)
+  private List<EventSession> sessions = new ArrayList<>();
 
   @Column(name = "title", nullable = false, length = 200)
   private String title;
@@ -119,6 +124,21 @@ public class Event {
     this.status = EventStatus.UPCOMING;
   }
 
+  // 공연 예매중
+  public void openSales() {
+
+    // TODO: 검증 필요
+    if (status != EventStatus.UPCOMING) {
+      throw new BusinessException(EventErrorCode.INVALID_EVENT_STATUS);
+    }
+
+    status = EventStatus.ON_SALE;
+  }
+
+  public boolean isPubliclyVisible() {
+    return status.isPubliclyVisible();
+  }
+
   private void validateModifiableStatus() {
     if (this.status != EventStatus.DRAFT) {
       throw new BusinessException(EventErrorCode.EVENT_NOT_MODIFIABLE);
@@ -130,4 +150,7 @@ public class Event {
       throw new BusinessException(EventErrorCode.INVALID_EVENT_STATUS);
     }
   }
+
+
+
 }

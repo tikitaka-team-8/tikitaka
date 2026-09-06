@@ -124,6 +124,7 @@ class RedisQueueRepositoryTest {
         assertThat(redisTemplate.opsForZSet().score("queue:active:{" + sessionId + "}", "100"))
                 .isEqualTo(admissionToken.expiresAt().toEpochMilli());
         assertThat(redisTemplate.getExpire("queue:active:{" + sessionId + "}")).isPositive();
+        assertThat(queueRepository.findActiveSessionIds()).contains(sessionId);
         assertThat(queueRepository.findAdmissionToken(sessionId, admissionToken.token())).contains(admissionToken);
         assertThat(queueRepository.findAdmissionTokenReference(sessionId, 100L)).contains(admissionToken.token());
         long admissionTokenTtl = redisTemplate.getExpire(
@@ -145,6 +146,42 @@ class RedisQueueRepositoryTest {
                 .get()
                 .extracting(AdmissionToken::status)
                 .isEqualTo(AdmissionTokenStatus.USED);
+        assertThat(queueRepository.findActiveSessionIds()).doesNotContain(sessionId);
+    }
+
+    @Test
+    void 만료된_ADMITTED_사용자를_EXPIRED로_전환하고_새_대기열_진입을_허용한다() {
+        UUID sessionId = UUID.randomUUID();
+        QueueEntry waitingEntry = createWaitingEntry(sessionId, 100L);
+        AdmissionToken admissionToken = admissionToken(sessionId, "token-1", 100L);
+        QueueEntry admittedEntry = waitingEntry.admit(Instant.parse("2026-09-01T01:01:00Z"));
+        Instant expirationTime = admissionToken.expiresAt();
+
+        assertThat(queueRepository.admitIfWaiting(admittedEntry, admissionToken, SESSION_TTL, Duration.ofMinutes(10)))
+                .isTrue();
+        assertThat(queueRepository.findExpiredAdmittedEntries(sessionId, expirationTime.minusMillis(1), 50)).isEmpty();
+        assertThat(queueRepository.findExpiredAdmittedEntries(sessionId, expirationTime, 50))
+                .containsExactly(admittedEntry);
+
+        assertThat(queueRepository.expireIfAdmitted(admittedEntry.expire(expirationTime), expirationTime)).isTrue();
+        assertThat(queueRepository.findEntry(sessionId, 100L))
+                .get()
+                .extracting(QueueEntry::status, QueueEntry::expiresAt)
+                .containsExactly(QueueStatus.EXPIRED, expirationTime);
+        assertThat(redisTemplate.opsForZSet().score("queue:active:{" + sessionId + "}", "100")).isNull();
+        assertThat(queueRepository.findAdmissionTokenReference(sessionId, 100L)).isEmpty();
+        assertThat(queueRepository.findActiveSessionIds()).doesNotContain(sessionId);
+
+        QueueEntry reentered = queueRepository.createWaitingEntryIfAbsent(
+                sessionId,
+                100L,
+                expirationTime.plusSeconds(1),
+                expirationTime.plus(SESSION_TTL),
+                SESSION_TTL
+        ).orElseThrow();
+
+        assertThat(reentered.status()).isEqualTo(QueueStatus.WAITING);
+        assertThat(reentered.sequence()).isEqualTo(2L);
     }
 
     @Test

@@ -31,7 +31,6 @@ public class EventSession {
   )
   private Event event;
 
-
   @OneToMany(
       mappedBy = "eventSession",
       cascade = CascadeType.ALL,
@@ -58,13 +57,17 @@ public class EventSession {
   @Column(name = "status", nullable = false, length = 30)
   private EventSessionStatus status;
 
+  @Column(name = "queue_enabled", nullable = false)
+  private boolean queueEnabled;
+
   private EventSession(
       Event event,
       Integer sessionNumber,
       OffsetDateTime performanceStartAt,
       OffsetDateTime performanceEndAt,
       OffsetDateTime salesOpenAt,
-      OffsetDateTime salesCloseAt
+      OffsetDateTime salesCloseAt,
+      boolean queueEnabled
   ) {
 
     // 공연 검증
@@ -86,6 +89,7 @@ public class EventSession {
     this.salesOpenAt = salesOpenAt;
     this.salesCloseAt = salesCloseAt;
     this.status = EventSessionStatus.SCHEDULED;
+    this.queueEnabled = queueEnabled;
   }
 
   public static EventSession create(
@@ -94,7 +98,8 @@ public class EventSession {
       OffsetDateTime performanceStartAt,
       OffsetDateTime performanceEndAt,
       OffsetDateTime salesOpenAt,
-      OffsetDateTime salesCloseAt
+      OffsetDateTime salesCloseAt,
+      boolean queueEnabled
   ) {
     return new EventSession(
         event,
@@ -102,7 +107,8 @@ public class EventSession {
         performanceStartAt,
         performanceEndAt,
         salesOpenAt,
-        salesCloseAt
+        salesCloseAt,
+        queueEnabled
     );
   }
 
@@ -112,7 +118,8 @@ public class EventSession {
       OffsetDateTime performanceStartAt,
       OffsetDateTime performanceEndAt,
       OffsetDateTime salesOpenAt,
-      OffsetDateTime salesCloseAt
+      OffsetDateTime salesCloseAt,
+      Boolean queueEnabled
   ) {
 
     // SCHEDULED 상태에서만 수정 가능
@@ -137,6 +144,7 @@ public class EventSession {
     OffsetDateTime nextSalesCloseAt =
         salesCloseAt != null ? salesCloseAt : this.salesCloseAt;
 
+    boolean nextQueueEnabled = queueEnabled != null ? queueEnabled : this.queueEnabled;
 
     //회차 시간 검증
     validateSchedule(
@@ -152,6 +160,12 @@ public class EventSession {
     this.performanceEndAt = nextPerformanceEndAt;
     this.salesOpenAt = nextSalesOpenAt;
     this.salesCloseAt = nextSalesCloseAt;
+    this.queueEnabled = nextQueueEnabled;
+  }
+
+  // 공개 회차 CANCELED 상태 제외
+  public boolean isPubliclyVisible() {
+    return status != EventSessionStatus.CANCELED;
   }
 
   // 공연 검증
@@ -191,5 +205,13 @@ public class EventSession {
         || this.status != EventSessionStatus.SCHEDULED) {
       throw new BusinessException(EventErrorCode.EVENT_SESSION_MODIFICATION_NOT_ALLOWED);
     }
+  }
+
+
+  // 예매가 가능한 시간인지
+  public boolean isReservableAt(OffsetDateTime now) {
+    return status.isReservable()
+        && !now.isBefore(salesOpenAt)
+        && now.isBefore(salesCloseAt);
   }
 }

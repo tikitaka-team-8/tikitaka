@@ -108,6 +108,7 @@ macOS 또는 Linux:
 | Payment PostgreSQL | `localhost:5435` |
 | Platform Redis | `localhost:6380` |
 | Ticketing Redis | `localhost:6381` |
+| RedisInsight | <http://localhost:5540> |
 | Kafka | `localhost:9092` |
 | Kafka UI | <http://localhost:8085> |
 | Prometheus | <http://localhost:9090> |
@@ -117,4 +118,4 @@ macOS 또는 Linux:
 
 ## 상세 안내
 
-IntelliJ 설정, 서비스별 연결 정보 등에 관한 구체적인 사항은 [로컬 개발 환경 설정 가이드](docs/development-environment-setup.md)를 확인해 주세요.
+IntelliJ 설정, 서비스별 연결 정보와 Docker Compose 연동 개발 방법은 [로컬 개발 환경 설정 가이드](docs/development-environment-setup.md)를 확인해 주세요.
