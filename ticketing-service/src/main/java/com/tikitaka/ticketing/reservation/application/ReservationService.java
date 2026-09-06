@@ -30,8 +30,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -194,7 +194,7 @@ public class ReservationService {
             throw new BusinessException(ReservationErrorCode.INVALID_SEAT_HOLD_STATUS);
         }
 
-        OffsetDateTime now = OffsetDateTime.now(); // 모든 좌석에 동일 현재 시각 기준 검증
+        Instant now = Instant.now(); // 모든 좌석에 동일 현재 시각 기준 검증
         if (seatHolds.stream().anyMatch(seatHold -> !seatHold.expiresAt().isAfter(now))) {
             throw new BusinessException(ReservationErrorCode.SEAT_HOLD_EXPIRED);
         }
@@ -263,7 +263,7 @@ public class ReservationService {
         }
 
         // 좌석 선점 만료 여부 검증
-        OffsetDateTime now = OffsetDateTime.now();
+        Instant now = Instant.now();
         if (seatInfos.stream().anyMatch(seatInfo -> !seatInfo.expiresAt().isAfter(now))) {
             throw new BusinessException(ReservationErrorCode.SEAT_HOLD_EXPIRED);
         }
