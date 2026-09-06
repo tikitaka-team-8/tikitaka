@@ -42,10 +42,8 @@ management:
 clients:
   platform-service:
     service-key: ${INTERNAL_SERVICE_KEY}
-    url: ${PLATFORM_SERVICE_URL:http://localhost:8081}
   payment-notification-service:
     service-key: ${INTERNAL_SERVICE_KEY}
-    url: ${PAYMENT_NOTIFICATION_SERVICE_URL:http://localhost:8083}
 
 internal:
   service:
