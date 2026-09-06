@@ -13,12 +13,14 @@ import com.tikitaka.ticketing.reservation.application.result.ReservationSearchRe
 import com.tikitaka.ticketing.reservation.domain.entity.Reservation;
 import com.tikitaka.ticketing.reservation.domain.entity.ReservationSeat;
 import com.tikitaka.ticketing.reservation.domain.enums.ReservationStatus;
+import com.tikitaka.ticketing.reservation.domain.model.PaymentCreationInfo;
 import com.tikitaka.ticketing.reservation.domain.model.ReservationCreationSeatInfo;
 import com.tikitaka.ticketing.reservation.domain.model.ReservationEventSessionInfo;
 import com.tikitaka.ticketing.reservation.domain.model.ReservationSeatCreationData;
 import com.tikitaka.ticketing.reservation.domain.model.ReservationSeatInfo;
 import com.tikitaka.ticketing.reservation.domain.model.SeatHoldValidationInfo;
 import com.tikitaka.ticketing.reservation.domain.port.EventSessionQueryPort;
+import com.tikitaka.ticketing.reservation.domain.port.PaymentCreationPort;
 import com.tikitaka.ticketing.reservation.domain.port.ReservationRepositoryPort;
 import com.tikitaka.ticketing.reservation.domain.port.SeatHoldQueryPort;
 import com.tikitaka.ticketing.reservation.exception.ReservationErrorCode;
@@ -57,13 +59,16 @@ public class ReservationService {
     private final SeatHoldQueryPort seatHoldQueryPort;
     private final EventSessionQueryPort eventSessionQueryPort;
     private final SeatHoldExtensionValidator seatHoldExtensionValidator;
+    private final PaymentCreationPort paymentCreationPort;
 
     public ReservationService(ReservationRepositoryPort reservationRepositoryPort, SeatHoldQueryPort seatHoldQueryPort,
-            EventSessionQueryPort eventSessionQueryPort, SeatHoldExtensionValidator seatHoldExtensionValidator) {
+            EventSessionQueryPort eventSessionQueryPort, SeatHoldExtensionValidator seatHoldExtensionValidator,
+            PaymentCreationPort paymentCreationPort) {
         this.reservationRepositoryPort = reservationRepositoryPort;
         this.seatHoldQueryPort = seatHoldQueryPort;
         this.eventSessionQueryPort = eventSessionQueryPort;
         this.seatHoldExtensionValidator = seatHoldExtensionValidator;
+        this.paymentCreationPort = paymentCreationPort;
     }
 
     public ReservationResult getReservation(GetReservationCommand command) {
@@ -163,7 +168,14 @@ public class ReservationService {
                 reservationSeat -> seatHoldExtensionValidator.validateAndExtend(reservationSeat.getSeatHoldId())
         );
 
-        // TODO: Payment 결제 생성 API 호출
+        // Payment Service에 결제 정보 생성 요청
+        PaymentCreationInfo paymentCreationInfo = paymentCreationPort.createPayment(
+                savedReservation.getReservationId(), savedReservation.getUserId(), savedReservation.getTotalAmount(), savedReservation.getIdempotencyKey()
+        );
+        validatePaymentCreationInfo(savedReservation, paymentCreationInfo);
+
+        // 결제 ID 저장 및 결제 처리 중 상태로 전환
+        savedReservation.markAsPaymentProcessing(paymentCreationInfo.paymentId(), command.getLoginUserId());
 
         return new CreateReservationResult(savedReservation, true);
     }
@@ -245,6 +257,17 @@ public class ReservationService {
                 || eventSessionInfo.eventTitle().isBlank()
                 || eventSessionInfo.sessionStartAt() == null) {
             throw new BusinessException(CommonErrorCode.DOWNSTREAM_SERVICE_FAILURE);
+        }
+    }
+
+    // Payment Service 응답이 요청한 예매의 결제 정보인지 검증
+    private void validatePaymentCreationInfo(Reservation reservation, PaymentCreationInfo paymentCreationInfo) {
+        if (paymentCreationInfo == null
+                || paymentCreationInfo.paymentId() == null
+                || !Objects.equals(reservation.getReservationId(), paymentCreationInfo.reservationId())
+                || !Objects.equals(reservation.getTotalAmount(), paymentCreationInfo.amount())
+                || !"READY".equals(paymentCreationInfo.status())) {
+            throw new BusinessException(ReservationErrorCode.PAYMENT_CREATION_FAILED);
         }
     }
 

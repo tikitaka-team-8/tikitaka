@@ -24,6 +24,8 @@ spring:
 clients:
   platform-service:
     url: ${PLATFORM_SERVICE_URL:http://localhost:8081}
+  payment-notification-service:
+    url: ${PAYMENT_NOTIFICATION_SERVICE_URL:http://localhost:8083}
 
 queue:
   admission-token-ttl: PT10M

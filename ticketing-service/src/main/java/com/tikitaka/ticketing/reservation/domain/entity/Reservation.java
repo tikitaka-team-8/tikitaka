@@ -126,6 +126,18 @@ public class Reservation extends BaseEntity {
         }
     }
 
+    public void markAsPaymentProcessing(UUID paymentId, Long userId) {
+        if (paymentId == null) {
+            throw new BusinessException(ReservationErrorCode.PAYMENT_CREATION_FAILED);
+        }
+        if (this.paymentId != null && !this.paymentId.equals(paymentId)) {
+            throw new BusinessException(ReservationErrorCode.INVALID_RESERVATION_STATUS_TRANSITION);
+        }
+
+        this.paymentId = paymentId;
+        updateStatus(ReservationStatus.PAYMENT_PROCESSING, userId);
+    }
+
     public void updateStatus(ReservationStatus nextStatus, Long userId) {
         if (reservationStatus == nextStatus) {
             return;
