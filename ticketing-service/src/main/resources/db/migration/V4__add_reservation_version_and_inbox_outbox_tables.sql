@@ -3,9 +3,21 @@ ALTER TABLE p_reservation
 
 CREATE TABLE p_reservation_inbox (
     event_id              UUID            NOT NULL,
+    reservation_id        UUID            NOT NULL,
+    event_type            VARCHAR(100)    NOT NULL,
+    processed_at          TIMESTAMPTZ     NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT pk_reservation_inbox
-        PRIMARY KEY (event_id)
+        PRIMARY KEY (event_id),
+
+    CONSTRAINT ck_reservation_inbox_event_type
+        CHECK (
+            event_type IN (
+                'PAYMENT_SUCCEEDED',
+                'PAYMENT_FAILED'
+            )
+        )
 );
 
 CREATE TABLE p_reservation_outbox (
