@@ -4,6 +4,14 @@ server:
 spring:
   application:
     name: payment-notification-service
+  kafka:
+    consumer:
+      group-id: notification-reservation-group
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      ack-mode: record
   jpa:
     hibernate:
       ddl-auto: validate
