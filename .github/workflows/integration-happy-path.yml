@@ -91,6 +91,7 @@ jobs:
         run: docker compose up -d --no-build --wait --wait-timeout 120 gateway
 
       - name: 보안 시나리오와 Happy Path 실행
+        id: happy_path
         shell: bash
         env:
           TEST_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
@@ -99,6 +100,37 @@ jobs:
           mkdir -p integration-test-artifacts
           set -o pipefail
           bash scripts/integration-test/run.sh 2>&1 | tee integration-test-artifacts/scenario.log
+
+      - name: Ticketing 최종 상태 확인
+        shell: bash
+        env:
+          RESERVATION_ID: ${{ steps.happy_path.outputs.reservation_id }}
+          SEAT_HOLD_ID: ${{ steps.happy_path.outputs.seat_hold_id }}
+          SCHEDULE_SEAT_ID: ${{ steps.happy_path.outputs.schedule_seat_id }}
+        run: |
+          set -euo pipefail
+
+          actual_state="$(docker compose exec -T ticketing-postgres \
+            psql -v ON_ERROR_STOP=1 \
+              -v reservation_id="$RESERVATION_ID" \
+              -v seat_hold_id="$SEAT_HOLD_ID" \
+              -v schedule_seat_id="$SCHEDULE_SEAT_ID" \
+              -U "$TICKETING_DB_USERNAME" \
+              -d "$TICKETING_DB_NAME" \
+              --tuples-only \
+              --no-align \
+            < scripts/integration-test/verify-ticketing-state.sql \
+            | tr -d '[:space:]')"
+
+          expected_state="CONFIRMED|CONFIRMED|SOLD"
+          if [[ "$actual_state" != "$expected_state" ]]; then
+            printf '[FAIL] Ticketing 최종 상태 불일치: expected=%s, actual=%s\n' \
+              "$expected_state" "${actual_state:-ROW_NOT_FOUND}" >&2
+            exit 1
+          fi
+
+          printf '[OK] Reservation=%s, SeatHold=%s, ScheduleSeat=%s\n' \
+            CONFIRMED CONFIRMED SOLD
 
       - name: 실패 진단 자료 수집
         if: failure()

@@ -289,4 +289,12 @@ if [[ "$RESERVATION_STATUS" != "CONFIRMED" ]]; then
 fi
 assert_json ".data.reservationId == \"${RESERVATION_ID}\" and .data.paymentCompletedAt != null" "예매 확정과 결제 완료 시각 확인"
 
+if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+  {
+    printf 'reservation_id=%s\n' "$RESERVATION_ID"
+    printf 'seat_hold_id=%s\n' "$SEAT_HOLD_ID"
+    printf 'schedule_seat_id=%s\n' "$SEAT_ID"
+  } >>"$GITHUB_OUTPUT"
+fi
+
 printf '\n[OK] 결제와 예매 확정까지의 Happy Path 및 Gateway 보안 시나리오가 모두 통과했습니다.\n'
