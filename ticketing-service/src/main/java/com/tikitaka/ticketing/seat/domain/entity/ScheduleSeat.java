@@ -59,10 +59,16 @@ public class ScheduleSeat extends BaseEntity {
         this.seatStatus = SeatStatus.HELD;
     }
 
-//   선점 취소/만료 등으로 좌석을 다시 판매 가능(AVAILABLE) 상태로 변경
+//   선점 취소/만료 등으로 좌석을 다시 판매 가능(AVAILABLE) 상태로 전이
     public void release() {
         validateStatusTransition(SeatStatus.AVAILABLE);
         this.seatStatus = SeatStatus.AVAILABLE;
+    }
+
+//   결제/예매 성공으로 좌석을 판매 완료(SOLD) 상태로 전이
+    public void sell() {
+        validateStatusTransition(SeatStatus.SOLD);
+        this.seatStatus = SeatStatus.SOLD;
     }
 
     private void validateStatusTransition(SeatStatus nextStatus) {

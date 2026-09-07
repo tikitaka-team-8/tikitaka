@@ -27,7 +27,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-public class SeatService implements SeatHoldExtensionValidator {
+public class SeatService implements SeatHoldReservationValidator {
 
     private static final Duration HOLD_EXTENSION_DURATION = Duration.ofMinutes(10);
 
@@ -169,6 +169,37 @@ public class SeatService implements SeatHoldExtensionValidator {
 
         ScheduleSeat seat = getScheduleSeatForUpdateOrThrow(seatHold.getScheduleSeatId());
         releaseIfHolding(seatHold, seat, ReleaseReason.EXPIRED);
+    }
+
+    @Override
+    @Transactional
+    public void confirmHold(UUID seatHoldId) {
+        SeatHold seatHold = getSeatHoldOrThrow(seatHoldId);
+        if (seatHold.getHoldStatus() == HoldStatus.CONFIRMED) {
+            return;
+        }
+        ScheduleSeat seat = getScheduleSeatForUpdateOrThrow(seatHold.getScheduleSeatId());
+
+        if (seatHold.getHoldStatus() != HoldStatus.HOLDING) {
+            throw new BusinessException(SeatErrorCode.SEAT_HOLD_ALREADY_CLOSED);
+        }
+        seatHold.confirm(Instant.now(clock));
+        seat.sell();
+    }
+
+    @Override
+    @Transactional
+    public void releaseHold(UUID seatHoldId, ReleaseReason reason) {
+        SeatHold seatHold = getSeatHoldOrThrow(seatHoldId);
+        if (seatHold.getHoldStatus() == HoldStatus.RELEASED) {
+            return;
+        }
+        ScheduleSeat seat = getScheduleSeatForUpdateOrThrow(seatHold.getScheduleSeatId());
+
+        if (seatHold.getHoldStatus() != HoldStatus.HOLDING) {
+            throw new BusinessException(SeatErrorCode.SEAT_HOLD_ALREADY_CLOSED);
+        }
+        releaseIfHolding(seatHold, seat, reason);
     }
 
 
