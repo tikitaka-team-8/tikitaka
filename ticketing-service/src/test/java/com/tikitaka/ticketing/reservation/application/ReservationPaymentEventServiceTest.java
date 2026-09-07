@@ -10,6 +10,7 @@ import com.tikitaka.ticketing.reservation.domain.enums.ReservationFailureReason;
 import com.tikitaka.ticketing.reservation.domain.enums.ReservationStatus;
 import com.tikitaka.ticketing.reservation.domain.port.ReservationInboxRepositoryPort;
 import com.tikitaka.ticketing.reservation.domain.port.ReservationRepositoryPort;
+import com.tikitaka.ticketing.seat.application.service.SeatHoldReservationValidator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -47,6 +48,9 @@ class ReservationPaymentEventServiceTest {
 
     @Mock
     private ReservationInboxRepositoryPort reservationInboxRepositoryPort;
+
+    @Mock
+    private SeatHoldReservationValidator seatHoldReservationValidator;
 
     @InjectMocks
     private ReservationPaymentEventService reservationPaymentEventService;

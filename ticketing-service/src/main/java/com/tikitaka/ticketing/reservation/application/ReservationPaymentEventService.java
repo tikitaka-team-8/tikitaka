@@ -10,6 +10,8 @@ import com.tikitaka.ticketing.reservation.domain.enums.ReservationFailureReason;
 import com.tikitaka.ticketing.reservation.domain.port.ReservationInboxRepositoryPort;
 import com.tikitaka.ticketing.reservation.domain.port.ReservationRepositoryPort;
 import com.tikitaka.ticketing.reservation.exception.ReservationErrorCode;
+import com.tikitaka.ticketing.seat.application.service.SeatHoldReservationValidator;
+import com.tikitaka.ticketing.seat.domain.enums.ReleaseReason;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,11 +27,14 @@ public class ReservationPaymentEventService {
 
     private final ReservationRepositoryPort reservationRepositoryPort;
     private final ReservationInboxRepositoryPort reservationInboxRepositoryPort;
+    private final SeatHoldReservationValidator seatHoldReservationValidator;
 
     public ReservationPaymentEventService(ReservationRepositoryPort reservationRepositoryPort,
-            ReservationInboxRepositoryPort reservationInboxRepositoryPort) {
+            ReservationInboxRepositoryPort reservationInboxRepositoryPort,
+            SeatHoldReservationValidator seatHoldReservationValidator) {
         this.reservationRepositoryPort = reservationRepositoryPort;
         this.reservationInboxRepositoryPort = reservationInboxRepositoryPort;
+        this.seatHoldReservationValidator = seatHoldReservationValidator;
     }
 
     public boolean processPaymentSucceeded(PaymentSucceededCommand command) {
@@ -52,7 +57,10 @@ public class ReservationPaymentEventService {
         // 결제 성공 결과를 예매 상태에 반영
         boolean statusChanged = reservation.applyPaymentSucceeded(command.getApprovedAt(), SYSTEM_USER_ID);
         if (statusChanged) {
-            // TODO: Seat 기능 연결 - 예매 좌석의 ScheduleSeat 상태를 SOLD로 변경
+            // 예매 좌석의 SeatHold를 확정하고 ScheduleSeat를 판매 완료 상태로 변경
+            reservation.getReservationSeats().forEach(
+                    reservationSeat -> seatHoldReservationValidator.confirmHold(reservationSeat.getSeatHoldId())
+            );
         }
 
         // 예매 상태 변경과 동일한 트랜잭션에서 처리 완료 이벤트 기록
@@ -79,7 +87,12 @@ public class ReservationPaymentEventService {
         // 결제 실패 결과를 예매에 반영
         boolean statusChanged = reservation.applyPaymentFailed(ReservationFailureReason.PAYMENT_FAILED, SYSTEM_USER_ID);
         if (statusChanged) {
-            // TODO: Seat 기능 연결 - SeatHold 상태를 RELEASED, ScheduleSeat 상태를 AVAILABLE로 변경
+            // 예매 좌석의 SeatHold를 해제하고 ScheduleSeat를 다시 예매 가능한 상태로 변경
+            reservation.getReservationSeats().forEach(
+                    reservationSeat -> seatHoldReservationValidator.releaseHold(
+                            reservationSeat.getSeatHoldId(), ReleaseReason.PAYMENT_FAILED
+                    )
+            );
         }
 
         // 예매 상태 변경과 동일한 트랜잭션에서 처리 완료 이벤트 기록
