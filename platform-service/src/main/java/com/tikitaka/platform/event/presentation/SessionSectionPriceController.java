@@ -44,4 +44,28 @@ public class SessionSectionPriceController {
         )
     );
   }
+
+  @GetMapping
+  public ResponseEntity<ApiResponse<SessionSectionPricesResponse>> getSectionPrices(
+      @AuthenticationPrincipal AuthenticatedUser user,
+      @PathVariable UUID eventId,
+      @PathVariable UUID sessionId
+  ) {
+
+    SessionSectionPricesResponse response =
+        sessionSectionPriceService.getSectionPrices(
+        user.userId(),
+        eventId,
+        sessionId
+    );
+
+    return ResponseEntity.ok(
+        ApiResponse.success(
+            HttpStatus.OK,
+            "회차별 좌석 등급 가격이 조회되었습니다.",
+            response
+        )
+    );
+  }
+
 }

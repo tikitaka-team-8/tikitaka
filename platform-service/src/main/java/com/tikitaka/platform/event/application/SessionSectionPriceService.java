@@ -99,8 +99,49 @@ public class SessionSectionPriceService {
     );
   }
 
+  public SessionSectionPricesResponse getSectionPrices(
+      Long userId,
+      UUID eventId,
+      UUID sessionId
+  ) {
 
+    // 주최자 확인
+    Organizer organizer = organizerRepository.findByUserId(userId)
+        .orElseThrow(() ->
+            new BusinessException(
+                OrganizerErrorCode.ORGANIZER_NOT_FOUND
+            )
+        );
 
+    organizer.validateActive();
+
+    // 공연 확인
+    Event event = eventRepository
+        .findByIdAndOrganizerId(eventId, organizer.getId())
+        .orElseThrow(() ->
+            new BusinessException(
+                EventErrorCode.EVENT_NOT_FOUND
+            )
+        );
+
+    // 공연에 속한 회차 검증
+    EventSession eventSession = eventSessionRepository
+        .findByIdAndEventId(sessionId, event.getId())
+        .orElseThrow(() ->
+            new BusinessException(
+                EventErrorCode.EVENT_SESSION_NOT_FOUND
+            )
+        );
+
+    List<SessionSectionPrice> sectionPrices =
+        sessionSectionPriceRepository
+            .findAllByEventSessionId(sessionId);
+
+    return SessionSectionPricesResponse.from(
+        eventSession.getId(),
+        sectionPrices
+    );
+  }
   private void validateDuplicateSections(
       SessionSectionPricesCreateRequest request) {
 
@@ -166,4 +207,6 @@ public class SessionSectionPriceService {
     );
 
   }
+
+
 }

@@ -2,6 +2,7 @@ package com.tikitaka.platform.event.application;
 
 import com.tikitaka.platform.event.domain.Event;
 import com.tikitaka.platform.event.domain.EventSession;
+import com.tikitaka.platform.event.domain.SessionSectionPrice;
 import com.tikitaka.platform.event.exception.EventErrorCode;
 import com.tikitaka.platform.event.infrastructure.EventRepository;
 import com.tikitaka.platform.event.infrastructure.EventSessionRepository;
@@ -126,6 +127,7 @@ class SessionSectionPriceServiceTest {
         .isTrue();
   }
 
+  @Test
   void 같은_공연장_구역을_중복으로_설정할_수_없다() {
     Long userId = 1L;
     UUID organizerId = UUID.randomUUID();
@@ -178,4 +180,67 @@ class SessionSectionPriceServiceTest {
         .extracting("errorCode")
         .isEqualTo(EventErrorCode.DUPLICATE_SECTION_PRICE);
   }
+
+  @Test
+  void 회차별_좌석_등급_가격을_조회한다() {
+    Long userId = 1L;
+    UUID organizerId = UUID.randomUUID();
+    UUID eventId = UUID.randomUUID();
+    UUID sessionId = UUID.randomUUID();
+    UUID sectionId = UUID.randomUUID();
+
+    Organizer organizer = mock(Organizer.class);
+    Event event = mock(Event.class);
+    EventSession eventSession = mock(EventSession.class);
+    VenueSection venueSection = mock(VenueSection.class);
+    SessionSectionPrice sectionPrice = mock(SessionSectionPrice.class);
+
+    given(organizer.getId()).willReturn(organizerId);
+    given(event.getId()).willReturn(eventId);
+    given(eventSession.getId()).willReturn(sessionId);
+
+    given(venueSection.getId()).willReturn(sectionId);
+    given(venueSection.getName()).willReturn("VIP 구역");
+
+    given(sectionPrice.getVenueSection()).willReturn(venueSection);
+    given(sectionPrice.getSeatGrade()).willReturn("VIP");
+    given(sectionPrice.getPriceAmount()).willReturn(150_000L);
+    given(sectionPrice.isSalesEnabled()).willReturn(true);
+
+    given(organizerRepository.findByUserId(userId))
+        .willReturn(Optional.of(organizer));
+
+    given(eventRepository.findByIdAndOrganizerId(eventId, organizerId))
+        .willReturn(Optional.of(event));
+
+    given(eventSessionRepository.findByIdAndEventId(sessionId, eventId))
+        .willReturn(Optional.of(eventSession));
+
+    given(sessionSectionPriceRepository.findAllByEventSessionId(sessionId))
+        .willReturn(List.of(sectionPrice));
+
+    SessionSectionPricesResponse response =
+        sessionSectionPriceService.getSectionPrices(
+            userId,
+            eventId,
+            sessionId
+        );
+
+    assertThat(response.sessionId()).isEqualTo(sessionId);
+    assertThat(response.sectionPrices()).hasSize(1);
+
+    assertThat(response.sectionPrices().getFirst().venueSectionId())
+        .isEqualTo(sectionId);
+    assertThat(response.sectionPrices().getFirst().sectionName())
+        .isEqualTo("VIP 구역");
+    assertThat(response.sectionPrices().getFirst().seatGrade())
+        .isEqualTo("VIP");
+    assertThat(response.sectionPrices().getFirst().priceAmount())
+        .isEqualTo(150_000L);
+    assertThat(response.sectionPrices().getFirst().salesEnabled())
+        .isTrue();
+
+  }
+
+
 }
