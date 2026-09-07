@@ -5,6 +5,7 @@ import com.tikitaka.ticketing.seat.application.service.SeatService;
 import com.tikitaka.ticketing.seat.presentation.dto.response.ScheduleSeatListResponse;
 import com.tikitaka.ticketing.seat.presentation.dto.response.ScheduleSeatResponse;
 import com.tikitaka.ticketing.seat.presentation.dto.response.SeatHoldResponse;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
@@ -83,5 +84,16 @@ public class SeatController {
                         response
                 );
     }
+
+    @DeleteMapping("/seat-holds/{seatHoldId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void cancelHold(
+            @PathVariable UUID seatHoldId,
+            @RequestHeader(USER_ID_HEADER) @Positive Long userId
+    ) {
+        seatService.cancelHold(seatHoldId, userId);
+
+    }
+
 
 }

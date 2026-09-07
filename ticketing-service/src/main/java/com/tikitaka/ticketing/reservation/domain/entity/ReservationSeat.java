@@ -37,11 +37,21 @@ public class ReservationSeat extends BaseEntity {
     @Column(nullable = false)
     private boolean isDeleted = false;
 
+    private ReservationSeat(Reservation reservation, Long userId, UUID seatHoldId, UUID scheduleSeatId, Long price) {
+        super(userId);
+        this.reservation = reservation;
+        this.seatHoldId = seatHoldId;
+        this.scheduleSeatId = scheduleSeatId;
+        this.price = price;
+    }
+
+    static ReservationSeat create(Reservation reservation, Long userId, UUID seatHoldId, UUID scheduleSeatId, Long price) {
+        return new ReservationSeat(reservation, userId, seatHoldId, scheduleSeatId, price);
+    }
+
     @Override
     protected void markAsDeleted(Long deletedBy, Instant deletedAt) {
         super.markAsDeleted(deletedBy, deletedAt);
         this.isDeleted = true;
     }
-
-
 }

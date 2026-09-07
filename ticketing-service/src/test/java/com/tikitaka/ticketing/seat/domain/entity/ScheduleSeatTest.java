@@ -57,4 +57,27 @@ class ScheduleSeatTest {
                 .extracting(exception -> ((BusinessException) exception).getErrorCode())
                 .isEqualTo(SeatErrorCode.SEAT_NOT_FOR_SALE);
     }
+
+    @Test
+    void HELD_좌석을_해제하면_AVAILABLE_상태가_된다() {
+
+        ScheduleSeat seat = new ScheduleSeat();
+        ReflectionTestUtils.setField(seat, "seatStatus", SeatStatus.HELD);
+
+        seat.release();
+
+        assertThat(seat.getSeatStatus()).isEqualTo(SeatStatus.AVAILABLE);
+    }
+
+    @Test
+    void HELD_상태가_아닌_좌석을_해제하면_예외가_발생한다() {
+
+        ScheduleSeat seat = new ScheduleSeat();
+        ReflectionTestUtils.setField(seat, "seatStatus", SeatStatus.SOLD);
+
+        assertThatThrownBy(seat::release)
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(SeatErrorCode.INVALID_STATUS_TRANSITION);
+    }
 }
