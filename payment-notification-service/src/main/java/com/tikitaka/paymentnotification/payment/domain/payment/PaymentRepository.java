@@ -13,4 +13,7 @@ public interface PaymentRepository {
 
     Optional<Payment> findByReservationId(UUID reservationId);
 
+    boolean tryStartProcessing(UUID paymentId);
+
+    boolean tryRestoreReady(UUID paymentId);
 }
