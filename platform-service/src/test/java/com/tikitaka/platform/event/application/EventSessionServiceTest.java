@@ -2,11 +2,18 @@ package com.tikitaka.platform.event.application;
 
 import com.tikitaka.platform.event.domain.Event;
 import com.tikitaka.platform.event.domain.EventSession;
+import com.tikitaka.platform.event.domain.EventSessionStatus;
+import com.tikitaka.platform.event.domain.EventStatus;
 import com.tikitaka.platform.event.exception.EventErrorCode;
+import com.tikitaka.platform.event.infrastructure.EventRepository;
 import com.tikitaka.platform.event.infrastructure.EventSessionRepository;
+import com.tikitaka.platform.event.presentation.dto.EventSessionCreateRequest;
+import com.tikitaka.platform.event.presentation.dto.EventSessionCreateResponse;
 import com.tikitaka.platform.event.presentation.dto.EventSessionInfoResponse;
 import com.tikitaka.platform.global.exception.BusinessException;
 import com.tikitaka.platform.organizer.domain.Organizer;
+import com.tikitaka.platform.organizer.domain.OrganizerStatus;
+import com.tikitaka.platform.organizer.infrastructure.OrganizerRepository;
 import com.tikitaka.platform.venue.domain.Venue;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,13 +27,23 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static com.tikitaka.platform.fixture.EventFixture.createEvent;
+import static com.tikitaka.platform.fixture.OrganizerFixture.activeOrganizer;
+import static com.tikitaka.platform.fixture.OrganizerFixture.createOrganizer;
+import static com.tikitaka.platform.fixture.VenueFixture.createVenue;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 
 @ExtendWith(MockitoExtension.class)
 class EventSessionServiceTest {
+
+  @Mock
+  private OrganizerRepository organizerRepository;
+
+  @Mock
+  private EventRepository eventRepository;
 
   @Mock
   private EventSessionRepository eventSessionRepository;
@@ -44,8 +61,17 @@ class EventSessionServiceTest {
     Venue venue = mock(Venue.class);
 
     Event event = createEvent(organizer, venue);
+    OffsetDateTime now = OffsetDateTime.now();
 
-    EventSession eventSession = createEventSession(event);
+    EventSession eventSession = EventSession.create(
+        event,
+        1,
+        now.plusDays(10),
+        now.plusDays(10).plusHours(2),
+        now.minusDays(1),
+        now.plusDays(9),
+        true
+    );
 
     event.publish();
     event.openSales();
@@ -84,14 +110,58 @@ class EventSessionServiceTest {
         .isEqualTo(EventErrorCode.EVENT_NOT_RESERVABLE);
   }
 
+  @Test
+  void 활성_주최자는_회차를_등록할_수_있다() {
+    Long userId = 1L;
+
+    Organizer organizer = activeOrganizer(userId);
+
+    Venue venue = createVenue();
+    Event event = createEvent(organizer, venue);
+    EventSessionCreateRequest request = createEventSessionRequest();
+
+    given(organizerRepository.findByUserId(userId))
+        .willReturn(Optional.of(organizer));
+
+    given(eventRepository.findByIdAndOrganizerId(event.getId(), organizer.getId()))
+        .willReturn(Optional.of(event));
+
+    given(eventSessionRepository.save(any(EventSession.class)))
+        .willAnswer(invocation ->
+            invocation.getArgument(0, EventSession.class)
+        );
+
+    EventSessionCreateResponse response = eventSessionService.createEventSession(
+        organizer.getUserId(),
+        event.getId(), request
+    );
+
+    assertThat(response.sessionNumber()).isEqualTo(1);
+    assertThat(response.status()).isEqualTo(EventSessionStatus.SCHEDULED.name());
+  }
+
   private static EventSession createEventSession(Event event) {
+    OffsetDateTime now = OffsetDateTime.now();
+
     return EventSession.create(
         event,
         1,
-        OffsetDateTime.parse("2026-09-10T19:00:00+09:00"),
-        OffsetDateTime.parse("2026-09-10T21:00:00+09:00"),
-        OffsetDateTime.parse("2026-09-01T12:00:00+09:00"),
-        OffsetDateTime.parse("2026-09-10T18:00:00+09:00"),
+        now.plusDays(10),
+        now.plusDays(10).plusHours(2),
+        now.plusDays(1),
+        now.plusDays(9),
+        true
+    );
+  }
+
+  private EventSessionCreateRequest createEventSessionRequest() {
+    OffsetDateTime now = OffsetDateTime.now();
+
+    return new EventSessionCreateRequest(
+        now.plusDays(10),
+        now.plusDays(10).plusHours(2),
+        now.plusDays(1),
+        now.plusDays(9),
         true
     );
   }

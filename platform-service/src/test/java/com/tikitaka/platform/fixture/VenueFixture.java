@@ -16,4 +16,10 @@ public class VenueFixture {
         "010-1234-5678"
     );
   }
+
+  public static Venue deactivateVenue() {
+    Venue venue = createVenue();
+    venue.deactivate();
+    return venue;
+  }
 }
