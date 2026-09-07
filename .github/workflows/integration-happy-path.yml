@@ -50,7 +50,7 @@ jobs:
           echo "INTERNAL_SERVICE_KEY=${internal_service_key}" >> "$GITHUB_ENV"
 
       - name: 애플리케이션 이미지 빌드
-        run: docker compose build gateway platform-service ticketing-service
+        run: docker compose build gateway platform-service ticketing-service payment-notification-service
 
       - name: PostgreSQL Redis Kafka 기동
         run: |
@@ -59,13 +59,15 @@ jobs:
             platform-redis \
             ticketing-postgres \
             ticketing-redis \
+            payment-postgres \
             kafka
 
-      - name: Platform Ticketing 기동
+      - name: Platform Ticketing Payment 기동
         run: |
           docker compose up -d --no-build --wait --wait-timeout 180 \
             platform-service \
-            ticketing-service
+            ticketing-service \
+            payment-notification-service
 
       - name: Platform 테스트 데이터 준비
         shell: bash
@@ -107,8 +109,10 @@ jobs:
           docker compose logs --no-color --timestamps gateway > integration-test-artifacts/gateway.log 2>&1 || true
           docker compose logs --no-color --timestamps platform-service > integration-test-artifacts/platform-service.log 2>&1 || true
           docker compose logs --no-color --timestamps ticketing-service > integration-test-artifacts/ticketing-service.log 2>&1 || true
+          docker compose logs --no-color --timestamps payment-notification-service > integration-test-artifacts/payment-notification-service.log 2>&1 || true
           docker compose logs --no-color --timestamps platform-postgres > integration-test-artifacts/platform-postgres.log 2>&1 || true
           docker compose logs --no-color --timestamps ticketing-postgres > integration-test-artifacts/ticketing-postgres.log 2>&1 || true
+          docker compose logs --no-color --timestamps payment-postgres > integration-test-artifacts/payment-postgres.log 2>&1 || true
           docker compose logs --no-color --timestamps platform-redis ticketing-redis kafka > integration-test-artifacts/infrastructure.log 2>&1 || true
 
       - name: 실패 진단 자료 보존
