@@ -16,12 +16,15 @@ import java.util.UUID;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Payment {
+
+    private static final String DEFAULT_CURRENCY = "KRW";
+
     @Id
     @UuidGenerator
     @Column(name = "payment_id", nullable = false, updatable = false)
     private UUID paymentId;
 
-    @Column(name = "reservation_id", nullable = false)
+    @Column(name = "reservation_id", nullable = false, unique = true)
     private UUID reservationId;
 
     @Column(name = "user_id", nullable = false)
@@ -83,7 +86,6 @@ public class Payment {
             String orderId,
             String idempotencyKey,
             Long amount,
-            String currency,
             PaymentProvider paymentProvider
     ) {
         Payment payment = new Payment();
@@ -93,7 +95,7 @@ public class Payment {
         payment.orderId = orderId;
         payment.idempotencyKey = idempotencyKey;
         payment.amount = amount;
-        payment.currency = currency;
+        payment.currency = DEFAULT_CURRENCY;
         payment.paymentProvider = paymentProvider;
         payment.status = PaymentStatus.READY;
 
@@ -151,15 +153,11 @@ public class Payment {
     public boolean isSameRequest(
             UUID reservationId,
             Long userId,
-            Long amount,
-            String currency,
-            PaymentProvider paymentProvider
+            Long amount
     ) {
         return this.reservationId.equals(reservationId)
                 && this.userId.equals(userId)
-                && this.amount.equals(amount)
-                && this.currency.equals(currency)
-                && this.paymentProvider == paymentProvider;
+                && this.amount.equals(amount);
     }
 
 

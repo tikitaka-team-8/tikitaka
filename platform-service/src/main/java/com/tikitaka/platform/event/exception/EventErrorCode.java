@@ -14,9 +14,9 @@ public enum EventErrorCode implements ErrorCode {
     INVALID_EVENT_SESSION_STATUS("E-008", HttpStatus.CONFLICT, "현재 상태에서는 회차 상태를 변경할 수 없습니다."),
     EVENT_NOT_MODIFIABLE("E-009", HttpStatus.CONFLICT, "현재 공연 상태에서는 정보를 수정할 수 없습니다."),
     EVENT_NOT_RESERVABLE("E-011", HttpStatus.CONFLICT, "현재 예매할 수 없는 공연입니다."),
-    EVENT_SESSION_NOT_RESERVABLE("E-012", HttpStatus.CONFLICT, "현재 예매할 수 없는 공연 회차입니다.")
+    EVENT_SESSION_NOT_RESERVABLE("E-012", HttpStatus.CONFLICT, "현재 예매할 수 없는 공연 회차입니다."),
+    EVENT_SESSION_CREATE_NOT_ALLOWED("E-013", HttpStatus.CONFLICT, "작성 중인 공연에만 회차를 등록할 수 있습니다.")
     ;
-
 
     private final String code;
     private final HttpStatus status;

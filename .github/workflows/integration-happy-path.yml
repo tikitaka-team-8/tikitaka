@@ -1,0 +1,125 @@
+name: 1차 Happy Path 통합 테스트
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-happy-path-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration-test:
+    name: Gateway 경유 통합 테스트
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      COMPOSE_PROJECT_NAME: tikitaka-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      PLATFORM_DB_NAME: tikitaka_platform_ci
+      PLATFORM_DB_USERNAME: platform_ci
+      PLATFORM_DB_PASSWORD: platform_ci_only_password
+      TICKETING_DB_NAME: tikitaka_ticketing_ci
+      TICKETING_DB_USERNAME: ticketing_ci
+      TICKETING_DB_PASSWORD: ticketing_ci_only_password
+      PAYMENT_DB_NAME: tikitaka_payment_ci
+      PAYMENT_DB_USERNAME: payment_ci
+      PAYMENT_DB_PASSWORD: payment_ci_only_password
+      GRAFANA_ADMIN_USERNAME: admin
+      GRAFANA_ADMIN_PASSWORD: grafana_ci_only_password
+
+    steps:
+      - name: 소스 코드 체크아웃
+        uses: actions/checkout@v7
+
+      - name: Docker Buildx 설정
+        uses: docker/setup-buildx-action@v3
+
+      - name: 실행 전용 인증값 생성
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          jwt_secret="$(openssl rand -base64 48 | tr -d '\n')"
+          internal_service_key="$(openssl rand -hex 32)"
+
+          echo "::add-mask::${jwt_secret}"
+          echo "::add-mask::${internal_service_key}"
+          echo "JWT_SECRET=${jwt_secret}" >> "$GITHUB_ENV"
+          echo "INTERNAL_SERVICE_KEY=${internal_service_key}" >> "$GITHUB_ENV"
+
+      - name: 애플리케이션 이미지 빌드
+        run: docker compose build gateway platform-service ticketing-service
+
+      - name: PostgreSQL Redis Kafka 기동
+        run: |
+          docker compose up -d --wait --wait-timeout 120 \
+            platform-postgres \
+            platform-redis \
+            ticketing-postgres \
+            ticketing-redis \
+            kafka
+
+      - name: Platform Ticketing 기동
+        run: |
+          docker compose up -d --no-build --wait --wait-timeout 180 \
+            platform-service \
+            ticketing-service
+
+      - name: Platform 테스트 데이터 준비
+        shell: bash
+        run: |
+          docker compose exec -T platform-postgres \
+            psql -v ON_ERROR_STOP=1 \
+              -U "$PLATFORM_DB_USERNAME" \
+              -d "$PLATFORM_DB_NAME" \
+            < scripts/integration-test/seed/platform-seed.sql
+
+      - name: Ticketing 테스트 데이터 준비
+        shell: bash
+        run: |
+          docker compose exec -T ticketing-postgres \
+            psql -v ON_ERROR_STOP=1 \
+              -U "$TICKETING_DB_USERNAME" \
+              -d "$TICKETING_DB_NAME" \
+            < scripts/integration-test/seed/ticketing-seed.sql
+
+      - name: Gateway 기동
+        run: docker compose up -d --no-build --wait --wait-timeout 120 gateway
+
+      - name: 보안 시나리오와 Happy Path 실행
+        shell: bash
+        env:
+          TEST_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          GATEWAY_URL: http://localhost:8000
+        run: |
+          mkdir -p integration-test-artifacts
+          set -o pipefail
+          bash scripts/integration-test/run.sh 2>&1 | tee integration-test-artifacts/scenario.log
+
+      - name: 실패 진단 자료 수집
+        if: failure()
+        shell: bash
+        run: |
+          mkdir -p integration-test-artifacts
+          docker compose ps --all > integration-test-artifacts/compose-ps.txt 2>&1 || true
+          docker compose logs --no-color --timestamps gateway > integration-test-artifacts/gateway.log 2>&1 || true
+          docker compose logs --no-color --timestamps platform-service > integration-test-artifacts/platform-service.log 2>&1 || true
+          docker compose logs --no-color --timestamps ticketing-service > integration-test-artifacts/ticketing-service.log 2>&1 || true
+          docker compose logs --no-color --timestamps platform-postgres > integration-test-artifacts/platform-postgres.log 2>&1 || true
+          docker compose logs --no-color --timestamps ticketing-postgres > integration-test-artifacts/ticketing-postgres.log 2>&1 || true
+          docker compose logs --no-color --timestamps platform-redis ticketing-redis kafka > integration-test-artifacts/infrastructure.log 2>&1 || true
+
+      - name: 실패 진단 자료 보존
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-logs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: integration-test-artifacts/
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: CI 컨테이너와 데이터 정리
+        if: always()
+        run: docker compose down --volumes --remove-orphans --timeout 10
