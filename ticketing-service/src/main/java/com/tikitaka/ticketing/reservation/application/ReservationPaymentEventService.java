@@ -27,13 +27,16 @@ public class ReservationPaymentEventService {
 
     private final ReservationRepositoryPort reservationRepositoryPort;
     private final ReservationInboxRepositoryPort reservationInboxRepositoryPort;
+    private final ReservationOutboxService reservationOutboxService;
     private final SeatHoldReservationValidator seatHoldReservationValidator;
 
     public ReservationPaymentEventService(ReservationRepositoryPort reservationRepositoryPort,
             ReservationInboxRepositoryPort reservationInboxRepositoryPort,
+            ReservationOutboxService reservationOutboxService,
             SeatHoldReservationValidator seatHoldReservationValidator) {
         this.reservationRepositoryPort = reservationRepositoryPort;
         this.reservationInboxRepositoryPort = reservationInboxRepositoryPort;
+        this.reservationOutboxService = reservationOutboxService;
         this.seatHoldReservationValidator = seatHoldReservationValidator;
     }
 
@@ -61,6 +64,7 @@ public class ReservationPaymentEventService {
             reservation.getReservationSeats().forEach(
                     reservationSeat -> seatHoldReservationValidator.confirmHold(reservationSeat.getSeatHoldId())
             );
+            reservationOutboxService.saveConfirmedEvent(reservation);
         }
 
         // 예매 상태 변경과 동일한 트랜잭션에서 처리 완료 이벤트 기록
@@ -93,6 +97,7 @@ public class ReservationPaymentEventService {
                             reservationSeat.getSeatHoldId(), ReleaseReason.PAYMENT_FAILED
                     )
             );
+            reservationOutboxService.saveFailedEvent(reservation);
         }
 
         // 예매 상태 변경과 동일한 트랜잭션에서 처리 완료 이벤트 기록

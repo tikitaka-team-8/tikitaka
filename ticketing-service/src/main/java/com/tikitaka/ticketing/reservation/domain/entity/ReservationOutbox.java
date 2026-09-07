@@ -11,8 +11,6 @@ import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
-
 import java.time.Instant;
 import java.util.UUID;
 
@@ -40,22 +38,24 @@ public class ReservationOutbox {
     @Column(nullable = false, length = 30)
     private ReservationOutboxStatus status;
 
-    @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
     private Instant publishedAt;
 
-    private ReservationOutbox(UUID eventId, UUID reservationId, ReservationOutboxEventType eventType, String payload) {
+    private ReservationOutbox(UUID eventId, UUID reservationId, ReservationOutboxEventType eventType, String payload,
+            Instant createdAt) {
         this.eventId = eventId;
         this.reservationId = reservationId;
         this.eventType = eventType;
         this.payload = payload;
         this.status = ReservationOutboxStatus.PENDING;
+        this.createdAt = createdAt;
     }
 
-    public static ReservationOutbox create(UUID eventId, UUID reservationId, ReservationOutboxEventType eventType, String payload) {
-        return new ReservationOutbox(eventId, reservationId, eventType, payload);
+    public static ReservationOutbox create(UUID eventId, UUID reservationId, ReservationOutboxEventType eventType, String payload,
+            Instant createdAt) {
+        return new ReservationOutbox(eventId, reservationId, eventType, payload, createdAt);
     }
 
     public void markAsPublished(Instant publishedAt) {
