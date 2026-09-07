@@ -21,6 +21,7 @@ spring:
     out-of-order: false
     clean-disabled: true
 
+
 queue:
   admission-token-ttl: PT10M
   retention-after-sales-close: PT1H
@@ -41,3 +42,9 @@ management:
 clients:
   platform-service:
     service-key: ${INTERNAL_SERVICE_KEY}
+  payment-notification-service:
+    service-key: ${INTERNAL_SERVICE_KEY}
+
+internal:
+  service:
+    key: ${INTERNAL_SERVICE_KEY}
