@@ -13,4 +13,7 @@ public interface ScheduleSeatRepository {
     Optional<ScheduleSeat> findSeatDetail(UUID eventSessionId, UUID scheduleSeatId);
 
     Optional<ScheduleSeat> findByIdForUpdate(UUID eventSessionId, UUID scheduleSeatId);
+
+    Optional<ScheduleSeat> findByIdForUpdate(UUID eventSessionId);
+
 }
