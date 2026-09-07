@@ -28,6 +28,8 @@ public interface QueueRepository {
 
     boolean removeWaitingSessionIfEmpty(UUID sessionId);
 
+    QueueLeaveResult leaveWaitingEntry(UUID sessionId, long userId);
+
     Optional<AdmissionToken> findAdmissionToken(UUID sessionId, String token);
 
     Optional<String> findAdmissionTokenReference(UUID sessionId, long userId);
