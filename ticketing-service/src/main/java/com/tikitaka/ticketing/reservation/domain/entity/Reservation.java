@@ -198,9 +198,8 @@ public class Reservation extends BaseEntity {
 
     private boolean isPaymentResultFinalized() {
         return switch (reservationStatus) {
-            case CONFIRMED, FAILED, CANCELLED -> true;
-            case PAYMENT_PENDING, CANCEL_PENDING, PAYMENT_PROCESSING -> false;
+            case CONFIRMED, FAILED, CANCEL_PENDING, CANCELLED -> true;
+            case PAYMENT_PENDING, PAYMENT_PROCESSING -> false;
         };
     }
-
 }

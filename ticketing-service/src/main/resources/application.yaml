@@ -16,6 +16,9 @@ spring:
       ddl-auto: validate
     open-in-view: false
   kafka:
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
     consumer:
       group-id: ticketing-payment-group
       enable-auto-commit: false
