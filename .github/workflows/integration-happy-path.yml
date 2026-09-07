@@ -1,4 +1,4 @@
-name: 1차 Happy Path 통합 테스트
+name: Happy Path Integration Test
 
 on:
   workflow_dispatch:
