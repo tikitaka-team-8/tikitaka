@@ -74,4 +74,15 @@ public interface ScheduleSeatJpaRepository extends JpaRepository<ScheduleSeat, U
     Optional<ScheduleSeat> findByIdForUpdate(
             @Param("scheduleSeatId") UUID scheduleSeatId
     );
+
+    @Query("""
+        SELECT s.venueSeatId
+        FROM ScheduleSeat s
+        WHERE s.eventSessionId = :eventSessionId
+          AND s.venueSeatId IN :venueSeatIds
+    """)
+    List<UUID> findExistingVenueSeatIds(
+            @Param("eventSessionId") UUID eventSessionId,
+            @Param("venueSeatIds") List<UUID> venueSeatIds
+    );
 }

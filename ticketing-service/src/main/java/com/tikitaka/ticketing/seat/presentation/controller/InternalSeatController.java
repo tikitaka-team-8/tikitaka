@@ -3,7 +3,9 @@ package com.tikitaka.ticketing.seat.presentation.controller;
 
 import com.tikitaka.ticketing.seat.application.service.SeatService;
 import com.tikitaka.ticketing.seat.domain.enums.ReleaseReason;
+import com.tikitaka.ticketing.seat.presentation.dto.request.CreateScheduleSeatsRequest;
 import com.tikitaka.ticketing.seat.presentation.dto.request.SeatReleaseRequest;
+import com.tikitaka.ticketing.seat.presentation.dto.response.CreateScheduleSeatsResponse;
 import com.tikitaka.ticketing.seat.presentation.security.InternalAuthValidator;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -35,5 +37,15 @@ public class InternalSeatController {
 
         seatService.releaseHold(seatHoldId, reason);
 
+    }
+
+    // TODO: 내부 서비스 인증(X-Internal-Auth) 필터 적용 예정 - 필터 도입 전까지 인증 검증 없이 동작함
+    @PostMapping("/event-sessions/{eventSessionId}/seats")
+    @ResponseStatus(HttpStatus.CREATED)
+    public CreateScheduleSeatsResponse createScheduleSeats(
+            @PathVariable UUID eventSessionId,
+            @Valid @RequestBody CreateScheduleSeatsRequest request
+    ) {
+        return seatService.createScheduleSeats(request.toCommand(eventSessionId));
     }
 }
