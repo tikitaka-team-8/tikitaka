@@ -26,4 +26,6 @@ public interface EventRepository extends
       @Param("eventId") UUID eventId,
       @Param("statuses") Collection<EventStatus> statuses
   );
+
+  Optional<Event> findByIdAndOrganizerId(UUID id, UUID organizerId);
 }
