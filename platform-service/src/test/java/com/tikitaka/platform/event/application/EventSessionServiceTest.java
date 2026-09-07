@@ -3,16 +3,14 @@ package com.tikitaka.platform.event.application;
 import com.tikitaka.platform.event.domain.Event;
 import com.tikitaka.platform.event.domain.EventSession;
 import com.tikitaka.platform.event.domain.EventSessionStatus;
-import com.tikitaka.platform.event.domain.EventStatus;
 import com.tikitaka.platform.event.exception.EventErrorCode;
 import com.tikitaka.platform.event.infrastructure.EventRepository;
 import com.tikitaka.platform.event.infrastructure.EventSessionRepository;
-import com.tikitaka.platform.event.presentation.dto.EventSessionCreateRequest;
-import com.tikitaka.platform.event.presentation.dto.EventSessionCreateResponse;
-import com.tikitaka.platform.event.presentation.dto.EventSessionInfoResponse;
+import com.tikitaka.platform.event.presentation.dto.organizer.EventSessionCreateRequest;
+import com.tikitaka.platform.event.presentation.dto.organizer.EventSessionCreateResponse;
+import com.tikitaka.platform.event.presentation.dto.organizer.EventSessionInfoResponse;
 import com.tikitaka.platform.global.exception.BusinessException;
 import com.tikitaka.platform.organizer.domain.Organizer;
-import com.tikitaka.platform.organizer.domain.OrganizerStatus;
 import com.tikitaka.platform.organizer.infrastructure.OrganizerRepository;
 import com.tikitaka.platform.venue.domain.Venue;
 import org.junit.jupiter.api.Test;
@@ -27,8 +25,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static com.tikitaka.platform.fixture.EventFixture.createEvent;
+import static com.tikitaka.platform.fixture.EventSessionFixture.createEventSession;
 import static com.tikitaka.platform.fixture.OrganizerFixture.activeOrganizer;
-import static com.tikitaka.platform.fixture.OrganizerFixture.createOrganizer;
 import static com.tikitaka.platform.fixture.VenueFixture.createVenue;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -138,20 +136,6 @@ class EventSessionServiceTest {
 
     assertThat(response.sessionNumber()).isEqualTo(1);
     assertThat(response.status()).isEqualTo(EventSessionStatus.SCHEDULED.name());
-  }
-
-  private static EventSession createEventSession(Event event) {
-    OffsetDateTime now = OffsetDateTime.now();
-
-    return EventSession.create(
-        event,
-        1,
-        now.plusDays(10),
-        now.plusDays(10).plusHours(2),
-        now.plusDays(1),
-        now.plusDays(9),
-        true
-    );
   }
 
   private EventSessionCreateRequest createEventSessionRequest() {

@@ -15,7 +15,9 @@ public enum EventErrorCode implements ErrorCode {
     EVENT_NOT_MODIFIABLE("E-009", HttpStatus.CONFLICT, "현재 공연 상태에서는 정보를 수정할 수 없습니다."),
     EVENT_NOT_RESERVABLE("E-011", HttpStatus.CONFLICT, "현재 예매할 수 없는 공연입니다."),
     EVENT_SESSION_NOT_RESERVABLE("E-012", HttpStatus.CONFLICT, "현재 예매할 수 없는 공연 회차입니다."),
-    EVENT_SESSION_CREATE_NOT_ALLOWED("E-013", HttpStatus.CONFLICT, "작성 중인 공연에만 회차를 등록할 수 있습니다.")
+    EVENT_SESSION_CREATE_NOT_ALLOWED("E-013", HttpStatus.CONFLICT, "작성 중인 공연에만 회차를 등록할 수 있습니다."),
+    INVALID_SECTION_PRICE("E-014", HttpStatus.BAD_REQUEST, "좌석 등급 또는 가격 설정이 올바르지 않습니다."),
+    DUPLICATE_SECTION_PRICE("E-015", HttpStatus.BAD_REQUEST, "같은 공연장 구역의 가격이 중복되었습니다."),
     ;
 
     private final String code;

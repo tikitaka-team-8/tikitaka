@@ -9,7 +9,8 @@ public record SectionPriceResponse(
     UUID venueSectionId,
     String sectionName,
     String seatGrade,
-    long priceAmount
+    long priceAmount,
+    boolean salesEnabled
 ) {
   public static SectionPriceResponse from(
       SessionSectionPrice sectionPrice
@@ -19,7 +20,8 @@ public record SectionPriceResponse(
         sectionPrice.getVenueSection().getId(),
         sectionPrice.getVenueSection().getName(),
         sectionPrice.getSeatGrade(),
-        sectionPrice.getPriceAmount()
+        sectionPrice.getPriceAmount(),
+        sectionPrice.isSalesEnabled()
     );
 
   }

@@ -1,9 +1,9 @@
 package com.tikitaka.platform.event.presentation;
 
 import com.tikitaka.platform.event.application.EventService;
-import com.tikitaka.platform.event.presentation.dto.PublicEventDetailResponse;
-import com.tikitaka.platform.event.presentation.dto.PublicEventListRequest;
-import com.tikitaka.platform.event.presentation.dto.PublicEventSummaryResponse;
+import com.tikitaka.platform.event.presentation.dto.query.PublicEventDetailResponse;
+import com.tikitaka.platform.event.presentation.dto.query.PublicEventListRequest;
+import com.tikitaka.platform.event.presentation.dto.query.PublicEventSummaryResponse;
 import com.tikitaka.platform.global.response.ApiResponse;
 import com.tikitaka.platform.global.response.PageMeta;
 import jakarta.validation.Valid;

@@ -2,10 +2,16 @@ package com.tikitaka.platform.event.application;
 
 import com.tikitaka.platform.event.domain.Event;
 import com.tikitaka.platform.event.domain.EventSession;
+import com.tikitaka.platform.event.domain.SessionSectionPrice;
+import com.tikitaka.platform.event.infrastructure.SessionSectionPriceRepository;
 import com.tikitaka.platform.event.exception.EventErrorCode;
 import com.tikitaka.platform.event.infrastructure.EventRepository;
 import com.tikitaka.platform.event.infrastructure.EventSessionRepository;
 import com.tikitaka.platform.event.presentation.dto.*;
+import com.tikitaka.platform.event.presentation.dto.organizer.EventSessionCreateRequest;
+import com.tikitaka.platform.event.presentation.dto.organizer.EventSessionCreateResponse;
+import com.tikitaka.platform.event.presentation.dto.organizer.EventSessionInfoResponse;
+import com.tikitaka.platform.event.presentation.dto.query.PublicEventSessionDetailResponse;
 import com.tikitaka.platform.global.exception.BusinessException;
 import com.tikitaka.platform.organizer.domain.Organizer;
 import com.tikitaka.platform.organizer.exception.OrganizerErrorCode;
@@ -15,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -25,6 +32,7 @@ public class EventSessionService {
   private final EventRepository eventRepository;
   private final EventSessionRepository eventSessionRepository;
   private final OrganizerRepository organizerRepository;
+  private final SessionSectionPriceRepository sessionSectionPriceRepository;
 
   public PublicEventSessionDetailResponse getPublicEventSession(
       UUID eventId,
@@ -44,6 +52,7 @@ public class EventSessionService {
         .orElseThrow(() ->
             new BusinessException(EventErrorCode.EVENT_SESSION_NOT_FOUND)
         );
+
 
     return PublicEventSessionDetailResponse.from(session);
   }

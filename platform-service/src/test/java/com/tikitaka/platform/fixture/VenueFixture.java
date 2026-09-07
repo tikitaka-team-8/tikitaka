@@ -1,6 +1,7 @@
 package com.tikitaka.platform.fixture;
 
 import com.tikitaka.platform.venue.domain.Venue;
+import com.tikitaka.platform.venue.domain.VenueSection;
 
 public class VenueFixture {
 
@@ -22,4 +23,15 @@ public class VenueFixture {
     venue.deactivate();
     return venue;
   }
+
+  public static VenueSection createVenueSection() {
+    return VenueSection.create(
+        createVenue(),
+        "VIP",
+        "1층",
+        1,
+        true
+    );
+  }
+
 }
