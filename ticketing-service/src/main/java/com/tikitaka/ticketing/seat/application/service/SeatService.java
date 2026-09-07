@@ -123,24 +123,6 @@ public class SeatService implements SeatHoldExtensionValidator {
         releaseIfHolding(seatHold, seat, ReleaseReason.USER_CANCEL);
     }
 
-
-    private SeatHold getSeatHoldOrThrow(UUID seatHoldId) {
-        return seatHoldRepository.findById(seatHoldId)
-                .orElseThrow(() -> new BusinessException(SeatErrorCode.SEAT_HOLD_NOT_FOUND));
-    }
-
-    private ScheduleSeat getScheduleSeatForUpdateOrThrow(UUID scheduleSeatId) {
-        return scheduleSeatRepository.findByIdForUpdate(scheduleSeatId)
-                .orElseThrow(() -> new BusinessException(SeatErrorCode.SESSION_OR_SEAT_NOT_FOUND));
-    }
-
-    private void releaseIfHolding(SeatHold seatHold, ScheduleSeat seat, ReleaseReason reason) {
-        if (seatHold.getHoldStatus() == HoldStatus.HOLDING) {
-            seatHold.release(reason, Instant.now(clock));
-            seat.release();
-        }
-    }
-
     @Override
     @Transactional
     public void validateAndExtend(UUID seatHoldId) {
@@ -169,5 +151,42 @@ public class SeatService implements SeatHoldExtensionValidator {
                 .toList();
     }
 
+    @Transactional
+    public void expireHold(UUID seatHoldId) {
+        Optional<SeatHold> maybeSeatHold = seatHoldRepository.findByIdForUpdate(seatHoldId);
+        if (maybeSeatHold.isEmpty()) {
+            return;
+        }
+        SeatHold seatHold = maybeSeatHold.get();
+        if (seatHold.getHoldStatus() != HoldStatus.HOLDING) {
+            return;
+        }
+
+        Instant now = Instant.now(clock);
+        if (!seatHold.isExpired(now)) {
+            return;
+        }
+
+        ScheduleSeat seat = getScheduleSeatForUpdateOrThrow(seatHold.getScheduleSeatId());
+        releaseIfHolding(seatHold, seat, ReleaseReason.EXPIRED);
+    }
+
+
+    private SeatHold getSeatHoldOrThrow(UUID seatHoldId) {
+        return seatHoldRepository.findByIdForUpdate(seatHoldId)
+                .orElseThrow(() -> new BusinessException(SeatErrorCode.SEAT_HOLD_NOT_FOUND));
+    }
+
+    private ScheduleSeat getScheduleSeatForUpdateOrThrow(UUID scheduleSeatId) {
+        return scheduleSeatRepository.findByIdForUpdate(scheduleSeatId)
+                .orElseThrow(() -> new BusinessException(SeatErrorCode.SESSION_OR_SEAT_NOT_FOUND));
+    }
+
+    private void releaseIfHolding(SeatHold seatHold, ScheduleSeat seat, ReleaseReason reason) {
+        if (seatHold.getHoldStatus() == HoldStatus.HOLDING) {
+            seatHold.release(reason, Instant.now(clock));
+            seat.release();
+        }
+    }
 
 }
