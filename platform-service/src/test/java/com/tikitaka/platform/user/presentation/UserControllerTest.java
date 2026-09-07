@@ -3,9 +3,9 @@ package com.tikitaka.platform.user.presentation;
 import java.time.Instant;
 import java.util.List;
 
-import com.tikitaka.platform.auth.infrastructure.SecurityConfig;
 import com.tikitaka.platform.auth.infrastructure.security.AuthenticatedUser;
 import com.tikitaka.platform.global.exception.BusinessException;
+import com.tikitaka.platform.global.security.SecurityConfig;
 import com.tikitaka.platform.user.application.UserService;
 import com.tikitaka.platform.user.domain.UserRole;
 import com.tikitaka.platform.user.exception.UserErrorCode;
