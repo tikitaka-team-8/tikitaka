@@ -1,0 +1,29 @@
+package com.tikitaka.paymentnotification.notification.infrastructure.adapter;
+
+import com.tikitaka.paymentnotification.notification.domain.entity.Notification;
+import com.tikitaka.paymentnotification.notification.domain.port.NotificationRepositoryPort;
+import com.tikitaka.paymentnotification.notification.infrastructure.repository.NotificationJpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.Optional;
+import java.util.UUID;
+
+@Repository
+public class NotificationRepositoryAdapter implements NotificationRepositoryPort {
+
+    private final NotificationJpaRepository notificationJpaRepository;
+
+    public NotificationRepositoryAdapter(NotificationJpaRepository notificationJpaRepository) {
+        this.notificationJpaRepository = notificationJpaRepository;
+    }
+
+    @Override
+    public Notification save(Notification notification) {
+        return notificationJpaRepository.save(notification);
+    }
+
+    @Override
+    public Optional<Notification> findByIdAndUserId(UUID notificationId, Long userId) {
+        return notificationJpaRepository.findByNotificationIdAndUserId(notificationId, userId);
+    }
+}
