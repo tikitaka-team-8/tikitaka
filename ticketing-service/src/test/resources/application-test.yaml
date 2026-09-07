@@ -11,4 +11,8 @@ spring:
 
 clients:
   platform-service:
+    url: http://localhost:8081
+    service-key: platform-internal-service-key-for-tests
+  payment-notification-service:
+    url: http://localhost:8083
     service-key: platform-internal-service-key-for-tests

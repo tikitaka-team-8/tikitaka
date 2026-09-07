@@ -3,16 +3,22 @@ package com.tikitaka.ticketing.reservation.presentation.controller;
 import com.tikitaka.ticketing.global.response.ApiResponse;
 import com.tikitaka.ticketing.global.response.PageMeta;
 import com.tikitaka.ticketing.reservation.application.ReservationService;
+import com.tikitaka.ticketing.reservation.application.command.CreateReservationCommand;
 import com.tikitaka.ticketing.reservation.application.command.GetReservationCommand;
 import com.tikitaka.ticketing.reservation.application.command.SearchReservationsCommand;
+import com.tikitaka.ticketing.reservation.application.result.CreateReservationResult;
 import com.tikitaka.ticketing.reservation.application.result.ReservationResult;
 import com.tikitaka.ticketing.reservation.application.result.ReservationSearchResult;
+import com.tikitaka.ticketing.reservation.presentation.dto.request.CreateReservationReqDto;
 import com.tikitaka.ticketing.reservation.presentation.dto.request.ReservationSearchReqDto;
+import com.tikitaka.ticketing.reservation.presentation.dto.response.CreateReservationResDto;
 import com.tikitaka.ticketing.reservation.presentation.dto.response.ReservationResDto;
 import com.tikitaka.ticketing.reservation.presentation.dto.response.ReservationSearchResDto;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -22,6 +28,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -40,6 +48,25 @@ public class ReservationController {
 
     public ReservationController(ReservationService reservationService) {
         this.reservationService = reservationService;
+    }
+
+    @PostMapping
+    public ResponseEntity<ApiResponse<CreateReservationResDto>> createReservation(
+            @RequestHeader(USER_ID_HEADER) Long loginUserId,
+            @RequestHeader(USER_ROLE_HEADER) @Pattern(regexp = "USER") String userRole,
+            @RequestHeader("Idempotency-Key") @NotBlank String idempotencyKey,
+            @Valid @RequestBody CreateReservationReqDto requestDto) {
+
+        CreateReservationCommand command = new CreateReservationCommand(
+                loginUserId, userRole, idempotencyKey, requestDto.getSeatHoldIds()
+        );
+        CreateReservationResult result = reservationService.createReservation(command);
+        HttpStatus responseStatus = result.isCreated() ? HttpStatus.CREATED : HttpStatus.OK;
+
+        return ResponseEntity.status(responseStatus).body(
+                ApiResponse.success(
+                        responseStatus, "예매 생성에 성공했습니다.", new CreateReservationResDto(result)
+                ));
     }
 
     @GetMapping
