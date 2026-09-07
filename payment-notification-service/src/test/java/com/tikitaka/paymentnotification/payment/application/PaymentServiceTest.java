@@ -17,6 +17,7 @@ import com.tikitaka.paymentnotification.payment.domain.transaction.PaymentTransa
 import com.tikitaka.paymentnotification.payment.domain.transaction.PaymentTransactionRepository;
 import com.tikitaka.paymentnotification.payment.domain.transaction.PaymentTransactionStatus;
 import com.tikitaka.paymentnotification.payment.domain.transaction.PaymentTransactionType;
+import com.tikitaka.paymentnotification.payment.exception.PaymentErrorCode;
 import com.tikitaka.paymentnotification.payment.exception.PaymentException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -72,16 +73,6 @@ class PaymentServiceTest {
                 150000L,
                 PaymentProvider.MOCK
         );
-        when(reservationPaymentValidator.validate(
-                payment.getReservationId(),
-                payment.getUserId()
-        )).thenReturn(
-                new ReservationPaymentValidationResult(
-                        payment.getReservationId(),
-                        payment.getUserId(),
-                        payment.getAmount()
-                )
-        );
     }
 
     @Test
@@ -89,6 +80,7 @@ class PaymentServiceTest {
         // given
         when(paymentRepository.findById(paymentId))
                 .thenReturn(Optional.of(payment));
+        stubReservationValidation();
 
         when(paymentGateway.approve(any()))
                 .thenReturn(
@@ -101,6 +93,7 @@ class PaymentServiceTest {
         // when
         paymentService.approvePayment(
                 paymentId,
+                payment.getUserId(),
                 PaymentMethod.CARD
         );
 
@@ -153,6 +146,7 @@ class PaymentServiceTest {
         // given
         when(paymentRepository.findById(paymentId))
                 .thenReturn(Optional.of(payment));
+        stubReservationValidation();
 
         when(paymentGateway.approve(any()))
                 .thenReturn(
@@ -168,6 +162,7 @@ class PaymentServiceTest {
         // when
         paymentService.approvePayment(
                 paymentId,
+                payment.getUserId(),
                 PaymentMethod.CARD
         );
 
@@ -222,6 +217,7 @@ class PaymentServiceTest {
         // given
         when(paymentRepository.findById(paymentId))
                 .thenReturn(Optional.of(payment));
+        stubReservationValidation();
 
         when(paymentGateway.approve(any()))
                 .thenReturn(
@@ -232,6 +228,7 @@ class PaymentServiceTest {
         PaymentApproveResult result =
                 paymentService.approvePayment(
                         paymentId,
+                        payment.getUserId(),
                         PaymentMethod.CARD
                 );
 
@@ -271,6 +268,7 @@ class PaymentServiceTest {
         assertThatThrownBy(() ->
                 paymentService.approvePayment(
                         paymentId,
+                        payment.getUserId(),
                         PaymentMethod.CARD
                 )
         )
@@ -279,6 +277,53 @@ class PaymentServiceTest {
         verify(paymentGateway, never()).approve(any());
         verify(paymentTransactionRepository, never()).save(any());
         verify(paymentOutboxRepository, never()).save(any());
+    }
+
+    @Test
+    void 결제_소유자는_결제정보를_조회할_수_있다() {
+        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(payment));
+
+        var result = paymentService.getPaymentById(paymentId, payment.getUserId());
+
+        assertThat(result.paymentId()).isEqualTo(payment.getPaymentId());
+        assertThat(result.reservationId()).isEqualTo(payment.getReservationId());
+    }
+
+    @Test
+    void 다른_사용자는_결제정보를_조회할_수_없다() {
+        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(payment));
+
+        assertThatThrownBy(() -> paymentService.getPaymentById(paymentId, 999L))
+                .isInstanceOf(PaymentException.class)
+                .satisfies(exception -> assertThat(((PaymentException) exception).getErrorCode())
+                        .isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND));
+    }
+
+    @Test
+    void 다른_사용자는_결제를_승인할_수_없다() {
+        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(payment));
+
+        assertThatThrownBy(() -> paymentService.approvePayment(paymentId, 999L, PaymentMethod.CARD))
+                .isInstanceOf(PaymentException.class)
+                .satisfies(exception -> assertThat(((PaymentException) exception).getErrorCode())
+                        .isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND));
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.READY);
+        verifyNoInteractions(reservationPaymentValidator, paymentGateway,
+                paymentTransactionRepository, paymentOutboxRepository, paymentEventSerializer);
+    }
+
+    private void stubReservationValidation() {
+        when(reservationPaymentValidator.validate(
+                payment.getReservationId(),
+                payment.getUserId()
+        )).thenReturn(
+                new ReservationPaymentValidationResult(
+                        payment.getReservationId(),
+                        payment.getUserId(),
+                        payment.getAmount()
+                )
+        );
     }
 
 
