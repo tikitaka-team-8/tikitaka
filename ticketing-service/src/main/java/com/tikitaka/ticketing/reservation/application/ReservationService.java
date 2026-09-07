@@ -24,7 +24,7 @@ import com.tikitaka.ticketing.reservation.domain.port.PaymentCreationPort;
 import com.tikitaka.ticketing.reservation.domain.port.ReservationRepositoryPort;
 import com.tikitaka.ticketing.reservation.domain.port.SeatHoldQueryPort;
 import com.tikitaka.ticketing.reservation.exception.ReservationErrorCode;
-import com.tikitaka.ticketing.seat.application.service.SeatHoldExtensionValidator;
+import com.tikitaka.ticketing.seat.application.service.SeatHoldReservationValidator;
 import com.tikitaka.ticketing.seat.domain.enums.HoldStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -58,16 +58,16 @@ public class ReservationService {
     private final ReservationRepositoryPort reservationRepositoryPort;
     private final SeatHoldQueryPort seatHoldQueryPort;
     private final EventSessionQueryPort eventSessionQueryPort;
-    private final SeatHoldExtensionValidator seatHoldExtensionValidator;
+    private final SeatHoldReservationValidator seatHoldReservationValidator;
     private final PaymentCreationPort paymentCreationPort;
 
     public ReservationService(ReservationRepositoryPort reservationRepositoryPort, SeatHoldQueryPort seatHoldQueryPort,
-            EventSessionQueryPort eventSessionQueryPort, SeatHoldExtensionValidator seatHoldExtensionValidator,
+            EventSessionQueryPort eventSessionQueryPort, SeatHoldReservationValidator seatHoldReservationValidator,
             PaymentCreationPort paymentCreationPort) {
         this.reservationRepositoryPort = reservationRepositoryPort;
         this.seatHoldQueryPort = seatHoldQueryPort;
         this.eventSessionQueryPort = eventSessionQueryPort;
-        this.seatHoldExtensionValidator = seatHoldExtensionValidator;
+        this.seatHoldReservationValidator = seatHoldReservationValidator;
         this.paymentCreationPort = paymentCreationPort;
     }
 
@@ -165,7 +165,7 @@ public class ReservationService {
 
         // 예매에 포함된 SeatHold 만료 시각 연장
         savedReservation.getReservationSeats().forEach(
-                reservationSeat -> seatHoldExtensionValidator.validateAndExtend(reservationSeat.getSeatHoldId())
+                reservationSeat -> seatHoldReservationValidator.validateAndExtend(reservationSeat.getSeatHoldId())
         );
 
         // Payment Service에 결제 정보 생성 요청

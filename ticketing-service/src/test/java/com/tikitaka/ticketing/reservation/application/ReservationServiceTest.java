@@ -23,7 +23,7 @@ import com.tikitaka.ticketing.reservation.domain.port.PaymentCreationPort;
 import com.tikitaka.ticketing.reservation.domain.port.ReservationRepositoryPort;
 import com.tikitaka.ticketing.reservation.domain.port.SeatHoldQueryPort;
 import com.tikitaka.ticketing.reservation.exception.ReservationErrorCode;
-import com.tikitaka.ticketing.seat.application.service.SeatHoldExtensionValidator;
+import com.tikitaka.ticketing.seat.application.service.SeatHoldReservationValidator;
 import com.tikitaka.ticketing.seat.domain.enums.HoldStatus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -81,7 +81,7 @@ class ReservationServiceTest {
     private EventSessionQueryPort eventSessionQueryPort;
 
     @Mock
-    private SeatHoldExtensionValidator seatHoldExtensionValidator;
+    private SeatHoldReservationValidator seatHoldReservationValidator;
 
     @Mock
     private PaymentCreationPort paymentCreationPort;
@@ -358,7 +358,7 @@ class ReservationServiceTest {
             assertThat(reservationSeat.getScheduleSeatId()).isEqualTo(SCHEDULE_SEAT_ID);
             assertThat(reservationSeat.getPrice()).isEqualTo(50_000L);
         });
-        verify(seatHoldExtensionValidator).validateAndExtend(SEAT_HOLD_ID);
+        verify(seatHoldReservationValidator).validateAndExtend(SEAT_HOLD_ID);
         verify(paymentCreationPort).createPayment(RESERVATION_ID, OWNER_ID, 50_000L, IDEMPOTENCY_KEY);
     }
 
@@ -378,7 +378,7 @@ class ReservationServiceTest {
         assertThat(result.isCreated()).isFalse();
         assertThat(result.getReservationId()).isEqualTo(RESERVATION_ID);
         verify(reservationRepositoryPort, never()).save(any(Reservation.class));
-        verifyNoInteractions(seatHoldQueryPort, eventSessionQueryPort, seatHoldExtensionValidator, paymentCreationPort);
+        verifyNoInteractions(seatHoldQueryPort, eventSessionQueryPort, seatHoldReservationValidator, paymentCreationPort);
     }
 
     @Test
@@ -397,7 +397,7 @@ class ReservationServiceTest {
         // then
         assertThat(exception.getErrorCode()).isEqualTo(ReservationErrorCode.IDEMPOTENCY_KEY_REUSED);
         verify(reservationRepositoryPort, never()).save(any(Reservation.class));
-        verifyNoInteractions(seatHoldQueryPort, eventSessionQueryPort, seatHoldExtensionValidator, paymentCreationPort);
+        verifyNoInteractions(seatHoldQueryPort, eventSessionQueryPort, seatHoldReservationValidator, paymentCreationPort);
     }
 
     @Test
@@ -450,7 +450,7 @@ class ReservationServiceTest {
         // then
         assertThat(exception.getErrorCode()).isEqualTo(ReservationErrorCode.INVALID_INPUT);
         verifyNoInteractions(reservationRepositoryPort, seatHoldQueryPort, eventSessionQueryPort,
-                seatHoldExtensionValidator, paymentCreationPort);
+                seatHoldReservationValidator, paymentCreationPort);
     }
 
     @Test
@@ -470,7 +470,7 @@ class ReservationServiceTest {
         // then
         assertThat(exception.getErrorCode()).isEqualTo(ReservationErrorCode.SEAT_HOLD_NOT_FOUND);
         verify(reservationRepositoryPort, never()).save(any(Reservation.class));
-        verifyNoInteractions(eventSessionQueryPort, seatHoldExtensionValidator, paymentCreationPort);
+        verifyNoInteractions(eventSessionQueryPort, seatHoldReservationValidator, paymentCreationPort);
     }
 
     @Test
@@ -493,7 +493,7 @@ class ReservationServiceTest {
         // then
         assertThat(exception.getErrorCode()).isEqualTo(ReservationErrorCode.SEAT_HOLD_OWNERSHIP_REQUIRED);
         verify(reservationRepositoryPort, never()).save(any(Reservation.class));
-        verifyNoInteractions(eventSessionQueryPort, seatHoldExtensionValidator, paymentCreationPort);
+        verifyNoInteractions(eventSessionQueryPort, seatHoldReservationValidator, paymentCreationPort);
     }
 
     @Test
@@ -516,7 +516,7 @@ class ReservationServiceTest {
         // then
         assertThat(exception.getErrorCode()).isEqualTo(ReservationErrorCode.INVALID_SEAT_HOLD_STATUS);
         verify(reservationRepositoryPort, never()).save(any(Reservation.class));
-        verifyNoInteractions(eventSessionQueryPort, seatHoldExtensionValidator, paymentCreationPort);
+        verifyNoInteractions(eventSessionQueryPort, seatHoldReservationValidator, paymentCreationPort);
     }
 
     @Test
@@ -539,7 +539,7 @@ class ReservationServiceTest {
         // then
         assertThat(exception.getErrorCode()).isEqualTo(ReservationErrorCode.SEAT_HOLD_EXPIRED);
         verify(reservationRepositoryPort, never()).save(any(Reservation.class));
-        verifyNoInteractions(eventSessionQueryPort, seatHoldExtensionValidator, paymentCreationPort);
+        verifyNoInteractions(eventSessionQueryPort, seatHoldReservationValidator, paymentCreationPort);
     }
 
     @Test
@@ -561,7 +561,7 @@ class ReservationServiceTest {
         // then
         assertThat(exception.getErrorCode()).isEqualTo(ReservationErrorCode.RESERVATION_ALREADY_EXISTS);
         verify(reservationRepositoryPort, never()).save(any(Reservation.class));
-        verifyNoInteractions(eventSessionQueryPort, seatHoldExtensionValidator, paymentCreationPort);
+        verifyNoInteractions(eventSessionQueryPort, seatHoldReservationValidator, paymentCreationPort);
     }
 
     @Test
@@ -583,7 +583,7 @@ class ReservationServiceTest {
         // then
         assertThat(exception.getErrorCode()).isEqualTo(CommonErrorCode.DOWNSTREAM_SERVICE_FAILURE);
         verify(reservationRepositoryPort, never()).save(any(Reservation.class));
-        verifyNoInteractions(seatHoldExtensionValidator, paymentCreationPort);
+        verifyNoInteractions(seatHoldReservationValidator, paymentCreationPort);
     }
 
     @Test
@@ -605,7 +605,7 @@ class ReservationServiceTest {
             return reservation;
         });
         willThrow(new BusinessException(ReservationErrorCode.SEAT_HOLD_EXPIRED))
-                .given(seatHoldExtensionValidator).validateAndExtend(SEAT_HOLD_ID);
+                .given(seatHoldReservationValidator).validateAndExtend(SEAT_HOLD_ID);
 
         // when
         BusinessException exception = catchThrowableOfType(
