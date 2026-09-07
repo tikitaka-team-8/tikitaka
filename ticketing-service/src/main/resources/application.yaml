@@ -15,11 +15,23 @@ spring:
     hibernate:
       ddl-auto: validate
     open-in-view: false
+  kafka:
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      group-id: ticketing-payment-group
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      ack-mode: record
   flyway:
     enabled: true
     validate-on-migrate: true
     out-of-order: false
     clean-disabled: true
+
 
 queue:
   admission-token-ttl: PT10M
@@ -41,3 +53,9 @@ management:
 clients:
   platform-service:
     service-key: ${INTERNAL_SERVICE_KEY}
+  payment-notification-service:
+    service-key: ${INTERNAL_SERVICE_KEY}
+
+internal:
+  service:
+    key: ${INTERNAL_SERVICE_KEY}

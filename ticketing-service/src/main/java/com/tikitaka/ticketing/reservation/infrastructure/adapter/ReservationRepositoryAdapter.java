@@ -27,6 +27,21 @@ public class ReservationRepositoryAdapter implements ReservationRepositoryPort {
     }
 
     @Override
+    public Optional<Reservation> findByUserIdAndIdempotencyKey(Long userId, String idempotencyKey) {
+        return reservationRepository.findByUserIdAndIdempotencyKey(userId, idempotencyKey);
+    }
+
+    @Override
+    public Reservation save(Reservation reservation) {
+        return reservationRepository.save(reservation);
+    }
+
+    @Override
+    public List<UUID> findUsedSeatHoldIds(List<UUID> seatHoldIds) {
+        return reservationRepository.findUsedSeatHoldIds(seatHoldIds);
+    }
+
+    @Override
     public List<ReservationSeatInfo> findSeatDetailsByReservationId(UUID reservationId) {
         return reservationRepository.findSeatDetailsByReservationId(reservationId);
     }

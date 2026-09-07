@@ -16,3 +16,5 @@ spring:
 clients:
   platform-service:
     url: http://localhost:8081
+  payment-notification-service:
+    url: http://localhost:8083
