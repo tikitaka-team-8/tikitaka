@@ -8,7 +8,5 @@ public record PaymentCreateCommand (
         UUID reservationId,
         Long userId,
         String idempotencyKey,
-        Long amount,
-        String currency,
-        PaymentProvider paymentProvider
+        Long totalAmount
 ){ }

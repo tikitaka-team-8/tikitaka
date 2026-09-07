@@ -8,3 +8,7 @@ spring:
     password: ${PAYMENT_DB_PASSWORD}
   kafka:
     bootstrap-servers: localhost:9092
+
+clients:
+  ticketing-service:
+    url: http://localhost:8082

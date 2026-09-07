@@ -11,4 +11,6 @@ public interface PaymentRepository {
 
     Optional<Payment> findByIdempotencyKey(String idempotencyKey);
 
+    Optional<Payment> findByReservationId(UUID reservationId);
+
 }
