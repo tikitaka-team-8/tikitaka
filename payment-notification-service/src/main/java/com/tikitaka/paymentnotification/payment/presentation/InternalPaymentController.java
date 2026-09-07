@@ -1,6 +1,5 @@
 package com.tikitaka.paymentnotification.payment.presentation;
 
-import com.tikitaka.paymentnotification.global.response.ApiResponse;
 import com.tikitaka.paymentnotification.payment.application.PaymentService;
 import com.tikitaka.paymentnotification.payment.application.command.PaymentCreateCommand;
 import com.tikitaka.paymentnotification.payment.application.result.PaymentCreateResult;
@@ -27,22 +26,18 @@ public class InternalPaymentController {
     private final PaymentService paymentService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<PaymentDetailResponse>> getPaymentByReservationId(@RequestParam UUID reservationId)
-    {
-        PaymentDetailResult result = paymentService.getPaymentByReservationId(reservationId);
+    public ResponseEntity<PaymentDetailResponse> getPaymentByReservationId(@RequestParam UUID reservationId) {
+        PaymentDetailResult result =
+                paymentService.getPaymentByReservationId(reservationId);
 
-        return ResponseEntity.ok(
-                ApiResponse.success(
-                        HttpStatus.OK,
-                        "예매 단건 조회성공.",
-                        PaymentDetailResponse.from(result)
-                )
-        );
+        return ResponseEntity.ok(PaymentDetailResponse.from(result));
     }
 
 
+
+
     @PostMapping
-    public ResponseEntity<ApiResponse<PaymentCreateResponse>> createPayment(
+    public ResponseEntity<PaymentCreateResponse> createPayment(
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody PaymentCreateRequest request
     ) {
@@ -55,15 +50,9 @@ public class InternalPaymentController {
 
         PaymentCreateResult result = paymentService.createPayment(command);
 
-        PaymentCreateResponse response = PaymentCreateResponse.from(result);
-
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(ApiResponse.success(
-                        HttpStatus.CREATED,
-                        "결제가 생성되었습니다.",
-                        response
-                ));
+                .body(PaymentCreateResponse.from(result));
     }
 
 
