@@ -49,4 +49,58 @@ public class PaymentOutbox {
 
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
+
+
+    public static PaymentOutbox create(
+            Payment payment,
+            String eventType,
+            String payload
+    ) {
+        PaymentOutbox outbox = new PaymentOutbox();
+
+        outbox.payment = payment;
+        outbox.eventType = eventType;
+        outbox.payload = payload;
+        outbox.status = PaymentOutboxStatus.PENDING;
+        outbox.retryCount = 0;
+
+        OffsetDateTime now = OffsetDateTime.now();
+        outbox.createdAt = now;
+        outbox.updatedAt = now;
+
+        return outbox;
+    }
+
+
+    // 상태 변경
+    public void markPublished() {
+        validatePendingStatus();
+
+        OffsetDateTime now = OffsetDateTime.now();
+
+        this.status = PaymentOutboxStatus.PUBLISHED;
+        this.publishedAt = now;
+        this.updatedAt = now;
+    }
+
+    public void recordPublishFailure(int maxRetryCount) {
+        validatePendingStatus();
+
+        this.retryCount++;
+
+        if (this.retryCount >= maxRetryCount) {
+            this.status = PaymentOutboxStatus.FAILED;
+        }
+
+        this.updatedAt = OffsetDateTime.now();
+    }
+
+    private void validatePendingStatus() {
+        if (this.status != PaymentOutboxStatus.PENDING) {
+            throw new IllegalStateException(
+                    "PENDING 상태의 Outbox만 처리할 수 있습니다."
+            );
+        }
+    }
+
 }

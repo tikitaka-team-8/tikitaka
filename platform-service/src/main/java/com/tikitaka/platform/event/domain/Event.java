@@ -8,6 +8,7 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.apache.kafka.common.errors.ApiException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -135,6 +136,12 @@ public class Event {
     status = EventStatus.ON_SALE;
   }
 
+  public void validateSessionCreatable() {
+    if (this.status != EventStatus.DRAFT) {
+      throw new BusinessException(EventErrorCode.EVENT_SESSION_CREATE_NOT_ALLOWED);
+    }
+  }
+
   public boolean isPubliclyVisible() {
     return status.isPubliclyVisible();
   }
@@ -150,7 +157,4 @@ public class Event {
       throw new BusinessException(EventErrorCode.INVALID_EVENT_STATUS);
     }
   }
-
-
-
 }
