@@ -50,6 +50,9 @@ class ReservationPaymentEventServiceTest {
     private ReservationInboxRepositoryPort reservationInboxRepositoryPort;
 
     @Mock
+    private ReservationOutboxService reservationOutboxService;
+
+    @Mock
     private SeatHoldReservationValidator seatHoldReservationValidator;
 
     @InjectMocks
@@ -72,6 +75,8 @@ class ReservationPaymentEventServiceTest {
         assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.CONFIRMED);
         assertThat(reservation.getPaymentCompletedAt()).isEqualTo(APPROVED_AT);
         assertThat(reservation.getUpdatedBy()).isZero();
+        verify(reservationOutboxService).saveConfirmedEvent(reservation);
+        verify(reservationOutboxService, never()).saveFailedEvent(any());
 
         ArgumentCaptor<ReservationInbox> inboxCaptor = ArgumentCaptor.forClass(ReservationInbox.class);
         verify(reservationInboxRepositoryPort).save(inboxCaptor.capture());
@@ -97,6 +102,8 @@ class ReservationPaymentEventServiceTest {
         assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.FAILED);
         assertThat(reservation.getFailureReason()).isEqualTo(ReservationFailureReason.PAYMENT_FAILED);
         assertThat(reservation.getUpdatedBy()).isZero();
+        verify(reservationOutboxService).saveFailedEvent(reservation);
+        verify(reservationOutboxService, never()).saveConfirmedEvent(any());
 
         ArgumentCaptor<ReservationInbox> inboxCaptor = ArgumentCaptor.forClass(ReservationInbox.class);
         verify(reservationInboxRepositoryPort).save(inboxCaptor.capture());
@@ -115,6 +122,7 @@ class ReservationPaymentEventServiceTest {
         // then
         assertThat(statusChanged).isFalse();
         verifyNoInteractions(reservationRepositoryPort);
+        verifyNoInteractions(reservationOutboxService);
         verify(reservationInboxRepositoryPort, never()).save(any());
     }
 
@@ -135,6 +143,7 @@ class ReservationPaymentEventServiceTest {
         assertThat(statusChanged).isFalse();
         assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.CONFIRMED);
         assertThat(reservation.getFailureReason()).isNull();
+        verifyNoInteractions(reservationOutboxService);
         verify(reservationInboxRepositoryPort).save(any(ReservationInbox.class));
     }
 
@@ -156,6 +165,7 @@ class ReservationPaymentEventServiceTest {
         // then
         assertThat(exception.getErrorCode()).isEqualTo(CommonErrorCode.INVALID_INPUT);
         assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.PAYMENT_PROCESSING);
+        verifyNoInteractions(reservationOutboxService);
         verify(reservationInboxRepositoryPort, never()).save(any());
     }
 
