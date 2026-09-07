@@ -118,4 +118,8 @@ public class SeatHold extends BaseEntity {
         this.expiresAt = now.plus(extension);
         this.extendedAt = now;
     }
+
+    public boolean isExpired(Instant now) {
+        return !expiresAt.isAfter(now);
+    }
 }

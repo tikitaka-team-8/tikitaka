@@ -145,7 +145,9 @@ public class SeatService implements SeatHoldExtensionValidator {
     @Transactional
     public void validateAndExtend(UUID seatHoldId) {
 
-        if (seatHoldId == null ) {
+        Instant now = Instant.now(clock);
+
+        if (seatHoldId == null) {
             throw new BusinessException(SeatErrorCode.SEAT_HOLD_NOT_FOUND);
         }
         SeatHold seatHold = getSeatHoldOrThrow(seatHoldId);
@@ -154,8 +156,17 @@ public class SeatService implements SeatHoldExtensionValidator {
             throw new BusinessException(SeatErrorCode.SEAT_STATUS_CONFLICT);
         }
 
-        Instant now = Instant.now(clock);
+        if (seatHold.isExpired(now)) {
+            throw new BusinessException(SeatErrorCode.SEAT_HOLD_ALREADY_CLOSED);
+        }
+
         seatHold.extendExpiry(now, HOLD_EXTENSION_DURATION);
+    }
+    public List<UUID> findOverdueHoldIds(int batchSize) {
+        Instant now = Instant.now(clock);
+        return seatHoldRepository.findExpiredHolds(now, batchSize).stream()
+                .map(SeatHold::getSeatHoldId)
+                .toList();
     }
 
 
