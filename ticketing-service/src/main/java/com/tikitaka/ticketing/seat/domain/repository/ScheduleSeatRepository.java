@@ -16,4 +16,8 @@ public interface ScheduleSeatRepository {
 
     Optional<ScheduleSeat> findByIdForUpdate(UUID eventSessionId);
 
+    List<UUID> findExistingVenueSeatIds(UUID eventSessionId, List<UUID> venueSeatIds);
+
+    List<ScheduleSeat> saveAll(List<ScheduleSeat> scheduleSeats);
+
 }

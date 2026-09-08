@@ -2,6 +2,7 @@ package com.tikitaka.ticketing.seat.application.service;
 
 import com.tikitaka.ticketing.global.exception.BusinessException;
 import com.tikitaka.ticketing.queue.application.QueueAdmissionValidator;
+import com.tikitaka.ticketing.seat.application.command.CreateScheduleSeatsCommand;
 import com.tikitaka.ticketing.seat.domain.entity.ScheduleSeat;
 import com.tikitaka.ticketing.seat.domain.entity.SeatHold;
 import com.tikitaka.ticketing.seat.domain.enums.HoldStatus;
@@ -9,6 +10,7 @@ import com.tikitaka.ticketing.seat.domain.enums.ReleaseReason;
 import com.tikitaka.ticketing.seat.domain.repository.ScheduleSeatRepository;
 import com.tikitaka.ticketing.seat.domain.repository.SeatHoldRepository;
 import com.tikitaka.ticketing.seat.exception.SeatErrorCode;
+import com.tikitaka.ticketing.seat.presentation.dto.response.CreateScheduleSeatsResponse;
 import com.tikitaka.ticketing.seat.presentation.dto.response.ScheduleSeatListResponse;
 import com.tikitaka.ticketing.seat.presentation.dto.response.ScheduleSeatResponse;
 import com.tikitaka.ticketing.seat.presentation.dto.response.SeatHoldResponse;
@@ -20,9 +22,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -30,6 +35,7 @@ import java.util.UUID;
 public class SeatService implements SeatHoldReservationValidator {
 
     private static final Duration HOLD_EXTENSION_DURATION = Duration.ofMinutes(10);
+    private static final Long SYSTEM_USER_ID = 0L;
 
     private final ScheduleSeatRepository scheduleSeatRepository;
     private final SeatHoldRepository seatHoldRepository;
@@ -202,6 +208,51 @@ public class SeatService implements SeatHoldReservationValidator {
         releaseIfHolding(seatHold, seat, reason);
     }
 
+
+    @Transactional
+    public CreateScheduleSeatsResponse createScheduleSeats(CreateScheduleSeatsCommand command) {
+        if (command.seats() == null || command.seats().isEmpty()) {
+            throw new BusinessException(SeatErrorCode.INVALID_INPUT);
+        }
+
+        List<UUID> venueSeatIds = command.seats().stream()
+                .map(CreateScheduleSeatsCommand.SeatItem::venueSeatId)
+                .toList();
+
+        if (new HashSet<>(venueSeatIds).size() != venueSeatIds.size()) {
+            throw new BusinessException(SeatErrorCode.INVALID_INPUT);
+        }
+
+        Set<UUID> existingVenueSeatIds = new HashSet<>(
+                scheduleSeatRepository.findExistingVenueSeatIds(command.eventSessionId(), venueSeatIds)
+        );
+
+        List<ScheduleSeat> scheduleSeatsToCreate = new ArrayList<>();
+        int skippedCount = 0;
+
+        for (CreateScheduleSeatsCommand.SeatItem seatItem : command.seats()) {
+            if (existingVenueSeatIds.contains(seatItem.venueSeatId())) {
+                skippedCount++;
+                continue;
+            }
+            scheduleSeatsToCreate.add(ScheduleSeat.create(
+                    command.eventSessionId(),
+                    seatItem.venueSeatId(),
+                    seatItem.section(),
+                    seatItem.rowLabel(),
+                    seatItem.seatNumber(),
+                    seatItem.grade(),
+                    seatItem.price(),
+                    SYSTEM_USER_ID
+            ));
+        }
+
+        if (!scheduleSeatsToCreate.isEmpty()) {
+            scheduleSeatRepository.saveAll(scheduleSeatsToCreate);
+        }
+
+        return CreateScheduleSeatsResponse.of(scheduleSeatsToCreate.size(), skippedCount);
+    }
 
     private SeatHold getSeatHoldOrThrow(UUID seatHoldId) {
         return seatHoldRepository.findByIdForUpdate(seatHoldId)

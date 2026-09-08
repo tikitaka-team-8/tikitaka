@@ -3,6 +3,7 @@ package com.tikitaka.ticketing.seat.application.service;
 import com.tikitaka.ticketing.global.exception.BusinessException;
 import com.tikitaka.ticketing.queue.application.QueueAdmissionValidator;
 import com.tikitaka.ticketing.queue.application.QueueService;
+import com.tikitaka.ticketing.seat.application.command.CreateScheduleSeatsCommand;
 import com.tikitaka.ticketing.seat.domain.entity.ScheduleSeat;
 import com.tikitaka.ticketing.seat.domain.entity.SeatHold;
 import com.tikitaka.ticketing.seat.domain.enums.HoldStatus;
@@ -474,6 +475,148 @@ class SeatServiceTest {
         List<UUID> result = seatService.findOverdueHoldIds(100);
 
         assertThat(result).containsExactly(seatHold.getSeatHoldId());
+    }
+
+    @Test
+    void HOLDING_상태의_선점을_확정하면_판매완료로_전이된다() {
+
+        SeatHold seatHold = SeatHold.hold(
+                userId, scheduleSeatId, idempotencyKey,
+                Instant.parse("2026-09-04T03:00:00Z"),
+                Instant.parse("2026-09-04T03:10:00Z")
+        );
+        ScheduleSeat seat = mock(ScheduleSeat.class);
+        Instant confirmedAt = Instant.parse("2026-09-04T03:05:00Z");
+
+        given(seatHoldRepository.findByIdForUpdate(seatHoldId)).willReturn(Optional.of(seatHold));
+        given(scheduleSeatRepository.findByIdForUpdate(scheduleSeatId)).willReturn(Optional.of(seat));
+        given(clock.instant()).willReturn(confirmedAt);
+
+        seatService.confirmHold(seatHoldId);
+
+        assertThat(seatHold.getHoldStatus()).isEqualTo(HoldStatus.CONFIRMED);
+        then(seat).should().sell();
+    }
+
+    @Test
+    void 이미_CONFIRMED된_선점을_다시_확정해도_아무_처리_없이_성공한다() {
+
+        SeatHold seatHold = SeatHold.hold(
+                userId, scheduleSeatId, idempotencyKey,
+                Instant.parse("2026-09-04T03:00:00Z"),
+                Instant.parse("2026-09-04T03:10:00Z")
+        );
+        seatHold.confirm(Instant.parse("2026-09-04T03:05:00Z"));
+
+        given(seatHoldRepository.findByIdForUpdate(seatHoldId)).willReturn(Optional.of(seatHold));
+
+        seatService.confirmHold(seatHoldId);
+
+        then(scheduleSeatRepository).should(never()).findByIdForUpdate(any());
+    }
+
+    @Test
+    void RELEASED된_선점을_확정하려하면_예외가_발생한다() {
+
+        SeatHold seatHold = SeatHold.hold(
+                userId, scheduleSeatId, idempotencyKey,
+                Instant.parse("2026-09-04T03:00:00Z"),
+                Instant.parse("2026-09-04T03:10:00Z")
+        );
+        seatHold.release(ReleaseReason.USER_CANCEL, Instant.parse("2026-09-04T03:01:00Z"));
+        ScheduleSeat seat = mock(ScheduleSeat.class);
+
+        given(seatHoldRepository.findByIdForUpdate(seatHoldId)).willReturn(Optional.of(seatHold));
+        given(scheduleSeatRepository.findByIdForUpdate(scheduleSeatId)).willReturn(Optional.of(seat));
+
+        assertThatThrownBy(() -> seatService.confirmHold(seatHoldId))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(SeatErrorCode.SEAT_HOLD_ALREADY_CLOSED);
+    }
+
+    @Test
+    void 결제_실패시_HOLDING_상태의_선점을_해제하면_좌석도_판매가능_상태로_돌아간다() {
+
+        SeatHold seatHold = SeatHold.hold(
+                userId, scheduleSeatId, idempotencyKey,
+                Instant.parse("2026-09-04T03:00:00Z"),
+                Instant.parse("2026-09-04T03:10:00Z")
+        );
+        ScheduleSeat seat = mock(ScheduleSeat.class);
+        Instant releasedAt = Instant.parse("2026-09-04T03:05:00Z");
+
+        given(seatHoldRepository.findByIdForUpdate(seatHoldId)).willReturn(Optional.of(seatHold));
+        given(scheduleSeatRepository.findByIdForUpdate(scheduleSeatId)).willReturn(Optional.of(seat));
+        given(clock.instant()).willReturn(releasedAt);
+
+        seatService.releaseHold(seatHoldId, ReleaseReason.PAYMENT_FAILED);
+
+        assertThat(seatHold.getHoldStatus()).isEqualTo(HoldStatus.RELEASED);
+        assertThat(seatHold.getReleaseReason()).isEqualTo(ReleaseReason.PAYMENT_FAILED);
+        then(seat).should().release();
+    }
+
+    @Test
+    void 이미_RELEASED된_선점을_다시_해제해도_아무_처리_없이_성공한다() {
+
+        SeatHold seatHold = SeatHold.hold(
+                userId, scheduleSeatId, idempotencyKey,
+                Instant.parse("2026-09-04T03:00:00Z"),
+                Instant.parse("2026-09-04T03:10:00Z")
+        );
+        seatHold.release(ReleaseReason.PAYMENT_FAILED, Instant.parse("2026-09-04T03:01:00Z"));
+
+        given(seatHoldRepository.findByIdForUpdate(seatHoldId)).willReturn(Optional.of(seatHold));
+
+        seatService.releaseHold(seatHoldId, ReleaseReason.RESERVATION_CANCELED);
+
+        then(scheduleSeatRepository).should(never()).findByIdForUpdate(any());
+    }
+
+    @Test
+    void CONFIRMED된_선점을_해제하려하면_예외가_발생한다() {
+
+        SeatHold seatHold = SeatHold.hold(
+                userId, scheduleSeatId, idempotencyKey,
+                Instant.parse("2026-09-04T03:00:00Z"),
+                Instant.parse("2026-09-04T03:10:00Z")
+        );
+        seatHold.confirm(Instant.parse("2026-09-04T03:01:00Z"));
+        ScheduleSeat seat = mock(ScheduleSeat.class);
+
+        given(seatHoldRepository.findByIdForUpdate(seatHoldId)).willReturn(Optional.of(seatHold));
+        given(scheduleSeatRepository.findByIdForUpdate(scheduleSeatId)).willReturn(Optional.of(seat));
+
+        assertThatThrownBy(() -> seatService.releaseHold(seatHoldId, ReleaseReason.PAYMENT_FAILED))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(SeatErrorCode.SEAT_HOLD_ALREADY_CLOSED);
+    }
+
+
+    @Test
+    void 회차별_좌석_재고_생성_요청에_동일한_venueSeatId가_중복되면_예외가_발생한다() {
+        UUID duplicatedVenueSeatId = UUID.randomUUID();
+        CreateScheduleSeatsCommand command = new CreateScheduleSeatsCommand(
+                eventSessionId,
+                UUID.randomUUID(),
+                List.of(
+                        new CreateScheduleSeatsCommand.SeatItem(
+                                duplicatedVenueSeatId, "A", "1", "1", "VIP", 10000L
+                        ),
+                        new CreateScheduleSeatsCommand.SeatItem(
+                                duplicatedVenueSeatId, "A", "1", "2", "VIP", 10000L
+                        )
+                )
+        );
+
+        assertThatThrownBy(() -> seatService.createScheduleSeats(command))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(SeatErrorCode.INVALID_INPUT);
+
+        verifyNoInteractions(scheduleSeatRepository);
     }
 
 }
