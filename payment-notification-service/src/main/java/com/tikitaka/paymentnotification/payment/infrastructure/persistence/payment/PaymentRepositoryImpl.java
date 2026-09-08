@@ -2,9 +2,11 @@ package com.tikitaka.paymentnotification.payment.infrastructure.persistence.paym
 
 import com.tikitaka.paymentnotification.payment.domain.payment.Payment;
 import com.tikitaka.paymentnotification.payment.domain.payment.PaymentRepository;
+import com.tikitaka.paymentnotification.payment.domain.payment.PaymentStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -31,6 +33,16 @@ public class PaymentRepositoryImpl implements PaymentRepository {
     @Override
     public Optional<Payment> findByReservationId(UUID reservationId) {
         return paymentJpaRepository.findByReservationId(reservationId);
+    }
+
+    @Override
+    public boolean tryStartProcessing(UUID paymentId) {
+        return paymentJpaRepository.tryStartProcessing(paymentId) == 1;
+    }
+
+    @Override
+    public boolean tryRestoreReady(UUID paymentId) {
+        return paymentJpaRepository.tryRestoreReady(paymentId) == 1;
     }
 
 }

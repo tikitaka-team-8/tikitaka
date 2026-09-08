@@ -1,24 +1,22 @@
 package com.tikitaka.paymentnotification.payment.application;
 
 import com.tikitaka.paymentnotification.payment.application.command.PaymentCreateCommand;
-import com.tikitaka.paymentnotification.payment.application.gateway.*;
+import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGateway;
+import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGatewayRequest;
+import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGatewayResult;
+import com.tikitaka.paymentnotification.payment.application.gateway.ReservationPaymentValidator;
 import com.tikitaka.paymentnotification.payment.application.result.PaymentApproveResult;
 import com.tikitaka.paymentnotification.payment.application.result.PaymentCreateResult;
 import com.tikitaka.paymentnotification.payment.application.result.PaymentDetailResult;
 import com.tikitaka.paymentnotification.payment.application.result.ReservationPaymentValidationResult;
-import com.tikitaka.paymentnotification.payment.domain.event.PaymentFailedEvent;
-import com.tikitaka.paymentnotification.payment.domain.event.PaymentSucceededEvent;
-import com.tikitaka.paymentnotification.payment.domain.outbox.PaymentOutbox;
-import com.tikitaka.paymentnotification.payment.domain.outbox.PaymentOutboxRepository;
 import com.tikitaka.paymentnotification.payment.domain.payment.Payment;
 import com.tikitaka.paymentnotification.payment.domain.payment.PaymentMethod;
 import com.tikitaka.paymentnotification.payment.domain.payment.PaymentProvider;
 import com.tikitaka.paymentnotification.payment.domain.payment.PaymentRepository;
-import com.tikitaka.paymentnotification.payment.domain.transaction.PaymentTransaction;
-import com.tikitaka.paymentnotification.payment.domain.transaction.PaymentTransactionRepository;
 import com.tikitaka.paymentnotification.payment.exception.PaymentErrorCode;
 import com.tikitaka.paymentnotification.payment.exception.PaymentException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,31 +25,35 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
+
+@Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class PaymentService {
 
-    private final ReservationPaymentValidator  reservationPaymentValidator;
+    private final ReservationPaymentValidator reservationPaymentValidator;
 
     private final PaymentRepository paymentRepository;
     private final PaymentGateway paymentGateway;
-    private final PaymentTransactionRepository paymentTransactionRepository;
 
-    private final PaymentOutboxRepository paymentOutboxRepository;
-    private final PaymentEventSerializer  paymentEventSerializer;
+    private final PaymentProcessingCompensator paymentProcessingCompensator;
+    private final PaymentProcessingAcquirer paymentProcessingAcquirer;
+    private final PaymentApprovalResultProcessor paymentApprovalResultProcessor;
 
 
     // 결제 정보 단건 조회
+    @Transactional(readOnly = true)
     public PaymentDetailResult getPaymentById(UUID paymentId, Long loginUserId) {
         Payment payment = paymentRepository.findById(paymentId).orElseThrow(() ->
                 new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
+
         validateOwner(payment, loginUserId);
 
         return PaymentDetailResult.from(payment);
     }
 
     // 예매별 결제 조회
+    @Transactional(readOnly = true)
     public PaymentDetailResult getPaymentByReservationId(UUID reservationId){
         Payment payment = paymentRepository.findByReservationId(reservationId).orElseThrow(()->
                 new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
@@ -107,26 +109,34 @@ public class PaymentService {
 
 
     // 결제 승인
-    @Transactional
     public PaymentApproveResult approvePayment(
             UUID paymentId,
             Long loginUserId,
             PaymentMethod paymentMethod
     ) {
-        Payment payment = paymentRepository.findById(paymentId)
-                .orElseThrow(() -> new PaymentException(
-                        PaymentErrorCode.PAYMENT_NOT_FOUND
-                ));
+        // 승인에 사용할 Payment 정보 조회
+        Payment payment = paymentRepository.findById(paymentId).orElseThrow(()->
+                new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
+
         validateOwner(payment, loginUserId);
 
-        // READY - > PROCESSING
-        payment.startProcessing();
+        // READY -> PROCESSING 선점
+        boolean acquired = paymentProcessingAcquirer.acquire(paymentId);
 
-        validateReservation(payment);
+        if(!acquired){
+            return handleAcquireFailure(paymentId);
+        }
 
-        // 실제 PG 요청을 보낸 시점
+        // PG 호출 전 단계
+        try{
+            validateReservation(payment);
+        }catch (RuntimeException e){
+            // PG 호출 전 실패이므로 PROCESSING -> READY 복구
+            paymentProcessingCompensator.restoreReady(paymentId);
+            throw e;
+        }
+
         OffsetDateTime requestedAt = OffsetDateTime.now();
-
 
         PaymentGatewayRequest request = new PaymentGatewayRequest(
                 payment.getOrderId(),
@@ -134,40 +144,42 @@ public class PaymentService {
                 payment.getCurrency()
         );
 
+        PaymentGatewayResult result;
 
-        PaymentGatewayResult result = paymentGateway.approve(request);
-
-        switch (result.status()) {
-            case SUCCESS ->
-                    handleApproveSuccess(
-                            payment,
-                            paymentMethod,
-                            result,
-                            requestedAt
-                    );
-
-            case FAILED ->
-                    handleApproveFailed(
-                            payment,
-                            result,
-                            requestedAt
-                    );
-
-            case UNKNOWN ->
-                    handleApproveUnknown(
-                            payment,
-                            requestedAt
-                    );
+        // PG 승인 요청
+        try {
+            result = paymentGateway.approve(request);
+        } catch (RuntimeException e) {
+            // PG 요청 이후 결과를 확신할 수 없으므로 UNKNOWN
+            markUnknownSafely(paymentId, requestedAt);
+            throw e;
         }
 
-        return PaymentApproveResult.from(payment);
+        // PG 결과를 DB에 최종 반영
+        try {
+            return paymentApprovalResultProcessor.process(
+                    paymentId,
+                    paymentMethod,
+                    result,
+                    requestedAt
+            );
+        } catch (RuntimeException e) {
+            // PG 결과를 받은 이후 DB 반영에 실패했으므로
+            // 실제 결제 결과와 DB 상태가 다를 가능성이 있어 UNKNOWN
+            markUnknownSafely(paymentId, requestedAt);
+            throw e;
+        }
     }
+
+    // ------------------------------------------------------------------ //
+
 
     private void validateOwner(Payment payment, Long loginUserId) {
         if (!Objects.equals(payment.getUserId(), loginUserId)) {
             throw new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND);
         }
     }
+
 
     // 실제 결제 전 검증 요청
     private void validateReservation(Payment payment){
@@ -181,112 +193,39 @@ public class PaymentService {
         }
     }
 
+    // 선점 실패 처리
+    private PaymentApproveResult handleAcquireFailure(UUID paymentId){
+        Payment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(()->
+                        new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
 
-    // 승인 + 성공 Outbox
-    private void handleApproveSuccess(
-            Payment payment,
-            PaymentMethod paymentMethod,
-            PaymentGatewayResult result,
-            OffsetDateTime requestedAt
-    ) {
-        payment.approve(
-                paymentMethod,
-                result.pgPaymentKey()
-        );
+        return switch (payment.getStatus()){
+            case APPROVED, UNKNOWN -> PaymentApproveResult.from(payment);
 
-        paymentTransactionRepository.save(
-                PaymentTransaction.createApproveSuccess(
-                        payment,
-                        payment.getPaymentProvider(),
-                        result.pgPaymentKey(),
-                        payment.getAmount(),
-                        1,
-                        requestedAt
-                )
-        );
-
-        PaymentSucceededEvent event = PaymentSucceededEvent.from(payment);
-
-        saveOutbox(
-                payment,
-                event.eventType(),
-                paymentEventSerializer.serialize(event)
-        );
-    }
-
-    // 실패 + Outbox
-    private void handleApproveFailed(
-            Payment payment,
-            PaymentGatewayResult result,
-            OffsetDateTime requestedAt
-    ) {
-        payment.fail(
-                result.failureCode(),
-                result.failureReason()
-        );
-
-        paymentTransactionRepository.save(
-                PaymentTransaction.createApproveFailed(
-                        payment,
-                        payment.getPaymentProvider(),
-                        payment.getAmount(),
-                        1,
-                        result.failureCode(),
-                        result.failureReason(),
-                        requestedAt
-                )
-        );
-
-        PaymentFailedEvent event =
-                PaymentFailedEvent.from(payment);
-
-        saveOutbox(
-                payment,
-                event.eventType(),
-                paymentEventSerializer.serialize(event)
-        );
-    }
-
-    // Unknown + Outbox
-    private void handleApproveUnknown(Payment payment, OffsetDateTime requestedAt) {
-        payment.markUnknown();
-
-        paymentTransactionRepository.save(
-                PaymentTransaction.createApproveUnknown(
-                        payment,
-                        payment.getPaymentProvider(),
-                        payment.getAmount(),
-                        1,
-                        requestedAt
-                )
-        );
-    }
-
-    // 아웃박스 저장
-    private void saveOutbox(
-            Payment payment,
-            String eventType,
-            String payload
-    ) {
-        PaymentOutbox outbox =
-                PaymentOutbox.create(
-                        payment,
-                        eventType,
-                        payload
+            case READY, PROCESSING, FAILED, CANCELED ->
+                throw new PaymentException(
+                        PaymentErrorCode.PAYMENT_NOT_ALLOWED
                 );
-
-        paymentOutboxRepository.save(outbox);
+        };
     }
 
-
-
-
-
-
-
-
-    private String createOrderId() {
-        return "PAY-" + UUID.randomUUID();
+    private void markUnknownSafely(
+            UUID paymentId,
+            OffsetDateTime requestedAt
+    ) {
+        try {
+            paymentApprovalResultProcessor.markUnknown(
+                    paymentId,
+                    requestedAt
+            );
+        } catch (RuntimeException e) {
+            log.error(
+                    "결제를 UNKNOWN 상태로 전환하지 못했습니다. paymentId={}",
+                    paymentId,
+                    e
+            );
+        }
     }
+
 
 }
