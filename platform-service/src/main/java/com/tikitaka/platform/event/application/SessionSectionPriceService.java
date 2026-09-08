@@ -79,6 +79,7 @@ public class SessionSectionPriceService {
     // 2. 요청 가격 생성
     Map<UUID, VenueSection> sectionMap = loadAndValidateVenueSections(event, request);
 
+    // 기존 가격을 벌크 삭제
     sessionSectionPriceRepository.deleteAllByEventSessionId(sessionId);
 
     // SectionPrice 객체 생성

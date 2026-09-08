@@ -2,6 +2,7 @@ package com.tikitaka.platform.event.infrastructure;
 
 import com.tikitaka.platform.event.domain.SessionSectionPrice;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -10,7 +11,14 @@ import java.util.UUID;
 
 public interface SessionSectionPriceRepository extends JpaRepository<SessionSectionPrice, UUID> {
 
-  void deleteAllByEventSessionId(UUID sessionId);
+
+  @Modifying
+  @Query("""
+    DELETE FROM SessionSectionPrice sp
+        WHERE sp.eventSession.id = :sessionId
+    """)
+  void deleteAllByEventSessionId(
+      @Param("sessionId") UUID sessionId);
 
   @Query("""
     SELECT price
