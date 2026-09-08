@@ -64,6 +64,9 @@ class RedisQueueRepositoryTest {
         assertThat(queueRepository.findEntry(sessionId, userId)).contains(createdEntry);
         assertThat(redisTemplate.getExpire("queue:waiting:{" + sessionId + "}")).isPositive();
         assertThat(redisTemplate.getExpire("queue:sequence:{" + sessionId + "}")).isPositive();
+        assertThat(redisTemplate.getExpire("queue:waiting-heartbeat:{" + sessionId + "}")).isPositive();
+        assertThat(redisTemplate.opsForZSet().score("queue:waiting-heartbeat:{" + sessionId + "}", "100"))
+                .isEqualTo(joinedAt.toEpochMilli());
     }
 
     @Test
@@ -96,6 +99,74 @@ class RedisQueueRepositoryTest {
     }
 
     @Test
+    void WAITING_heartbeat는_순번을_변경하지_않고_마지막_활동_시각만_갱신한다() {
+        UUID sessionId = UUID.randomUUID();
+        QueueEntry waitingEntry = createWaitingEntry(sessionId, 100L);
+        Instant heartbeatAt = Instant.parse("2026-09-01T01:02:00Z");
+
+        assertThat(queueRepository.refreshWaitingHeartbeat(sessionId, waitingEntry.userId(), heartbeatAt)).isTrue();
+        assertThat(queueRepository.findWaitingPosition(sessionId, waitingEntry.userId())).contains(1L);
+        assertThat(queueRepository.findInactiveWaitingUserIds(sessionId, heartbeatAt.minusMillis(1), 50)).isEmpty();
+        assertThat(queueRepository.findInactiveWaitingUserIds(sessionId, heartbeatAt, 50))
+                .containsExactly(waitingEntry.userId());
+    }
+
+    @Test
+    void 대기_순번이_없는_Entry에는_heartbeat를_갱신하지_않는다() {
+        UUID sessionId = UUID.randomUUID();
+        QueueEntry waitingEntry = createWaitingEntry(sessionId, 100L);
+        String waitingKey = "queue:waiting:{" + sessionId + "}";
+        String heartbeatKey = "queue:waiting-heartbeat:{" + sessionId + "}";
+        redisTemplate.opsForZSet().remove(waitingKey, String.valueOf(waitingEntry.userId()));
+
+        assertThat(queueRepository.refreshWaitingHeartbeat(
+                sessionId,
+                waitingEntry.userId(),
+                Instant.parse("2026-09-01T01:02:00Z")
+        )).isFalse();
+        assertThat(redisTemplate.opsForZSet().score(heartbeatKey, String.valueOf(waitingEntry.userId())))
+                .isEqualTo(waitingEntry.joinedAt().toEpochMilli());
+    }
+
+    @Test
+    void heartbeat는_회차_종료_기준_TTL을_연장하지_않는다() {
+        UUID sessionId = UUID.randomUUID();
+        QueueEntry waitingEntry = createWaitingEntry(sessionId, 100L);
+        String heartbeatKey = "queue:waiting-heartbeat:{" + sessionId + "}";
+        long ttlBefore = redisTemplate.getExpire(heartbeatKey, TimeUnit.MILLISECONDS);
+
+        assertThat(queueRepository.refreshWaitingHeartbeat(
+                sessionId, waitingEntry.userId(), Instant.parse("2026-09-01T01:02:00Z"))).isTrue();
+
+        long ttlAfter = redisTemplate.getExpire(heartbeatKey, TimeUnit.MILLISECONDS);
+        assertThat(ttlAfter).isPositive().isLessThanOrEqualTo(ttlBefore);
+    }
+
+    @Test
+    void 비활성_WAITING_사용자는_heartbeat_기준으로_원자적으로_정리한다() {
+        UUID sessionId = UUID.randomUUID();
+        QueueEntry inactiveEntry = createWaitingEntry(sessionId, 100L);
+        QueueEntry activeEntry = createWaitingEntry(sessionId, 200L);
+        queueRepository.registerWaitingSession(sessionId);
+        Instant inactiveSince = Instant.parse("2026-09-01T01:03:00Z");
+        queueRepository.refreshWaitingHeartbeat(sessionId, activeEntry.userId(), inactiveSince.plusSeconds(1));
+
+        assertThat(queueRepository.findInactiveWaitingUserIds(sessionId, inactiveSince, 50))
+                .containsExactly(inactiveEntry.userId());
+        assertThat(queueRepository.removeWaitingEntryIfHeartbeatExpired(
+                sessionId, inactiveEntry.userId(), inactiveSince)).isTrue();
+        assertThat(queueRepository.findEntry(sessionId, inactiveEntry.userId())).isEmpty();
+        assertThat(queueRepository.findWaitingPosition(sessionId, activeEntry.userId())).contains(1L);
+        assertThat(redisTemplate.opsForZSet().score(
+                "queue:waiting-heartbeat:{" + sessionId + "}", String.valueOf(inactiveEntry.userId()))).isNull();
+        assertThat(queueRepository.findWaitingSessionIds()).contains(sessionId);
+
+        assertThat(queueRepository.removeWaitingEntryIfHeartbeatExpired(
+                sessionId, activeEntry.userId(), inactiveSince.plusSeconds(2))).isTrue();
+        assertThat(queueRepository.findWaitingSessionIds()).doesNotContain(sessionId);
+    }
+
+    @Test
     void WAITING_사용자_이탈은_엔트리와_순번을_원자적으로_정리한다() {
         UUID sessionId = UUID.randomUUID();
         QueueEntry first = createWaitingEntry(sessionId, 100L);
@@ -107,6 +178,8 @@ class RedisQueueRepositoryTest {
         assertThat(firstResult).isEqualTo(QueueLeaveResult.LEFT);
         assertThat(queueRepository.findEntry(sessionId, first.userId())).isEmpty();
         assertThat(queueRepository.findWaitingPosition(sessionId, first.userId())).isEmpty();
+        assertThat(redisTemplate.opsForZSet().score(
+                "queue:waiting-heartbeat:{" + sessionId + "}", String.valueOf(first.userId()))).isNull();
         assertThat(queueRepository.findWaitingPosition(sessionId, second.userId())).contains(1L);
         assertThat(queueRepository.findWaitingSessionIds()).contains(sessionId);
 
@@ -133,7 +206,7 @@ class RedisQueueRepositoryTest {
                 waitingEntry.admit(Instant.parse("2026-09-01T01:01:00Z")),
                 admissionToken,
                 SESSION_TTL,
-                Duration.ofMinutes(10)
+                Duration.ofMinutes(3)
         )).isTrue();
 
         assertThat(queueRepository.leaveWaitingEntry(sessionId, 100L))
@@ -154,7 +227,7 @@ class RedisQueueRepositoryTest {
                 "token-1",
                 sessionId,
                 100L,
-                Instant.parse("2026-09-01T01:10:00Z"),
+                Instant.parse("2026-09-01T01:04:00Z"),
                 AdmissionTokenStatus.ACTIVE
         );
 
@@ -162,7 +235,7 @@ class RedisQueueRepositoryTest {
                 waitingEntry.admit(Instant.parse("2026-09-01T01:01:00Z")),
                 admissionToken,
                 SESSION_TTL,
-                Duration.ofMinutes(10)
+                Duration.ofMinutes(3)
         );
 
         assertThat(admitted).isTrue();
@@ -171,6 +244,9 @@ class RedisQueueRepositoryTest {
                 .extracting(QueueEntry::status)
                 .isEqualTo(QueueStatus.ADMITTED);
         assertThat(redisTemplate.opsForZSet().score("queue:waiting:{" + sessionId + "}", "100")).isNull();
+        assertThat(redisTemplate.opsForZSet().score("queue:waiting-heartbeat:{" + sessionId + "}", "100")).isNull();
+        assertThat(queueRepository.refreshWaitingHeartbeat(
+                sessionId, 100L, Instant.parse("2026-09-01T01:02:00Z"))).isFalse();
         assertThat(redisTemplate.opsForZSet().score("queue:active:{" + sessionId + "}", "100"))
                 .isEqualTo(admissionToken.expiresAt().toEpochMilli());
         assertThat(redisTemplate.getExpire("queue:active:{" + sessionId + "}")).isPositive();
@@ -181,7 +257,7 @@ class RedisQueueRepositoryTest {
                 "queue:admission-token:{" + sessionId + "}:" + admissionToken.token(),
                 TimeUnit.MILLISECONDS
         );
-        assertThat(admissionTokenTtl).isBetween(Duration.ofMinutes(9).toMillis(), Duration.ofMinutes(10).toMillis());
+        assertThat(admissionTokenTtl).isBetween(Duration.ofMinutes(2).toMillis(), Duration.ofMinutes(3).toMillis());
 
         QueueEntry admittedEntry = queueRepository.findEntry(sessionId, 100L).orElseThrow();
         boolean entered = queueRepository.enterIfAdmissionTokenActive(admittedEntry.enter(), admissionToken);
@@ -207,7 +283,7 @@ class RedisQueueRepositoryTest {
         QueueEntry admittedEntry = waitingEntry.admit(Instant.parse("2026-09-01T01:01:00Z"));
         Instant expirationTime = admissionToken.expiresAt();
 
-        assertThat(queueRepository.admitIfWaiting(admittedEntry, admissionToken, SESSION_TTL, Duration.ofMinutes(10)))
+        assertThat(queueRepository.admitIfWaiting(admittedEntry, admissionToken, SESSION_TTL, Duration.ofMinutes(3)))
                 .isTrue();
         assertThat(queueRepository.findExpiredAdmittedEntries(sessionId, expirationTime.minusMillis(1), 50)).isEmpty();
         assertThat(queueRepository.findExpiredAdmittedEntries(sessionId, expirationTime, 50))
@@ -246,13 +322,13 @@ class RedisQueueRepositoryTest {
                 firstWaitingEntry.admit(Instant.parse("2026-09-01T01:01:00Z")),
                 firstToken,
                 SESSION_TTL,
-                Duration.ofMinutes(10)
+                Duration.ofMinutes(3)
         )).isTrue();
         assertThat(queueRepository.admitIfWaiting(
                 secondWaitingEntry.admit(Instant.parse("2026-09-01T01:01:00Z")),
                 secondToken,
                 SESSION_TTL,
-                Duration.ofMinutes(10)
+                Duration.ofMinutes(3)
         )).isTrue();
 
         QueueEntry firstAdmittedEntry = queueRepository.findEntry(sessionId, 100L).orElseThrow();
@@ -273,8 +349,8 @@ class RedisQueueRepositoryTest {
         AdmissionToken firstToken = admissionToken(sessionId, "token-1", 100L);
         AdmissionToken secondToken = admissionToken(sessionId, "token-2", 100L);
 
-        assertThat(queueRepository.admitIfWaiting(admittedEntry, firstToken, SESSION_TTL, Duration.ofMinutes(10))).isTrue();
-        assertThat(queueRepository.admitIfWaiting(admittedEntry, secondToken, SESSION_TTL, Duration.ofMinutes(10))).isFalse();
+        assertThat(queueRepository.admitIfWaiting(admittedEntry, firstToken, SESSION_TTL, Duration.ofMinutes(3))).isTrue();
+        assertThat(queueRepository.admitIfWaiting(admittedEntry, secondToken, SESSION_TTL, Duration.ofMinutes(3))).isFalse();
         assertThat(queueRepository.findAdmissionTokenReference(sessionId, 100L)).contains(firstToken.token());
         assertThat(queueRepository.findAdmissionToken(sessionId, secondToken.token())).isEmpty();
     }
@@ -320,7 +396,7 @@ class RedisQueueRepositoryTest {
                 "token-1",
                 UUID.randomUUID(),
                 100L,
-                Instant.parse("2026-09-01T01:10:00Z"),
+                Instant.parse("2026-09-01T01:04:00Z"),
                 AdmissionTokenStatus.EXPIRED
         );
 

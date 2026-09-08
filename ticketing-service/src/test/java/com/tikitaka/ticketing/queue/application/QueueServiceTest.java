@@ -62,7 +62,7 @@ class QueueServiceTest {
         queueService = new QueueService(
                 queueRepository,
                 platformSalesStatusClient,
-                new QueueProperties(Duration.ofMinutes(10), Duration.ofHours(1), 50, 50),
+                new QueueProperties(Duration.ofMinutes(3), Duration.ofHours(1), 50, 50, Duration.ofMinutes(2)),
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 new ObjectMapper()
         );
@@ -117,7 +117,7 @@ class QueueServiceTest {
         QueueService serviceWithAdvancingClock = new QueueService(
                 queueRepository,
                 platformSalesStatusClient,
-                new QueueProperties(Duration.ofMinutes(10), Duration.ofHours(1), 50, 50),
+                new QueueProperties(Duration.ofMinutes(3), Duration.ofHours(1), 50, 50, Duration.ofMinutes(2)),
                 advancingClock,
                 new ObjectMapper()
         );
@@ -391,7 +391,7 @@ class QueueServiceTest {
                 "admission-token",
                 UUID.randomUUID(),
                 USER_ID,
-                NOW.plus(Duration.ofMinutes(10)),
+                NOW.plus(Duration.ofMinutes(3)),
                 AdmissionTokenStatus.ACTIVE
         );
         when(queueRepository.findEntry(SESSION_ID, USER_ID)).thenReturn(Optional.of(admittedEntry));
@@ -503,6 +503,24 @@ class QueueServiceTest {
         );
     }
 
+    @Test
+    void WAITING_사용자의_heartbeat를_갱신한다() {
+        queueService.refreshWaitingHeartbeat(SESSION_ID, USER_ID);
+
+        verify(queueRepository).refreshWaitingHeartbeat(SESSION_ID, USER_ID, NOW);
+    }
+
+    @Test
+    void heartbeat_갱신_중_Redis_장애가_발생하면_서비스_이용_불가를_반환한다() {
+        when(queueRepository.refreshWaitingHeartbeat(SESSION_ID, USER_ID, NOW))
+                .thenThrow(new RedisConnectionFailureException("Redis connection failed"));
+
+        assertQueueError(
+                () -> queueService.refreshWaitingHeartbeat(SESSION_ID, USER_ID),
+                QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE
+        );
+    }
+
     private QueueEntry waitingEntry(long sequence) {
         return QueueEntry.waiting(SESSION_ID, USER_ID, sequence, NOW, NOW.plus(Duration.ofHours(2)));
     }
@@ -512,7 +530,7 @@ class QueueServiceTest {
                 "admission-token",
                 SESSION_ID,
                 userId,
-                NOW.plus(Duration.ofMinutes(10)),
+                NOW.plus(Duration.ofMinutes(3)),
                 AdmissionTokenStatus.ACTIVE
         );
     }
