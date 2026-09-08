@@ -3,6 +3,7 @@ package com.tikitaka.platform.event.domain;
 import com.tikitaka.platform.event.exception.EventErrorCode;
 import com.tikitaka.platform.global.exception.BusinessException;
 import com.tikitaka.platform.organizer.domain.Organizer;
+import com.tikitaka.platform.organizer.exception.OrganizerErrorCode;
 import com.tikitaka.platform.venue.domain.Venue;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -142,9 +143,12 @@ public class Event {
     }
   }
 
+
+
   public boolean isPubliclyVisible() {
     return status.isPubliclyVisible();
   }
+
 
   private void validateModifiableStatus() {
     if (this.status != EventStatus.DRAFT) {

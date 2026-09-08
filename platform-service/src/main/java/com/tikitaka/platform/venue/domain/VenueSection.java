@@ -33,4 +33,34 @@ public class VenueSection {
 
   @Column(name = "active", nullable = false)
   private boolean active = true;
+
+  private VenueSection(
+      Venue venue,
+      String name,
+      String floorLabel,
+      int displayOrder,
+      boolean active
+  ) {
+    this.venue = venue;
+    this.name = name;
+    this.floorLabel = floorLabel;
+    this.displayOrder = displayOrder;
+    this.active = active;
+  }
+
+  public static VenueSection create(
+      Venue venue,
+      String name,
+      String floorLabel,
+      int displayOrder,
+      boolean active
+  ) {
+    return new VenueSection(
+        venue,
+        name,
+        floorLabel,
+        displayOrder,
+        active
+    );
+  }
 }

@@ -1,4 +1,4 @@
-package com.tikitaka.platform.event.presentation.dto;
+package com.tikitaka.platform.event.presentation.dto.query;
 
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;

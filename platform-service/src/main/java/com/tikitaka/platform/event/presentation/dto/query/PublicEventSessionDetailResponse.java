@@ -1,8 +1,9 @@
-package com.tikitaka.platform.event.presentation.dto;
+package com.tikitaka.platform.event.presentation.dto.query;
 
 import com.tikitaka.platform.event.domain.EventSession;
 import com.tikitaka.platform.event.domain.EventSessionStatus;
 import com.tikitaka.platform.event.domain.SessionSectionPrice;
+import com.tikitaka.platform.event.presentation.dto.SectionPriceResponse;
 
 import java.time.OffsetDateTime;
 import java.util.Comparator;

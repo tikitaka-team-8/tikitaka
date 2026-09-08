@@ -1,7 +1,7 @@
 package com.tikitaka.platform.event.presentation;
 
 import com.tikitaka.platform.event.application.EventSessionService;
-import com.tikitaka.platform.event.presentation.dto.PublicEventSessionDetailResponse;
+import com.tikitaka.platform.event.presentation.dto.query.PublicEventSessionDetailResponse;
 import com.tikitaka.platform.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
