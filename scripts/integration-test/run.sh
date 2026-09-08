@@ -8,6 +8,8 @@ SESSION_ID="${SESSION_ID:-31000000-0000-0000-0000-000000000001}"
 EXPECTED_PRICE="${EXPECTED_PRICE:-150000}"
 ADMISSION_POLL_MAX_ATTEMPTS="${ADMISSION_POLL_MAX_ATTEMPTS:-20}"
 ADMISSION_POLL_INTERVAL_SECONDS="${ADMISSION_POLL_INTERVAL_SECONDS:-1}"
+RESERVATION_POLL_MAX_ATTEMPTS="${RESERVATION_POLL_MAX_ATTEMPTS:-30}"
+RESERVATION_POLL_INTERVAL_SECONDS="${RESERVATION_POLL_INTERVAL_SECONDS:-1}"
 HTTP_CONNECT_TIMEOUT_SECONDS="${HTTP_CONNECT_TIMEOUT_SECONDS:-5}"
 HTTP_MAX_TIME_SECONDS="${HTTP_MAX_TIME_SECONDS:-15}"
 
@@ -17,6 +19,8 @@ TEST_EMAIL="ci.${RUN_SUFFIX}@test.tikitaka.local"
 TEST_PASSWORD="Tikitaka!Aa1-${RUN_SUFFIX:0:16}"
 TEST_NAME="CI 테스트 사용자"
 TEST_NICKNAME="ci-${RUN_SUFFIX}"
+SEAT_HOLD_IDEMPOTENCY_KEY="seat-hold-${RUN_SUFFIX}"
+RESERVATION_IDEMPOTENCY_KEY="reservation-${RUN_SUFFIX}"
 
 HTTP_STATUS=""
 HTTP_BODY=""
@@ -202,16 +206,95 @@ EXTRA_HEADERS=(
 )
 http GET "/api/v1/schedules/${SESSION_ID}/seats"
 assert_status 200 "좌석 목록 조회"
-SEAT_ID="$(jq --raw-output '.data.seats[0].scheduleSeatId // empty' <<<"$HTTP_BODY")"
+SEAT_ID="$(jq --raw-output --argjson expectedPrice "$EXPECTED_PRICE" \
+  'first(.data.seats[]? | select(.price == $expectedPrice and .seatStatus == "AVAILABLE") | .scheduleSeatId) // empty' \
+  <<<"$HTTP_BODY")"
 if [[ -z "$SEAT_ID" ]]; then
-  log_fail "좌석 목록에서 scheduleSeatId를 찾지 못했습니다."
+  log_fail "좌석 목록에서 가격 ${EXPECTED_PRICE}원의 예매 가능한 좌석을 찾지 못했습니다."
   exit 1
 fi
-log_ok "조회 가능한 좌석 확인"
+log_ok "가격과 상태가 일치하는 예매 가능 좌석 확인"
 
 log_step "HAPPY_SEAT_DETAIL" "좌석 상세 조회"
 http GET "/api/v1/schedules/${SESSION_ID}/seats/${SEAT_ID}"
 assert_status 200 "좌석 상세 조회"
 assert_json ".data.scheduleSeatId == \"${SEAT_ID}\"" "좌석 상세 ID 확인"
+assert_json ".data.price == ${EXPECTED_PRICE} and .data.seatStatus == \"AVAILABLE\"" "좌석 상세 가격과 상태 확인"
 
-printf '\n[OK] 1차 통합 테스트 Happy Path와 Gateway 보안 시나리오가 모두 통과했습니다.\n'
+log_step "HAPPY_SEAT_HOLD" "좌석 선점"
+EXTRA_HEADERS=(
+  --header "Authorization: Bearer ${ACCESS_TOKEN}"
+  --header "Idempotency-Key: ${SEAT_HOLD_IDEMPOTENCY_KEY}"
+)
+http POST "/api/v1/schedules/${SESSION_ID}/seats/${SEAT_ID}/hold"
+assert_status 200 "좌석 선점"
+SEAT_HOLD_ID="$(jq --raw-output '.data.seatHoldId // empty' <<<"$HTTP_BODY")"
+if [[ -z "$SEAT_HOLD_ID" ]]; then
+  log_fail "좌석 선점 응답에서 seatHoldId를 찾지 못했습니다."
+  exit 1
+fi
+assert_json '.data.holdToken != null and .data.expiresAt != null' "선점 토큰과 만료 시각 확인"
+
+log_step "HAPPY_RESERVATION_CREATE" "예매 생성과 Payment READY 생성"
+EXTRA_HEADERS=(
+  --header "Authorization: Bearer ${ACCESS_TOKEN}"
+  --header "Idempotency-Key: ${RESERVATION_IDEMPOTENCY_KEY}"
+)
+http POST "/api/v1/reservations" "$(jq --null-input \
+  --arg seatHoldId "$SEAT_HOLD_ID" \
+  '{seatHoldIds:[$seatHoldId]}')"
+assert_status 201 "예매 생성"
+RESERVATION_ID="$(jq --raw-output '.data.reservationId // empty' <<<"$HTTP_BODY")"
+PAYMENT_ID="$(jq --raw-output '.data.paymentId // empty' <<<"$HTTP_BODY")"
+if [[ -z "$RESERVATION_ID" || -z "$PAYMENT_ID" ]]; then
+  log_fail "예매 생성 응답에서 reservationId 또는 paymentId를 찾지 못했습니다."
+  exit 1
+fi
+assert_json ".data.reservationStatus == \"PAYMENT_PROCESSING\"" "예매 결제 처리 상태 확인"
+assert_json ".data.seatCount == 1 and .data.totalAmount == ${EXPECTED_PRICE}" "예매 좌석 수와 금액 확인"
+
+log_step "HAPPY_PAYMENT_READY" "생성된 결제 조회"
+EXTRA_HEADERS=(--header "Authorization: Bearer ${ACCESS_TOKEN}")
+http GET "/api/v1/payments/${PAYMENT_ID}"
+assert_status 200 "결제 조회"
+assert_json ".data.paymentId == \"${PAYMENT_ID}\" and .data.reservationId == \"${RESERVATION_ID}\"" "결제와 예매 ID 연결 확인"
+assert_json ".data.status == \"READY\" and .data.amount == ${EXPECTED_PRICE}" "결제 READY 상태와 금액 확인"
+
+log_step "HAPPY_PAYMENT_APPROVE" "결제 승인과 성공 Outbox 생성"
+http POST "/api/v1/payments/${PAYMENT_ID}/approve" '{"paymentMethod":"CARD"}'
+assert_status 200 "결제 승인"
+assert_json ".data.paymentId == \"${PAYMENT_ID}\" and .data.status == \"APPROVED\"" "결제 승인 상태 확인"
+
+log_step "HAPPY_RESERVATION_CONFIRMED" "Kafka 결제 성공 이벤트 반영 폴링"
+RESERVATION_STATUS="UNKNOWN"
+for ((attempt = 1; attempt <= RESERVATION_POLL_MAX_ATTEMPTS; attempt++)); do
+  http GET "/api/v1/reservations/${RESERVATION_ID}"
+  assert_status 200 "예매 상태 조회 ${attempt}/${RESERVATION_POLL_MAX_ATTEMPTS}"
+  RESERVATION_STATUS="$(jq --raw-output '.data.reservationStatus // empty' <<<"$HTTP_BODY")"
+
+  if [[ "$RESERVATION_STATUS" == "CONFIRMED" ]]; then
+    break
+  fi
+  if [[ "$RESERVATION_STATUS" == "FAILED" || "$RESERVATION_STATUS" == "CANCELLED" ]]; then
+    log_fail "결제 성공 이벤트 대기 중 예매가 실패 상태로 변경됐습니다: ${RESERVATION_STATUS}"
+    exit 1
+  fi
+
+  sleep "$RESERVATION_POLL_INTERVAL_SECONDS"
+done
+
+if [[ "$RESERVATION_STATUS" != "CONFIRMED" ]]; then
+  log_fail "제한 시간 안에 결제 성공 이벤트가 반영되지 않았습니다. 마지막 예매 상태: ${RESERVATION_STATUS}"
+  exit 1
+fi
+assert_json ".data.reservationId == \"${RESERVATION_ID}\" and .data.paymentCompletedAt != null" "예매 확정과 결제 완료 시각 확인"
+
+if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+  {
+    printf 'reservation_id=%s\n' "$RESERVATION_ID"
+    printf 'seat_hold_id=%s\n' "$SEAT_HOLD_ID"
+    printf 'schedule_seat_id=%s\n' "$SEAT_ID"
+  } >>"$GITHUB_OUTPUT"
+fi
+
+printf '\n[OK] 결제와 예매 확정까지의 Happy Path 및 Gateway 보안 시나리오가 모두 통과했습니다.\n'
