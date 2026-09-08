@@ -31,11 +31,7 @@ public class EventSession {
   )
   private Event event;
 
-  @OneToMany(
-      mappedBy = "eventSession",
-      cascade = CascadeType.ALL,
-      orphanRemoval = true
-  )
+  @OneToMany(mappedBy = "eventSession")
   private List<SessionSectionPrice> sectionPrices = new ArrayList<>();
 
   @Column(name = "session_number", nullable = false)
@@ -166,6 +162,15 @@ public class EventSession {
   // 공개 회차 CANCELED 상태 제외
   public boolean isPubliclyVisible() {
     return status != EventSessionStatus.CANCELED;
+  }
+
+
+  // 가격 수정 가능 상태 검증
+  public void validateSectionPriceModifiable() {
+    if (this.event.getStatus() != EventStatus.DRAFT
+        || this.status != EventSessionStatus.SCHEDULED) {
+      throw new BusinessException(EventErrorCode.EVENT_SESSION_MODIFICATION_NOT_ALLOWED);
+    }
   }
 
   // 공연 검증

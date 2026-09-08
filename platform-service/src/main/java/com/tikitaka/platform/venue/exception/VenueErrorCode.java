@@ -10,7 +10,9 @@ public enum VenueErrorCode implements ErrorCode {
     DUPLICATE_VENUE_COMPONENT("V-004", HttpStatus.CONFLICT, "같은 이름 또는 좌석 번호가 이미 존재합니다."),
     VENUE_COMPONENT_IN_USE("V-005", HttpStatus.CONFLICT, "예정된 공연에서 사용중입니다."),
     VENUE_SECTION_MISMATCH("V-006", HttpStatus.BAD_REQUEST, "공연장에 속하지 않은 구역입니다."),
-    INACTIVE_VENUE("V-007", HttpStatus.CONFLICT, "비활성화된 공연장은 선택할 수 없습니다.");
+    INACTIVE_VENUE("V-007", HttpStatus.CONFLICT, "비활성화된 공연장은 선택할 수 없습니다."),
+    INACTIVE_VENUE_SECTION("V-008", HttpStatus.CONFLICT, "비활성화된 공연장 구역은 선택할 수 없습니다.");
+
 
     private final String code;
     private final HttpStatus status;

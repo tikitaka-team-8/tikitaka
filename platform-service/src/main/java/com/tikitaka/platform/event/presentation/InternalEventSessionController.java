@@ -1,8 +1,8 @@
 package com.tikitaka.platform.event.presentation;
 
 import com.tikitaka.platform.event.application.EventSessionService;
-import com.tikitaka.platform.event.presentation.dto.EventSessionInfoResponse;
 import com.tikitaka.platform.event.presentation.dto.QueueSalesStatusResponse;
+import com.tikitaka.platform.event.presentation.dto.organizer.EventSessionInfoResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;

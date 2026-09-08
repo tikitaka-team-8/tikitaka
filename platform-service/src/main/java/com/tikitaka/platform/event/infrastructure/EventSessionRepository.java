@@ -43,4 +43,6 @@ public interface EventSessionRepository extends JpaRepository<EventSession,UUID>
   """)
   int findMaxSessionNumber(
       @Param("eventId") UUID eventId);
+
+  Optional<EventSession> findByIdAndEventId(UUID sessionId, UUID eventId);
 }

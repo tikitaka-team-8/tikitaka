@@ -40,7 +40,8 @@ public class SessionSectionPrice {
       EventSession eventSession,
       VenueSection venueSection,
       String seatGrade,
-      long priceAmount
+      long priceAmount,
+      boolean salesEnabled
   ) {
 
     // TODO: 검증 필요
@@ -48,20 +49,22 @@ public class SessionSectionPrice {
     this.venueSection = venueSection;
     this.seatGrade = seatGrade;
     this.priceAmount = priceAmount;
-    this.salesEnabled = true;
+    this.salesEnabled = salesEnabled;
   }
 
   public static SessionSectionPrice create(
       EventSession eventSession,
       VenueSection venueSection,
       String seatGrade,
-      long priceAmount
+      long priceAmount,
+      boolean salesEnabled
   ) {
     return new SessionSectionPrice(
         eventSession,
         venueSection,
         seatGrade,
-        priceAmount
+        priceAmount,
+        salesEnabled
     );
   }
 }

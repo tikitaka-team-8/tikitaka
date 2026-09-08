@@ -1,8 +1,8 @@
 package com.tikitaka.platform.event.presentation;
 
 import com.tikitaka.platform.event.application.EventSessionService;
-import com.tikitaka.platform.event.presentation.dto.EventSessionCreateRequest;
-import com.tikitaka.platform.event.presentation.dto.EventSessionCreateResponse;
+import com.tikitaka.platform.event.presentation.dto.organizer.EventSessionCreateRequest;
+import com.tikitaka.platform.event.presentation.dto.organizer.EventSessionCreateResponse;
 import com.tikitaka.platform.global.response.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
