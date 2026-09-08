@@ -76,12 +76,13 @@ public class ReservationNotificationEventService {
                 command.reservationId(), command.reservationNumber(), command.userId(), command.eventTitle(),
                 command.sessionStartAt(), NotificationType.RESERVATION_FAILED
         );
-        String failureReason = convertFailureReason(command.failureReason());
 
         // 이미 처리한 이벤트는 알림을 중복 생성하지 않고 정상 종료
         if (notificationInboxRepositoryPort.existsByEventId(command.eventId())) {
             return false;
         }
+
+        String failureReason = convertFailureReason(command.failureReason());
 
         // 예매 실패 이벤트의 사용자 알림 내용 구성
         String content = createFailedContent(command.eventTitle(), failureReason);
