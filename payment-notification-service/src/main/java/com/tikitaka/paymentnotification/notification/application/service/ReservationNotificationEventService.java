@@ -1,4 +1,4 @@
-package com.tikitaka.paymentnotification.notification.application;
+package com.tikitaka.paymentnotification.notification.application.service;
 
 import com.tikitaka.paymentnotification.global.exception.BusinessException;
 import com.tikitaka.paymentnotification.global.exception.CommonErrorCode;

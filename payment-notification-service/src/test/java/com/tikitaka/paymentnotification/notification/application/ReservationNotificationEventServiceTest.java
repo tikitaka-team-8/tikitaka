@@ -4,6 +4,7 @@ import com.tikitaka.paymentnotification.global.exception.BusinessException;
 import com.tikitaka.paymentnotification.global.exception.CommonErrorCode;
 import com.tikitaka.paymentnotification.notification.application.command.ReservationConfirmedNotificationCommand;
 import com.tikitaka.paymentnotification.notification.application.command.ReservationFailedNotificationCommand;
+import com.tikitaka.paymentnotification.notification.application.service.ReservationNotificationEventService;
 import com.tikitaka.paymentnotification.notification.domain.entity.Notification;
 import com.tikitaka.paymentnotification.notification.domain.entity.NotificationInbox;
 import com.tikitaka.paymentnotification.notification.domain.enums.NotificationReadStatus;

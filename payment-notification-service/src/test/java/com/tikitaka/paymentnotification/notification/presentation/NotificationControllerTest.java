@@ -1,6 +1,6 @@
 package com.tikitaka.paymentnotification.notification.presentation;
 
-import com.tikitaka.paymentnotification.notification.application.NotificationService;
+import com.tikitaka.paymentnotification.notification.application.service.NotificationService;
 import com.tikitaka.paymentnotification.notification.application.command.SearchNotificationsCommand;
 import com.tikitaka.paymentnotification.notification.application.result.NotificationSearchResult;
 import com.tikitaka.paymentnotification.notification.domain.entity.Notification;
