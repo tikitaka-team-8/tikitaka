@@ -18,7 +18,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -31,7 +30,6 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
-@Validated
 @RequestMapping("/api/v1/notifications")
 public class NotificationController {
     // TODO: 헤더 상수 사용으로 중복 코드 삭제

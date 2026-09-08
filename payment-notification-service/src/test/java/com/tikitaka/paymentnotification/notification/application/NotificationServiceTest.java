@@ -1,7 +1,9 @@
 package com.tikitaka.paymentnotification.notification.application;
 
 import com.tikitaka.paymentnotification.global.exception.BusinessException;
+import com.tikitaka.paymentnotification.notification.application.command.ReadNotificationCommand;
 import com.tikitaka.paymentnotification.notification.application.command.SearchNotificationsCommand;
+import com.tikitaka.paymentnotification.notification.application.result.NotificationDetailResult;
 import com.tikitaka.paymentnotification.notification.application.result.NotificationSearchResult;
 import com.tikitaka.paymentnotification.notification.application.service.NotificationService;
 import com.tikitaka.paymentnotification.notification.domain.entity.Notification;
@@ -24,6 +26,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -40,7 +43,9 @@ class NotificationServiceTest {
 
     private static final Long USER_ID = 1L;
     private static final Long ADMIN_ID = 2L;
+    private static final Long OTHER_USER_ID = 3L;
     private static final UUID NOTIFICATION_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
+    private static final String RESERVATION_NUMBER = "RSV-260908-ABCDEF123456";
 
     @Mock
     private NotificationRepositoryPort notificationRepositoryPort;
@@ -161,9 +166,113 @@ class NotificationServiceTest {
         verify(notificationRepositoryPort, never()).searchNotifications(any(), any(), any(), any());
     }
 
+    @Test
+    void 사용자는_본인의_알림을_상세조회하면_읽음처리한다() {
+        // given
+        Notification notification = createNotification(USER_ID);
+        ReadNotificationCommand command = new ReadNotificationCommand(USER_ID, "USER", NOTIFICATION_ID);
+        Instant requestedAt = Instant.now();
+
+        given(notificationRepositoryPort.findByIdAndUserId(NOTIFICATION_ID, USER_ID))
+                .willReturn(Optional.of(notification));
+
+        // when
+        NotificationDetailResult result = notificationService.readNotification(command);
+
+        // then
+        verify(notificationRepositoryPort).findByIdAndUserId(NOTIFICATION_ID, USER_ID);
+        verify(notificationRepositoryPort, never()).findById(any(UUID.class));
+        verify(notificationRepositoryPort, never()).save(any(Notification.class));
+
+        assertThat(notification.getReadStatus()).isEqualTo(NotificationReadStatus.READ);
+        assertThat(notification.getLastViewedAt()).isAfterOrEqualTo(requestedAt);
+        assertThat(notification.getUpdatedBy()).isEqualTo(USER_ID);
+        assertThat(result.getNotificationId()).isEqualTo(NOTIFICATION_ID);
+        assertThat(result.getReservationNumber()).isEqualTo(RESERVATION_NUMBER);
+        assertThat(result.getReadStatus()).isEqualTo(NotificationReadStatus.READ);
+        assertThat(result.getLastViewedAt()).isEqualTo(notification.getLastViewedAt());
+    }
+
+    @Test
+    void 사용자는_다른_사용자의_알림을_조회할_수_없다() {
+        // given
+        ReadNotificationCommand command = new ReadNotificationCommand(USER_ID, "USER", NOTIFICATION_ID);
+        given(notificationRepositoryPort.findByIdAndUserId(NOTIFICATION_ID, USER_ID))
+                .willReturn(Optional.empty());
+
+        // when
+        BusinessException exception = catchThrowableOfType(
+                () -> notificationService.readNotification(command), BusinessException.class);
+
+        // then
+        assertThat(exception.getErrorCode()).isEqualTo(NotificationErrorCode.NOTIFICATION_NOT_FOUND);
+        verify(notificationRepositoryPort, never()).findById(any(UUID.class));
+    }
+
+    @Test
+    void 관리자는_본인의_알림을_조회하면_읽음처리한다() {
+        // given
+        Notification notification = createNotification(ADMIN_ID);
+        ReadNotificationCommand command = new ReadNotificationCommand(ADMIN_ID, "ADMIN", NOTIFICATION_ID);
+
+        given(notificationRepositoryPort.findById(NOTIFICATION_ID)).willReturn(Optional.of(notification));
+
+        // when
+        NotificationDetailResult result = notificationService.readNotification(command);
+
+        // then
+        verify(notificationRepositoryPort).findById(NOTIFICATION_ID);
+        verify(notificationRepositoryPort, never()).findByIdAndUserId(any(UUID.class), any(Long.class));
+        assertThat(result.getReadStatus()).isEqualTo(NotificationReadStatus.READ);
+        assertThat(result.getLastViewedAt()).isNotNull();
+        assertThat(notification.getUpdatedBy()).isEqualTo(ADMIN_ID);
+    }
+
+    @Test
+    void 관리자는_다른_사용자의_알림을_조회해도_읽음처리하지_않는다() {
+        // given
+        Notification notification = createNotification(OTHER_USER_ID);
+        ReadNotificationCommand command = new ReadNotificationCommand(ADMIN_ID, "ADMIN", NOTIFICATION_ID);
+
+        given(notificationRepositoryPort.findById(NOTIFICATION_ID)).willReturn(Optional.of(notification));
+
+        // when
+        NotificationDetailResult result = notificationService.readNotification(command);
+
+        // then
+        assertThat(result.getReadStatus()).isEqualTo(NotificationReadStatus.UNREAD);
+        assertThat(result.getLastViewedAt()).isNull();
+        assertThat(notification.getUpdatedBy()).isZero();
+        verify(notificationRepositoryPort, never()).save(any(Notification.class));
+    }
+
+    @Test
+    void 이미_읽은_본인_알림을_다시_조회하면_마지막조회시각을_갱신한다() {
+        // given
+        Instant previousViewedAt = Instant.parse("2026-09-07T01:00:00Z");
+        Notification notification = createNotification(USER_ID);
+        notification.markAsRead(USER_ID, previousViewedAt);
+        ReadNotificationCommand command = new ReadNotificationCommand(USER_ID, "USER", NOTIFICATION_ID);
+
+        given(notificationRepositoryPort.findByIdAndUserId(NOTIFICATION_ID, USER_ID))
+                .willReturn(Optional.of(notification));
+
+        // when
+        NotificationDetailResult result = notificationService.readNotification(command);
+
+        // then
+        assertThat(result.getReadStatus()).isEqualTo(NotificationReadStatus.READ);
+        assertThat(result.getLastViewedAt()).isAfter(previousViewedAt);
+    }
+
     private Notification createNotification() {
+        return createNotification(USER_ID);
+    }
+
+    private Notification createNotification(Long userId) {
         Notification notification = Notification.create(
-                UUID.randomUUID(), USER_ID, UUID.randomUUID(), NotificationType.RESERVATION_CONFIRMED,
+                UUID.randomUUID(), userId, UUID.randomUUID(), RESERVATION_NUMBER,
+                NotificationType.RESERVATION_CONFIRMED,
                 "[예매완료]", "고객님, 예매가 완료되었습니다.", 0L
         );
         ReflectionTestUtils.setField(notification, "notificationId", NOTIFICATION_ID);
