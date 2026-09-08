@@ -62,7 +62,7 @@ public class ReservationNotificationEventService {
 
         // 알림과 처리 완료 Inbox를 같은 트랜잭션으로 저장
         saveNotificationAndInbox(
-                command.eventId(), command.userId(), command.reservationId(),
+                command.eventId(), command.userId(), command.reservationId(), command.reservationNumber(),
                 NotificationType.RESERVATION_CONFIRMED, CONFIRMED_TITLE, content
         );
         return true;
@@ -89,7 +89,7 @@ public class ReservationNotificationEventService {
 
         // 알림과 처리 완료 Inbox를 같은 트랜잭션으로 저장
         saveNotificationAndInbox(
-                command.eventId(), command.userId(), command.reservationId(),
+                command.eventId(), command.userId(), command.reservationId(), command.reservationNumber(),
                 NotificationType.RESERVATION_FAILED, FAILED_TITLE, content
         );
         return true;
@@ -139,10 +139,10 @@ public class ReservationNotificationEventService {
         };
     }
 
-    private void saveNotificationAndInbox(UUID eventId, Long userId, UUID reservationId, NotificationType notificationType, String title, String content) {
+    private void saveNotificationAndInbox(UUID eventId, Long userId, UUID reservationId, String reservationNumber, NotificationType notificationType, String title, String content) {
 
         Notification notification = Notification.create(
-                eventId, userId, reservationId, notificationType, title, content, SYSTEM_USER_ID
+                eventId, userId, reservationId, reservationNumber, notificationType, title, content, SYSTEM_USER_ID
         );
         NotificationInbox notificationInbox = NotificationInbox.create(eventId, reservationId, notificationType);
 
