@@ -60,6 +60,22 @@ public class QueueAdmissionService {
         }
     }
 
+    public void expireInactiveWaitingUsers() {
+        try {
+            for (UUID sessionId : queueRepository.findWaitingSessionIds()) {
+                try {
+                    expireInactiveWaitingUsers(sessionId);
+                } catch (RedisConnectionFailureException exception) {
+                    throw exception;
+                } catch (RuntimeException exception) {
+                    log.error("Queue heartbeat expiration failed for sessionId={}", sessionId, exception);
+                }
+            }
+        } catch (RedisConnectionFailureException exception) {
+            log.warn("heartbeat 만료 처리를 건너뜁니다. Redis를 사용할 수 없습니다.", exception);
+        }
+    }
+
     private void expireAdmittedUsers(UUID sessionId) {
         Instant now = Instant.now(clock);
         var expiredEntries = queueRepository.findExpiredAdmittedEntries(
@@ -85,6 +101,44 @@ public class QueueAdmissionService {
                         exception
                 );
             }
+        }
+    }
+
+    private void expireInactiveWaitingUsers(UUID sessionId) {
+        Instant inactiveSince = Instant.now(clock).minus(queueProperties.waitingHeartbeatTimeout());
+        var inactiveUserIds = queueRepository.findInactiveWaitingUserIds(
+                sessionId,
+                inactiveSince,
+                queueProperties.expirationBatchSize()
+        );
+        if (inactiveUserIds.isEmpty()) {
+            queueRepository.removeWaitingSessionIfEmpty(sessionId);
+            return;
+        }
+
+        int removedCount = 0;
+        for (long userId : inactiveUserIds) {
+            try {
+                if (queueRepository.removeWaitingEntryIfHeartbeatExpired(sessionId, userId, inactiveSince)) {
+                    removedCount++;
+                }
+            } catch (RedisConnectionFailureException exception) {
+                throw exception;
+            } catch (RuntimeException exception) {
+                log.error(
+                        "heartbeat 만료 처리에 실패했습니다. sessionId={}, userId={}",
+                        sessionId,
+                        userId,
+                        exception
+                );
+            }
+        }
+        if (removedCount > 0) {
+            log.info(
+                    "비활성 WAITING 사용자를 정리했습니다. sessionId={}, removedCount={}",
+                    sessionId,
+                    removedCount
+            );
         }
     }
 

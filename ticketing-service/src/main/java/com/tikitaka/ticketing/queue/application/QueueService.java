@@ -124,6 +124,14 @@ public class QueueService implements QueueAdmissionValidator {
         }
     }
 
+    public void refreshWaitingHeartbeat(UUID sessionId, long userId) {
+        try {
+            queueRepository.refreshWaitingHeartbeat(sessionId, userId, Instant.now(clock));
+        } catch (RedisConnectionFailureException exception) {
+            throw new BusinessException(QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE);
+        }
+    }
+
     public QueueStatusResult getQueueStatus(UUID sessionId, long userId) {
         try {
             QueueEntry entry = queueRepository.findEntry(sessionId, userId)

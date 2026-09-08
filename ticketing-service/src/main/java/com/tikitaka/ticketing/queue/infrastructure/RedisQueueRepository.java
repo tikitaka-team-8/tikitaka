@@ -45,6 +45,8 @@ public class RedisQueueRepository implements QueueRepository {
                     redis.call('ZADD', KEYS[2], sequence, ARGV[1])
                     redis.call('PEXPIRE', KEYS[2], ARGV[4])
                     redis.call('PEXPIRE', KEYS[3], ARGV[4])
+                    redis.call('ZADD', KEYS[4], ARGV[5], ARGV[1])
+                    redis.call('PEXPIRE', KEYS[4], ARGV[4])
                     return sequence
                     """,
             Long.class
@@ -89,9 +91,10 @@ public class RedisQueueRepository implements QueueRepository {
                         'admittedAt', ARGV[3],
                         'expiresAt', ARGV[4])
                     redis.call('ZREM', KEYS[2], ARGV[5])
+                    redis.call('ZREM', KEYS[6], ARGV[5])
                     redis.call('ZADD', KEYS[3], ARGV[6], ARGV[5])
                     redis.call('PEXPIRE', KEYS[3], ARGV[10])
-                    redis.call('SADD', KEYS[6], ARGV[7])
+                    redis.call('SADD', KEYS[7], ARGV[7])
                     redis.call('HSET', KEYS[4],
                         'sessionId', ARGV[7],
                         'userId', ARGV[5],
@@ -177,9 +180,46 @@ public class RedisQueueRepository implements QueueRepository {
                     end
 
                     redis.call('ZREM', KEYS[2], ARGV[1])
+                    redis.call('ZREM', KEYS[3], ARGV[1])
                     redis.call('DEL', KEYS[1])
                     if redis.call('ZCARD', KEYS[2]) == 0 then
-                        redis.call('SREM', KEYS[3], ARGV[2])
+                        redis.call('SREM', KEYS[4], ARGV[2])
+                    end
+                    return 1
+                    """,
+            Long.class
+    );
+    private static final DefaultRedisScript<Long> REFRESH_WAITING_HEARTBEAT_SCRIPT = new DefaultRedisScript<>(
+            """
+                    if redis.call('EXISTS', KEYS[1]) == 0
+                        or redis.call('HGET', KEYS[1], 'status') ~= 'WAITING'
+                        or redis.call('ZSCORE', KEYS[3], ARGV[1]) == false then
+                        return 0
+                    end
+
+                    redis.call('ZADD', KEYS[2], ARGV[2], ARGV[1])
+                    return 1
+                    """,
+            Long.class
+    );
+    private static final DefaultRedisScript<Long> REMOVE_WAITING_ENTRY_IF_HEARTBEAT_EXPIRED_SCRIPT = new DefaultRedisScript<>(
+            """
+                    local lastSeenAt = redis.call('ZSCORE', KEYS[3], ARGV[1])
+                    if not lastSeenAt or tonumber(lastSeenAt) > tonumber(ARGV[2]) then
+                        return 0
+                    end
+
+                    if redis.call('EXISTS', KEYS[1]) == 0
+                        or redis.call('HGET', KEYS[1], 'status') ~= 'WAITING' then
+                        redis.call('ZREM', KEYS[3], ARGV[1])
+                        return 0
+                    end
+
+                    redis.call('ZREM', KEYS[2], ARGV[1])
+                    redis.call('ZREM', KEYS[3], ARGV[1])
+                    redis.call('DEL', KEYS[1])
+                    if redis.call('ZCARD', KEYS[2]) == 0 then
+                        redis.call('SREM', KEYS[4], ARGV[3])
                     end
                     return 1
                     """,
@@ -257,6 +297,57 @@ public class RedisQueueRepository implements QueueRepository {
     }
 
     @Override
+    public boolean refreshWaitingHeartbeat(UUID sessionId, long userId, Instant now) {
+        Long refreshed = redisTemplate.execute(
+                REFRESH_WAITING_HEARTBEAT_SCRIPT,
+                List.of(
+                        entryKey(sessionId, userId),
+                        waitingHeartbeatKey(sessionId),
+                        waitingKey(sessionId)
+                ),
+                String.valueOf(userId),
+                String.valueOf(now.toEpochMilli())
+        );
+        return refreshed != null && refreshed == 1L;
+    }
+
+    @Override
+    public List<Long> findInactiveWaitingUserIds(UUID sessionId, Instant inactiveSince, int limit) {
+        if (limit <= 0) {
+            return List.of();
+        }
+
+        var userIds = redisTemplate.opsForZSet().rangeByScore(
+                waitingHeartbeatKey(sessionId),
+                Double.NEGATIVE_INFINITY,
+                inactiveSince.toEpochMilli(),
+                0,
+                limit
+        );
+        if (userIds == null || userIds.isEmpty()) {
+            return List.of();
+        }
+        return userIds.stream().map(Long::parseLong).toList();
+    }
+
+    @Override
+    public boolean removeWaitingEntryIfHeartbeatExpired(UUID sessionId, long userId, Instant inactiveSince) {
+        Long removed = redisTemplate.execute(
+                REMOVE_WAITING_ENTRY_IF_HEARTBEAT_EXPIRED_SCRIPT,
+                List.of(
+                        entryKey(sessionId, userId),
+                        waitingKey(sessionId),
+                        waitingHeartbeatKey(sessionId),
+                        waitingSessionRegistryKey()
+                ),
+                String.valueOf(userId),
+                String.valueOf(inactiveSince.toEpochMilli()),
+                sessionId.toString()
+        );
+        return removed != null && removed == 1L;
+    }
+
+    @Override
     public Set<UUID> findWaitingSessionIds() {
         Set<String> sessionIds = redisTemplate.opsForSet().members(waitingSessionRegistryKey());
         if (sessionIds == null || sessionIds.isEmpty()) {
@@ -303,7 +394,12 @@ public class RedisQueueRepository implements QueueRepository {
     public QueueLeaveResult leaveWaitingEntry(UUID sessionId, long userId) {
         Long result = redisTemplate.execute(
                 LEAVE_WAITING_ENTRY_SCRIPT,
-                List.of(entryKey(sessionId, userId), waitingKey(sessionId), waitingSessionRegistryKey()),
+                List.of(
+                        entryKey(sessionId, userId),
+                        waitingKey(sessionId),
+                        waitingHeartbeatKey(sessionId),
+                        waitingSessionRegistryKey()
+                ),
                 String.valueOf(userId),
                 sessionId.toString()
         );
@@ -349,11 +445,12 @@ public class RedisQueueRepository implements QueueRepository {
     ) {
         Long sequence = redisTemplate.execute(
                 CREATE_WAITING_ENTRY_SCRIPT,
-                List.of(entryKey(sessionId, userId), waitingKey(sessionId), sequenceKey(sessionId)),
+                List.of(entryKey(sessionId, userId), waitingKey(sessionId), sequenceKey(sessionId), waitingHeartbeatKey(sessionId)),
                 String.valueOf(userId),
                 joinedAt.toString(),
                 expiresAt.toString(),
-                String.valueOf(sessionTtl.toMillis())
+                String.valueOf(sessionTtl.toMillis()),
+                String.valueOf(joinedAt.toEpochMilli())
         );
         if (sequence == null || sequence == 0L) {
             return Optional.empty();
@@ -390,6 +487,7 @@ public class RedisQueueRepository implements QueueRepository {
                         activeKey(admittedEntry.sessionId()),
                         admissionTokenKey(admittedEntry.sessionId(), admissionToken.token()),
                         admissionTokenReferenceKey(admittedEntry.sessionId(), admittedEntry.userId()),
+                        waitingHeartbeatKey(admittedEntry.sessionId()),
                         activeSessionRegistryKey()
                 ),
                 String.valueOf(admittedEntry.sequence()),
@@ -472,6 +570,7 @@ public class RedisQueueRepository implements QueueRepository {
     @Override
     public void removeWaitingUser(UUID sessionId, long userId) {
         redisTemplate.opsForZSet().remove(waitingKey(sessionId), String.valueOf(userId));
+        redisTemplate.opsForZSet().remove(waitingHeartbeatKey(sessionId), String.valueOf(userId));
         removeWaitingSessionIfEmpty(sessionId);
     }
 
@@ -531,6 +630,10 @@ public class RedisQueueRepository implements QueueRepository {
 
     private String waitingKey(UUID sessionId) {
         return "queue:waiting:{" + sessionId + "}";
+    }
+
+    private String waitingHeartbeatKey(UUID sessionId) {
+        return "queue:waiting-heartbeat:{" + sessionId + "}";
     }
 
     private String waitingSessionRegistryKey() {
