@@ -48,6 +48,9 @@ class PaymentApprovalConcurrencyTest {
 
     private UUID paymentId;
     private UUID reservationId;
+
+    private static final Long USER_ID = 1L;
+
     @BeforeEach
     void setUp() {
 
@@ -136,6 +139,7 @@ class PaymentApprovalConcurrencyTest {
 
                                 paymentService.approvePayment(
                                         paymentId,
+                                        USER_ID,
                                         PaymentMethod.CARD
                                 );
 
