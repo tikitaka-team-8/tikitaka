@@ -13,6 +13,8 @@ public interface NotificationRepositoryPort {
 
     Notification save(Notification notification);
 
+    Optional<Notification> findById(UUID notificationId);
+
     Optional<Notification> findByIdAndUserId(UUID notificationId, Long userId);
 
     Page<Notification> searchNotifications(Long ownerUserId, NotificationType notificationType, NotificationReadStatus readStatus, Pageable pageable);
