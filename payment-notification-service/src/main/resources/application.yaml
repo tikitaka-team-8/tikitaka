@@ -23,9 +23,9 @@ management:
     health:
       probes:
         enabled: true
-clients:
-  ticketing-service:
-    service-key: ${INTERNAL_SERVICE_KEY}
+internal:
+  service:
+    key: ${INTERNAL_SERVICE_KEY}
 payment:
   outbox:
     publish-delay-ms: 1000
