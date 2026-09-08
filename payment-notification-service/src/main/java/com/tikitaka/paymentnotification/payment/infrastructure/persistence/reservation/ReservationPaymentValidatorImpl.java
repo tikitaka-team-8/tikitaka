@@ -2,6 +2,7 @@ package com.tikitaka.paymentnotification.payment.infrastructure.persistence.rese
 
 import com.tikitaka.paymentnotification.global.exception.BusinessException;
 import com.tikitaka.paymentnotification.global.exception.CommonErrorCode;
+import com.tikitaka.paymentnotification.global.security.InternalServiceKeyProperties;
 import com.tikitaka.paymentnotification.payment.application.gateway.ReservationPaymentValidator;
 import com.tikitaka.paymentnotification.payment.application.result.ReservationPaymentValidationResult;
 import com.tikitaka.paymentnotification.payment.exception.PaymentErrorCode;
@@ -10,7 +11,6 @@ import com.tikitaka.paymentnotification.payment.infrastructure.reservation.Reser
 import feign.FeignException;
 import feign.RetryableException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.net.SocketTimeoutException;
@@ -21,16 +21,14 @@ import java.util.UUID;
 public class ReservationPaymentValidatorImpl implements ReservationPaymentValidator {
 
     private final ReservationFeignClient reservationFeignClient;
-
-    @Value("${clients.ticketing-service.service-key}")
-    private String ticketingServiceKey;
+    private final InternalServiceKeyProperties internalServiceKeyProperties;
 
     @Override
     public ReservationPaymentValidationResult validate(UUID reservationId, Long userId) {
         try {
             ReservationPaymentValidationResponse response =
                     reservationFeignClient.validatePayment(
-                            ticketingServiceKey,
+                            internalServiceKeyProperties.key(),
                             reservationId,
                             new ReservationPaymentValidationRequest(userId)
                     );

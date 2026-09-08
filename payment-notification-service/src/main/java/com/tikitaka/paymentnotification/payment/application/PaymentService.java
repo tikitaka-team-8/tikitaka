@@ -29,6 +29,7 @@ import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class PaymentService {
 
     private final ReservationPaymentValidator  reservationPaymentValidator;
@@ -43,9 +44,11 @@ public class PaymentService {
 
     // 결제 정보 단건 조회
     @Transactional(readOnly = true)
-    public PaymentDetailResult getPaymentById(UUID payment_id){
-        Payment payment = paymentRepository.findById(payment_id).orElseThrow(()->
+    public PaymentDetailResult getPaymentById(UUID paymentId, Long loginUserId) {
+        Payment payment = paymentRepository.findById(paymentId).orElseThrow(() ->
                 new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
+
+        validateOwner(payment, loginUserId);
 
         return PaymentDetailResult.from(payment);
     }
@@ -109,11 +112,14 @@ public class PaymentService {
     // 결제 승인
     public PaymentApproveResult approvePayment(
             UUID paymentId,
+            Long loginUserId,
             PaymentMethod paymentMethod
     ) {
         // 승인에 사용할 Payment 정보 조회
         Payment payment = paymentRepository.findById(paymentId).orElseThrow(()->
                 new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
+
+        validateOwner(payment, loginUserId);
 
         // READY -> PROCESSING 선점
         boolean acquired = paymentProcessingAcquirer.acquire(paymentId);
@@ -167,6 +173,14 @@ public class PaymentService {
     }
 
     // ------------------------------------------------------------------ //
+
+
+    private void validateOwner(Payment payment, Long loginUserId) {
+        if (!Objects.equals(payment.getUserId(), loginUserId)) {
+            throw new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND);
+        }
+    }
+
 
     // 실제 결제 전 검증 요청
     private void validateReservation(Payment payment){
