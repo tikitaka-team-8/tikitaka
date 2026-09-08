@@ -39,4 +39,14 @@ public class ScheduleSeatRepositoryAdapter implements ScheduleSeatRepository {
     public Optional<ScheduleSeat> findByIdForUpdate(UUID scheduleSeatId) {
         return jpaRepository.findByIdForUpdate(scheduleSeatId);
     }
+
+    @Override
+    public List<UUID> findExistingVenueSeatIds(UUID eventSessionId, List<UUID> venueSeatIds) {
+        return jpaRepository.findExistingVenueSeatIds(eventSessionId, venueSeatIds);
+    }
+
+    @Override
+    public List<ScheduleSeat> saveAll(List<ScheduleSeat> scheduleSeats) {
+        return jpaRepository.saveAll(scheduleSeats);
+    }
 }

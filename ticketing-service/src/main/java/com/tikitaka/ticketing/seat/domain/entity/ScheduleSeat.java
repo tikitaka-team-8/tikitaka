@@ -46,6 +46,55 @@ public class ScheduleSeat extends BaseEntity {
     private SeatStatus seatStatus = SeatStatus.AVAILABLE;
 
 
+    private ScheduleSeat(Long createdBy) {
+        super(createdBy);
+    }
+
+    public static ScheduleSeat create(
+            UUID eventSessionId,
+            UUID venueSeatId,
+            String section,
+            String rowLabel,
+            String seatNumber,
+            String seatGrade,
+            Long price,
+            Long createdBy
+    ) {
+        validateCoreInvariants(eventSessionId, venueSeatId, section, rowLabel, seatNumber, seatGrade, price);
+
+        ScheduleSeat scheduleSeat = new ScheduleSeat(createdBy);
+        scheduleSeat.eventSessionId = eventSessionId;
+        scheduleSeat.venueSeatId = venueSeatId;
+        scheduleSeat.section = section;
+        scheduleSeat.rowLabel = rowLabel;
+        scheduleSeat.seatNumber = seatNumber;
+        scheduleSeat.seatGrade = seatGrade;
+        scheduleSeat.price = price;
+        scheduleSeat.seatStatus = SeatStatus.AVAILABLE;
+
+        return scheduleSeat;
+    }
+
+    private static void validateCoreInvariants(
+            UUID eventSessionId,
+            UUID venueSeatId,
+            String section,
+            String rowLabel,
+            String seatNumber,
+            String seatGrade,
+            Long price
+    ) {
+        if (eventSessionId == null
+                || venueSeatId == null
+                || section == null || section.isBlank()
+                || rowLabel == null || rowLabel.isBlank()
+                || seatNumber == null || seatNumber.isBlank()
+                || seatGrade == null || seatGrade.isBlank()
+                || price == null || price < 0) {
+            throw new BusinessException(SeatErrorCode.INVALID_INPUT);
+        }
+    }
+
 //   좌석을 선점 상태(HELD)로 전이
     public void hold() {
         if (seatStatus == SeatStatus.EXCLUDED) {
