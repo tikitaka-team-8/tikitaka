@@ -10,18 +10,22 @@ import com.tikitaka.paymentnotification.payment.application.result.PaymentDetail
 import com.tikitaka.paymentnotification.payment.domain.payment.PaymentProvider;
 import com.tikitaka.paymentnotification.payment.presentation.dto.*;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
 @RestController
+@Validated
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/payments")
 public class PaymentController {
 
+    private static final String USER_ID_HEADER = "X-User-Id";
 
     private final PaymentService paymentService;
 
@@ -30,9 +34,12 @@ public class PaymentController {
 
 
     @GetMapping("/{paymentId}")
-    public ResponseEntity<ApiResponse<PaymentDetailResponse>> getPaymentById(@PathVariable UUID  paymentId){
+    public ResponseEntity<ApiResponse<PaymentDetailResponse>> getPaymentById(
+            @PathVariable UUID paymentId,
+            @RequestHeader(USER_ID_HEADER) @Positive Long loginUserId
+    ) {
 
-        PaymentDetailResult result = paymentService.getPaymentById(paymentId);
+        PaymentDetailResult result = paymentService.getPaymentById(paymentId, loginUserId);
 
         return ResponseEntity.ok(
                 ApiResponse.success(
@@ -51,11 +58,13 @@ public class PaymentController {
     @PostMapping("/{paymentId}/approve")
     public ResponseEntity<ApiResponse<PaymentApproveResponse>> approvePayment(
             @PathVariable UUID paymentId,
+            @RequestHeader(USER_ID_HEADER) @Positive Long loginUserId,
             @Valid @RequestBody PaymentApproveRequest request
     ) {
         PaymentApproveResult result =
                 paymentService.approvePayment(
                         paymentId,
+                        loginUserId,
                         request.paymentMethod()
                 );
 

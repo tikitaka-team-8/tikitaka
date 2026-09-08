@@ -1,6 +1,7 @@
 package com.tikitaka.ticketing.queue.infrastructure;
 
 import com.tikitaka.ticketing.queue.application.QueueRepository;
+import com.tikitaka.ticketing.queue.application.QueueLeaveResult;
 import com.tikitaka.ticketing.queue.domain.AdmissionToken;
 import com.tikitaka.ticketing.queue.domain.AdmissionTokenStatus;
 import com.tikitaka.ticketing.queue.domain.QueueEntry;
@@ -164,6 +165,26 @@ public class RedisQueueRepository implements QueueRepository {
                     """,
             Long.class
     );
+    private static final DefaultRedisScript<Long> LEAVE_WAITING_ENTRY_SCRIPT = new DefaultRedisScript<>(
+            """
+                    local status = redis.call('HGET', KEYS[1], 'status')
+                    if not status or status == 'EXPIRED' then
+                        return 0
+                    end
+
+                    if status ~= 'WAITING' then
+                        return 2
+                    end
+
+                    redis.call('ZREM', KEYS[2], ARGV[1])
+                    redis.call('DEL', KEYS[1])
+                    if redis.call('ZCARD', KEYS[2]) == 0 then
+                        redis.call('SREM', KEYS[3], ARGV[2])
+                    end
+                    return 1
+                    """,
+            Long.class
+    );
     private static final DefaultRedisScript<Long> EXPIRE_IF_ADMITTED_SCRIPT = new DefaultRedisScript<>(
             """
                     local activeExpiresAt = redis.call('ZSCORE', KEYS[2], ARGV[1])
@@ -276,6 +297,25 @@ public class RedisQueueRepository implements QueueRepository {
                 sessionId.toString()
         );
         return removed != null && removed == 1L;
+    }
+
+    @Override
+    public QueueLeaveResult leaveWaitingEntry(UUID sessionId, long userId) {
+        Long result = redisTemplate.execute(
+                LEAVE_WAITING_ENTRY_SCRIPT,
+                List.of(entryKey(sessionId, userId), waitingKey(sessionId), waitingSessionRegistryKey()),
+                String.valueOf(userId),
+                sessionId.toString()
+        );
+        if (result == null) {
+            return QueueLeaveResult.FAILED;
+        }
+        return switch (result.intValue()) {
+            case 0 -> QueueLeaveResult.NOT_FOUND_OR_INACTIVE;
+            case 1 -> QueueLeaveResult.LEFT;
+            case 2 -> QueueLeaveResult.NOT_ALLOWED;
+            default -> QueueLeaveResult.FAILED;
+        };
     }
 
     @Override
