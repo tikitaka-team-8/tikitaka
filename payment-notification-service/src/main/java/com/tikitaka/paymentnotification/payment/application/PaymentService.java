@@ -29,10 +29,9 @@ import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class PaymentService {
 
-    private final ReservationPaymentValidator  reservationPaymentValidator;
+    private final ReservationPaymentValidator reservationPaymentValidator;
 
     private final PaymentRepository paymentRepository;
     private final PaymentGateway paymentGateway;
