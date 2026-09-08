@@ -1,9 +1,12 @@
-package com.tikitaka.paymentnotification.notification.application;
+package com.tikitaka.paymentnotification.notification.application.service;
 
 import com.tikitaka.paymentnotification.global.exception.BusinessException;
 import com.tikitaka.paymentnotification.global.exception.CommonErrorCode;
+import com.tikitaka.paymentnotification.notification.application.command.ReadNotificationCommand;
 import com.tikitaka.paymentnotification.notification.application.command.SearchNotificationsCommand;
+import com.tikitaka.paymentnotification.notification.application.result.NotificationDetailResult;
 import com.tikitaka.paymentnotification.notification.application.result.NotificationSearchResult;
+import com.tikitaka.paymentnotification.notification.domain.entity.Notification;
 import com.tikitaka.paymentnotification.notification.domain.enums.NotificationReadStatus;
 import com.tikitaka.paymentnotification.notification.domain.enums.NotificationType;
 import com.tikitaka.paymentnotification.notification.domain.port.NotificationRepositoryPort;
@@ -15,7 +18,9 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 @Service
@@ -46,6 +51,32 @@ public class NotificationService {
         // 조건에 맞는 알림 목록 조회 및 응답 결과 변환
         return notificationRepositoryPort.searchNotifications(ownerUserId, notificationType, readStatus, pageable)
                 .map(NotificationSearchResult::new);
+    }
+
+    @Transactional
+    public NotificationDetailResult readNotification(ReadNotificationCommand command) {
+
+        // 역할에 따라 조회 범위를 제한하여 알림 조회
+        Notification notification = findNotification(command);
+
+        // 본인 소유 알림인 경우에만 읽음 상태와 마지막 조회 시각 갱신
+        if (Objects.equals(notification.getUserId(), command.getLoginUserId())) {
+            notification.markAsRead(command.getLoginUserId(), Instant.now());
+        }
+
+        return new NotificationDetailResult(notification);
+    }
+
+    private Notification findNotification(ReadNotificationCommand command) {
+        if (USER_ROLE.equals(command.getUserRole()) && command.getLoginUserId() != null) {
+            return notificationRepositoryPort.findByIdAndUserId(command.getNotificationId(), command.getLoginUserId())
+                    .orElseThrow(() -> new BusinessException(NotificationErrorCode.NOTIFICATION_NOT_FOUND));
+        }
+        if (ADMIN_ROLE.equals(command.getUserRole())) {
+            return notificationRepositoryPort.findById(command.getNotificationId())
+                    .orElseThrow(() -> new BusinessException(NotificationErrorCode.NOTIFICATION_NOT_FOUND));
+        }
+        throw new BusinessException(CommonErrorCode.INVALID_INPUT);
     }
 
     private Long resolveOwnerUserId(SearchNotificationsCommand command) {
