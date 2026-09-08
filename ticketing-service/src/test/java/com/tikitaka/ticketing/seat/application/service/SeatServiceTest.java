@@ -3,6 +3,7 @@ package com.tikitaka.ticketing.seat.application.service;
 import com.tikitaka.ticketing.global.exception.BusinessException;
 import com.tikitaka.ticketing.queue.application.QueueAdmissionValidator;
 import com.tikitaka.ticketing.queue.application.QueueService;
+import com.tikitaka.ticketing.seat.application.command.CreateScheduleSeatsCommand;
 import com.tikitaka.ticketing.seat.domain.entity.ScheduleSeat;
 import com.tikitaka.ticketing.seat.domain.entity.SeatHold;
 import com.tikitaka.ticketing.seat.domain.enums.HoldStatus;
@@ -591,6 +592,31 @@ class SeatServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(exception -> ((BusinessException) exception).getErrorCode())
                 .isEqualTo(SeatErrorCode.SEAT_HOLD_ALREADY_CLOSED);
+    }
+
+
+    @Test
+    void 회차별_좌석_재고_생성_요청에_동일한_venueSeatId가_중복되면_예외가_발생한다() {
+        UUID duplicatedVenueSeatId = UUID.randomUUID();
+        CreateScheduleSeatsCommand command = new CreateScheduleSeatsCommand(
+                eventSessionId,
+                UUID.randomUUID(),
+                List.of(
+                        new CreateScheduleSeatsCommand.SeatItem(
+                                duplicatedVenueSeatId, "A", "1", "1", "VIP", 10000L
+                        ),
+                        new CreateScheduleSeatsCommand.SeatItem(
+                                duplicatedVenueSeatId, "A", "1", "2", "VIP", 10000L
+                        )
+                )
+        );
+
+        assertThatThrownBy(() -> seatService.createScheduleSeats(command))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(SeatErrorCode.INVALID_INPUT);
+
+        verifyNoInteractions(scheduleSeatRepository);
     }
 
 }

@@ -219,6 +219,10 @@ public class SeatService implements SeatHoldReservationValidator {
                 .map(CreateScheduleSeatsCommand.SeatItem::venueSeatId)
                 .toList();
 
+        if (new HashSet<>(venueSeatIds).size() != venueSeatIds.size()) {
+            throw new BusinessException(SeatErrorCode.INVALID_INPUT);
+        }
+
         Set<UUID> existingVenueSeatIds = new HashSet<>(
                 scheduleSeatRepository.findExistingVenueSeatIds(command.eventSessionId(), venueSeatIds)
         );
