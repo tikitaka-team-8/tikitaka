@@ -1,6 +1,7 @@
 package com.tikitaka.ticketing.queue.infrastructure;
 
 import com.tikitaka.ticketing.queue.application.QueueRepository;
+import com.tikitaka.ticketing.queue.application.QueueLeaveResult;
 import com.tikitaka.ticketing.queue.domain.AdmissionToken;
 import com.tikitaka.ticketing.queue.domain.AdmissionTokenStatus;
 import com.tikitaka.ticketing.queue.domain.QueueEntry;
@@ -92,6 +93,55 @@ class RedisQueueRepositoryTest {
 
         assertThat(removed).isFalse();
         assertThat(queueRepository.findWaitingSessionIds()).contains(sessionId);
+    }
+
+    @Test
+    void WAITING_사용자_이탈은_엔트리와_순번을_원자적으로_정리한다() {
+        UUID sessionId = UUID.randomUUID();
+        QueueEntry first = createWaitingEntry(sessionId, 100L);
+        QueueEntry second = createWaitingEntry(sessionId, 200L);
+        queueRepository.registerWaitingSession(sessionId);
+
+        QueueLeaveResult firstResult = queueRepository.leaveWaitingEntry(sessionId, first.userId());
+
+        assertThat(firstResult).isEqualTo(QueueLeaveResult.LEFT);
+        assertThat(queueRepository.findEntry(sessionId, first.userId())).isEmpty();
+        assertThat(queueRepository.findWaitingPosition(sessionId, first.userId())).isEmpty();
+        assertThat(queueRepository.findWaitingPosition(sessionId, second.userId())).contains(1L);
+        assertThat(queueRepository.findWaitingSessionIds()).contains(sessionId);
+
+        QueueLeaveResult secondResult = queueRepository.leaveWaitingEntry(sessionId, second.userId());
+
+        assertThat(secondResult).isEqualTo(QueueLeaveResult.LEFT);
+        assertThat(queueRepository.findWaitingSessionIds()).doesNotContain(sessionId);
+        assertThat(queueRepository.leaveWaitingEntry(sessionId, second.userId()))
+                .isEqualTo(QueueLeaveResult.NOT_FOUND_OR_INACTIVE);
+
+        QueueEntry reentered = createWaitingEntry(sessionId, first.userId());
+
+        assertThat(reentered.sequence()).isEqualTo(3L);
+        assertThat(queueRepository.findWaitingPosition(sessionId, first.userId())).contains(1L);
+    }
+
+    @Test
+    void ADMITTED_사용자는_이탈할_수_없다() {
+        UUID sessionId = UUID.randomUUID();
+        QueueEntry waitingEntry = createWaitingEntry(sessionId, 100L);
+        AdmissionToken admissionToken = admissionToken(sessionId, "token-1", 100L);
+
+        assertThat(queueRepository.admitIfWaiting(
+                waitingEntry.admit(Instant.parse("2026-09-01T01:01:00Z")),
+                admissionToken,
+                SESSION_TTL,
+                Duration.ofMinutes(10)
+        )).isTrue();
+
+        assertThat(queueRepository.leaveWaitingEntry(sessionId, 100L))
+                .isEqualTo(QueueLeaveResult.NOT_ALLOWED);
+        assertThat(queueRepository.findEntry(sessionId, 100L))
+                .get()
+                .extracting(QueueEntry::status)
+                .isEqualTo(QueueStatus.ADMITTED);
     }
 
     @Test

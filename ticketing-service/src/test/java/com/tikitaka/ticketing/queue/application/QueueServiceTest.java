@@ -465,6 +465,44 @@ class QueueServiceTest {
         );
     }
 
+    @Test
+    void WAITING_사용자는_대기열에서_이탈할_수_있다() {
+        when(queueRepository.leaveWaitingEntry(SESSION_ID, USER_ID)).thenReturn(QueueLeaveResult.LEFT);
+
+        queueService.leaveQueue(SESSION_ID, USER_ID);
+
+        verify(queueRepository).leaveWaitingEntry(SESSION_ID, USER_ID);
+    }
+
+    @Test
+    void 존재하지_않거나_비활성_엔트리의_이탈은_성공으로_처리한다() {
+        when(queueRepository.leaveWaitingEntry(SESSION_ID, USER_ID))
+                .thenReturn(QueueLeaveResult.NOT_FOUND_OR_INACTIVE);
+
+        queueService.leaveQueue(SESSION_ID, USER_ID);
+    }
+
+    @Test
+    void ADMITTED_또는_ENTERED_사용자의_이탈은_거부한다() {
+        when(queueRepository.leaveWaitingEntry(SESSION_ID, USER_ID)).thenReturn(QueueLeaveResult.NOT_ALLOWED);
+
+        assertQueueError(
+                () -> queueService.leaveQueue(SESSION_ID, USER_ID),
+                QueueErrorCode.QUEUE_EXIT_NOT_ALLOWED
+        );
+    }
+
+    @Test
+    void 대기열_이탈_중_Redis_장애가_발생하면_서비스_이용_불가를_반환한다() {
+        when(queueRepository.leaveWaitingEntry(SESSION_ID, USER_ID))
+                .thenThrow(new RedisConnectionFailureException("Redis connection failed"));
+
+        assertQueueError(
+                () -> queueService.leaveQueue(SESSION_ID, USER_ID),
+                QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE
+        );
+    }
+
     private QueueEntry waitingEntry(long sequence) {
         return QueueEntry.waiting(SESSION_ID, USER_ID, sequence, NOW, NOW.plus(Duration.ofHours(2)));
     }

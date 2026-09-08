@@ -110,6 +110,20 @@ public class QueueService implements QueueAdmissionValidator {
         }
     }
 
+    public void leaveQueue(UUID sessionId, long userId) {
+        try {
+            QueueLeaveResult result = queueRepository.leaveWaitingEntry(sessionId, userId);
+            if (result == QueueLeaveResult.NOT_ALLOWED) {
+                throw new BusinessException(QueueErrorCode.QUEUE_EXIT_NOT_ALLOWED);
+            }
+            if (result == QueueLeaveResult.FAILED) {
+                throw new BusinessException(QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE);
+            }
+        } catch (RedisConnectionFailureException exception) {
+            throw new BusinessException(QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE);
+        }
+    }
+
     public QueueStatusResult getQueueStatus(UUID sessionId, long userId) {
         try {
             QueueEntry entry = queueRepository.findEntry(sessionId, userId)

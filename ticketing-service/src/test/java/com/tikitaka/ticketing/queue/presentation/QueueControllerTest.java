@@ -2,6 +2,7 @@ package com.tikitaka.ticketing.queue.presentation;
 
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -78,5 +79,17 @@ class QueueControllerTest {
                 .andExpect(jsonPath("$.data.expiresAt").value(token.expiresAt().toString()));
 
         verify(queueService).getQueueStatus(SESSION_ID, USER_ID);
+    }
+
+    @Test
+    void WAITING_사용자가_대기열에서_이탈한다() throws Exception {
+        mockMvc.perform(delete("/api/v1/event-sessions/{sessionId}/queue/me", SESSION_ID)
+                        .header("X-User-Id", USER_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.sessionId").value(SESSION_ID.toString()))
+                .andExpect(jsonPath("$.data.queueStatus").value("LEFT"));
+
+        verify(queueService).leaveQueue(SESSION_ID, USER_ID);
     }
 }
