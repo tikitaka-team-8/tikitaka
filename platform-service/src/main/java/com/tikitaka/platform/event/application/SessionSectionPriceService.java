@@ -8,8 +8,8 @@ import com.tikitaka.platform.event.infrastructure.EventRepository;
 import com.tikitaka.platform.event.infrastructure.EventSessionRepository;
 import com.tikitaka.platform.event.infrastructure.SessionSectionPriceRepository;
 import com.tikitaka.platform.event.presentation.dto.SessionSectionPricesResponse;
-import com.tikitaka.platform.event.presentation.dto.organizer.SessionSectionPricesCreateRequest;
-import com.tikitaka.platform.event.presentation.dto.organizer.SessionSectionPricesCreateRequest.SectionPriceRequest;
+import com.tikitaka.platform.event.presentation.dto.organizer.request.SessionSectionPricesCreateRequest;
+import com.tikitaka.platform.event.presentation.dto.organizer.request.SessionSectionPricesCreateRequest.SectionPriceRequest;
 import com.tikitaka.platform.global.exception.BusinessException;
 import com.tikitaka.platform.organizer.domain.Organizer;
 import com.tikitaka.platform.organizer.exception.OrganizerErrorCode;
@@ -17,8 +17,6 @@ import com.tikitaka.platform.organizer.infrastructure.OrganizerRepository;
 import com.tikitaka.platform.venue.domain.VenueSection;
 import com.tikitaka.platform.venue.exception.VenueErrorCode;
 import com.tikitaka.platform.venue.infrastructure.VenueSectionRepository;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,7 +25,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -143,6 +140,7 @@ public class SessionSectionPriceService {
         sectionPrices
     );
   }
+
   private void validateDuplicateSections(
       SessionSectionPricesCreateRequest request) {
 

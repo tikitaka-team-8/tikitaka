@@ -1,4 +1,4 @@
-package com.tikitaka.platform.event.presentation.dto.organizer;
+package com.tikitaka.platform.event.presentation.dto.organizer.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

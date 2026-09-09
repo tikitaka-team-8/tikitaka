@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -45,4 +46,16 @@ public interface EventSessionRepository extends JpaRepository<EventSession,UUID>
       @Param("eventId") UUID eventId);
 
   Optional<EventSession> findByIdAndEventId(UUID sessionId, UUID eventId);
+
+  @Query("""
+    SELECT DISTINCT session
+    FROM EventSession session
+    LEFT JOIN FETCH session.sectionPrices price
+    LEFT JOIN FETCH price.venueSection section
+    LEFT JOIN FETCH section.venue
+    WHERE session.event.id = :eventId
+    ORDER BY session.sessionNumber
+  """)
+  List<EventSession> findAllForPublication(
+      @Param("eventId") UUID eventId);
 }

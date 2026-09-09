@@ -143,12 +143,23 @@ public class Event {
     }
   }
 
-
-
   public boolean isPubliclyVisible() {
     return status.isPubliclyVisible();
   }
 
+  // 현재 DRAFT 상태에서 UPCOMING과 CANCELED만 가능
+  public void changeStatus(EventStatus targetStatus) {
+    if (status != EventStatus.DRAFT) {
+      throw new BusinessException(EventErrorCode.INVALID_EVENT_STATUS);
+    }
+
+    if (targetStatus != EventStatus.UPCOMING
+        && targetStatus != EventStatus.CANCELED) {
+      throw new BusinessException(EventErrorCode.INVALID_EVENT_STATUS);
+    }
+
+    this.status = targetStatus;
+  }
 
   private void validateModifiableStatus() {
     if (this.status != EventStatus.DRAFT) {
@@ -161,4 +172,6 @@ public class Event {
       throw new BusinessException(EventErrorCode.INVALID_EVENT_STATUS);
     }
   }
+
+
 }

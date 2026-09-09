@@ -203,6 +203,37 @@ public class EventSession {
       );
     }
   }
+  // 예매가 가능한 시간인지
+  public boolean isReservableAt(OffsetDateTime now) {
+    return status.isReservable()
+        && !now.isBefore(salesOpenAt)
+        && now.isBefore(salesCloseAt);
+  }
+
+  // 공연 공개시 검증
+  public void validatePublishable(OffsetDateTime now) {
+
+    if (status != EventSessionStatus.SCHEDULED) {
+      throw new BusinessException(
+          EventErrorCode.EVENT_SESSION_NOT_SCHEDULED
+      );
+    }
+
+    validateSchedule(
+        sessionNumber,
+        performanceStartAt,
+        performanceEndAt,
+        salesOpenAt,
+        salesCloseAt
+    );
+
+    // 공개하는 시점에 이미 판매 시작 시간이 지난 경우
+    if (!now.isBefore(salesOpenAt)) {
+      throw new BusinessException(
+          EventErrorCode.INVALID_EVENT_SCHEDULE
+      );
+    }
+  }
 
   // 판매 시작 및 좌석 재고 생성은 Service에서 검증
   private void validateModifiableStatus() {
@@ -213,10 +244,5 @@ public class EventSession {
   }
 
 
-  // 예매가 가능한 시간인지
-  public boolean isReservableAt(OffsetDateTime now) {
-    return status.isReservable()
-        && !now.isBefore(salesOpenAt)
-        && now.isBefore(salesCloseAt);
-  }
+
 }
