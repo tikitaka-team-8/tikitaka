@@ -18,7 +18,7 @@ public interface QueueRepository {
 
     Optional<Long> findWaitingPosition(UUID sessionId, long userId);
 
-    boolean refreshWaitingHeartbeat(UUID sessionId, long userId, Instant now);
+    HeartbeatRefreshResult refreshWaitingHeartbeat(UUID sessionId, long userId, Instant now);
 
     List<Long> findInactiveWaitingUserIds(UUID sessionId, Instant inactiveSince, int limit);
 

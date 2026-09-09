@@ -2,6 +2,7 @@ package com.tikitaka.ticketing.queue.infrastructure;
 
 import com.tikitaka.ticketing.queue.application.QueueRepository;
 import com.tikitaka.ticketing.queue.application.QueueLeaveResult;
+import com.tikitaka.ticketing.queue.application.HeartbeatRefreshResult;
 import com.tikitaka.ticketing.queue.domain.AdmissionToken;
 import com.tikitaka.ticketing.queue.domain.AdmissionTokenStatus;
 import com.tikitaka.ticketing.queue.domain.QueueEntry;
@@ -191,9 +192,15 @@ public class RedisQueueRepository implements QueueRepository {
     );
     private static final DefaultRedisScript<Long> REFRESH_WAITING_HEARTBEAT_SCRIPT = new DefaultRedisScript<>(
             """
-                    if redis.call('EXISTS', KEYS[1]) == 0
-                        or redis.call('HGET', KEYS[1], 'status') ~= 'WAITING'
-                        or redis.call('ZSCORE', KEYS[3], ARGV[1]) == false then
+                    if redis.call('EXISTS', KEYS[1]) == 0 then
+                        return 0
+                    end
+
+                    if redis.call('HGET', KEYS[1], 'status') ~= 'WAITING' then
+                        return 2
+                    end
+
+                    if redis.call('ZSCORE', KEYS[3], ARGV[1]) == false then
                         return 0
                     end
 
@@ -297,7 +304,7 @@ public class RedisQueueRepository implements QueueRepository {
     }
 
     @Override
-    public boolean refreshWaitingHeartbeat(UUID sessionId, long userId, Instant now) {
+    public HeartbeatRefreshResult refreshWaitingHeartbeat(UUID sessionId, long userId, Instant now) {
         Long refreshed = redisTemplate.execute(
                 REFRESH_WAITING_HEARTBEAT_SCRIPT,
                 List.of(
@@ -308,7 +315,13 @@ public class RedisQueueRepository implements QueueRepository {
                 String.valueOf(userId),
                 String.valueOf(now.toEpochMilli())
         );
-        return refreshed != null && refreshed == 1L;
+        if (refreshed == null || refreshed == 0L) {
+            return HeartbeatRefreshResult.ENTRY_NOT_FOUND;
+        }
+        if (refreshed == 2L) {
+            return HeartbeatRefreshResult.NOT_WAITING;
+        }
+        return HeartbeatRefreshResult.REFRESHED;
     }
 
     @Override

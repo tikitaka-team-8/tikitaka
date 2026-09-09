@@ -505,9 +505,34 @@ class QueueServiceTest {
 
     @Test
     void WAITING_사용자의_heartbeat를_갱신한다() {
+        when(queueRepository.refreshWaitingHeartbeat(SESSION_ID, USER_ID, NOW))
+                .thenReturn(HeartbeatRefreshResult.REFRESHED);
+
         queueService.refreshWaitingHeartbeat(SESSION_ID, USER_ID);
 
         verify(queueRepository).refreshWaitingHeartbeat(SESSION_ID, USER_ID, NOW);
+    }
+
+    @Test
+    void heartbeat_대상_Entry가_없으면_참여정보_없음_오류를_반환한다() {
+        when(queueRepository.refreshWaitingHeartbeat(SESSION_ID, USER_ID, NOW))
+                .thenReturn(HeartbeatRefreshResult.ENTRY_NOT_FOUND);
+
+        assertQueueError(
+                () -> queueService.refreshWaitingHeartbeat(SESSION_ID, USER_ID),
+                QueueErrorCode.QUEUE_ENTRY_NOT_FOUND
+        );
+    }
+
+    @Test
+    void heartbeat_대상이_WAITING이_아니면_상태_충돌_오류를_반환한다() {
+        when(queueRepository.refreshWaitingHeartbeat(SESSION_ID, USER_ID, NOW))
+                .thenReturn(HeartbeatRefreshResult.NOT_WAITING);
+
+        assertQueueError(
+                () -> queueService.refreshWaitingHeartbeat(SESSION_ID, USER_ID),
+                QueueErrorCode.QUEUE_ENTRY_STATE_CONFLICT
+        );
     }
 
     @Test

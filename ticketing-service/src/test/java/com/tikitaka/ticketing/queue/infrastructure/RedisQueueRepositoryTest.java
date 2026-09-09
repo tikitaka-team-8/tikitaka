@@ -2,6 +2,7 @@ package com.tikitaka.ticketing.queue.infrastructure;
 
 import com.tikitaka.ticketing.queue.application.QueueRepository;
 import com.tikitaka.ticketing.queue.application.QueueLeaveResult;
+import com.tikitaka.ticketing.queue.application.HeartbeatRefreshResult;
 import com.tikitaka.ticketing.queue.domain.AdmissionToken;
 import com.tikitaka.ticketing.queue.domain.AdmissionTokenStatus;
 import com.tikitaka.ticketing.queue.domain.QueueEntry;
@@ -104,7 +105,8 @@ class RedisQueueRepositoryTest {
         QueueEntry waitingEntry = createWaitingEntry(sessionId, 100L);
         Instant heartbeatAt = Instant.parse("2026-09-01T01:02:00Z");
 
-        assertThat(queueRepository.refreshWaitingHeartbeat(sessionId, waitingEntry.userId(), heartbeatAt)).isTrue();
+        assertThat(queueRepository.refreshWaitingHeartbeat(sessionId, waitingEntry.userId(), heartbeatAt))
+                .isEqualTo(HeartbeatRefreshResult.REFRESHED);
         assertThat(queueRepository.findWaitingPosition(sessionId, waitingEntry.userId())).contains(1L);
         assertThat(queueRepository.findInactiveWaitingUserIds(sessionId, heartbeatAt.minusMillis(1), 50)).isEmpty();
         assertThat(queueRepository.findInactiveWaitingUserIds(sessionId, heartbeatAt, 50))
@@ -123,7 +125,7 @@ class RedisQueueRepositoryTest {
                 sessionId,
                 waitingEntry.userId(),
                 Instant.parse("2026-09-01T01:02:00Z")
-        )).isFalse();
+        )).isEqualTo(HeartbeatRefreshResult.ENTRY_NOT_FOUND);
         assertThat(redisTemplate.opsForZSet().score(heartbeatKey, String.valueOf(waitingEntry.userId())))
                 .isEqualTo(waitingEntry.joinedAt().toEpochMilli());
     }
@@ -136,7 +138,8 @@ class RedisQueueRepositoryTest {
         long ttlBefore = redisTemplate.getExpire(heartbeatKey, TimeUnit.MILLISECONDS);
 
         assertThat(queueRepository.refreshWaitingHeartbeat(
-                sessionId, waitingEntry.userId(), Instant.parse("2026-09-01T01:02:00Z"))).isTrue();
+                sessionId, waitingEntry.userId(), Instant.parse("2026-09-01T01:02:00Z")))
+                .isEqualTo(HeartbeatRefreshResult.REFRESHED);
 
         long ttlAfter = redisTemplate.getExpire(heartbeatKey, TimeUnit.MILLISECONDS);
         assertThat(ttlAfter).isPositive().isLessThanOrEqualTo(ttlBefore);
@@ -246,7 +249,8 @@ class RedisQueueRepositoryTest {
         assertThat(redisTemplate.opsForZSet().score("queue:waiting:{" + sessionId + "}", "100")).isNull();
         assertThat(redisTemplate.opsForZSet().score("queue:waiting-heartbeat:{" + sessionId + "}", "100")).isNull();
         assertThat(queueRepository.refreshWaitingHeartbeat(
-                sessionId, 100L, Instant.parse("2026-09-01T01:02:00Z"))).isFalse();
+                sessionId, 100L, Instant.parse("2026-09-01T01:02:00Z")))
+                .isEqualTo(HeartbeatRefreshResult.NOT_WAITING);
         assertThat(redisTemplate.opsForZSet().score("queue:active:{" + sessionId + "}", "100"))
                 .isEqualTo(admissionToken.expiresAt().toEpochMilli());
         assertThat(redisTemplate.getExpire("queue:active:{" + sessionId + "}")).isPositive();

@@ -126,7 +126,17 @@ public class QueueService implements QueueAdmissionValidator {
 
     public void refreshWaitingHeartbeat(UUID sessionId, long userId) {
         try {
-            queueRepository.refreshWaitingHeartbeat(sessionId, userId, Instant.now(clock));
+            HeartbeatRefreshResult result = queueRepository.refreshWaitingHeartbeat(
+                    sessionId,
+                    userId,
+                    Instant.now(clock)
+            );
+            if (result == HeartbeatRefreshResult.ENTRY_NOT_FOUND) {
+                throw new BusinessException(QueueErrorCode.QUEUE_ENTRY_NOT_FOUND);
+            }
+            if (result == HeartbeatRefreshResult.NOT_WAITING) {
+                throw new BusinessException(QueueErrorCode.QUEUE_ENTRY_STATE_CONFLICT);
+            }
         } catch (RedisConnectionFailureException exception) {
             throw new BusinessException(QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE);
         }
