@@ -13,6 +13,7 @@ public class QueueAdmissionScheduler {
 
     @Scheduled(fixedDelayString = "${queue.admission-interval:PT1S}")
     public void processQueueAdmissions() {
+        queueAdmissionService.expireInactiveWaitingUsers();
         queueAdmissionService.admitWaitingUsers();
         queueAdmissionService.expireAdmittedUsers();
     }

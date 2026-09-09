@@ -92,4 +92,13 @@ class QueueControllerTest {
 
         verify(queueService).leaveQueue(SESSION_ID, USER_ID);
     }
+
+    @Test
+    void WAITING_사용자의_heartbeat를_갱신한다() throws Exception {
+        mockMvc.perform(post("/api/v1/event-sessions/{sessionId}/queue/me/heartbeat", SESSION_ID)
+                        .header("X-User-Id", USER_ID))
+                .andExpect(status().isNoContent());
+
+        verify(queueService).refreshWaitingHeartbeat(SESSION_ID, USER_ID);
+    }
 }

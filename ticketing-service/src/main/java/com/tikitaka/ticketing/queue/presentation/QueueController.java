@@ -6,6 +6,7 @@ import com.tikitaka.ticketing.queue.application.QueueStatusResult;
 import jakarta.validation.constraints.Positive;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -51,5 +52,14 @@ public class QueueController {
     ) {
         queueService.leaveQueue(sessionId, userId);
         return ApiResponse.success(HttpStatus.OK, "대기열에서 이탈했습니다.", QueueLeaveResponse.left(sessionId));
+    }
+
+    @PostMapping("/event-sessions/{sessionId}/queue/me/heartbeat")
+    public ResponseEntity<Void> refreshWaitingHeartbeat(
+            @PathVariable UUID sessionId,
+            @RequestHeader("X-User-Id") @Positive long userId
+    ) {
+        queueService.refreshWaitingHeartbeat(sessionId, userId);
+        return ResponseEntity.noContent().build();
     }
 }
