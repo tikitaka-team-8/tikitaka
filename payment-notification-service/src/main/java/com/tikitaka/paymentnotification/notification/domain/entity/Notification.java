@@ -39,6 +39,9 @@ public class Notification extends BaseEntity {
     @Column(nullable = false, updatable = false)
     private UUID reservationId;
 
+    @Column(nullable = false, length = 30, updatable = false)
+    private String reservationNumber;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50, updatable = false)
     private NotificationType notificationType;
@@ -53,19 +56,20 @@ public class Notification extends BaseEntity {
     @Column(nullable = false, length = 20)
     private NotificationReadStatus readStatus;
 
-    private Instant readAt;
+    private Instant lastViewedAt;
 
     private Notification(Long createdBy) {
         super(createdBy);
     }
 
-    public static Notification create(UUID sourceEventId, Long userId, UUID reservationId, NotificationType notificationType,
-                                      String title, String content, Long createdBy) {
+    public static Notification create(UUID sourceEventId, Long userId, UUID reservationId, String reservationNumber,
+                                      NotificationType notificationType, String title, String content, Long createdBy) {
 
         Notification notification = new Notification(createdBy);
         notification.sourceEventId = sourceEventId;
         notification.userId = userId;
         notification.reservationId = reservationId;
+        notification.reservationNumber = reservationNumber;
         notification.notificationType = notificationType;
         notification.title = title;
         notification.content = content;
@@ -74,17 +78,13 @@ public class Notification extends BaseEntity {
         return notification;
     }
 
-    public boolean markAsRead(Long updatedBy, Instant readAt) {
-        if (readStatus == NotificationReadStatus.READ) {
-            return false;
-        }
-        if (readAt == null) {
+    public void markAsRead(Long updatedBy, Instant lastViewedAt) {
+        if (lastViewedAt == null) {
             throw new IllegalArgumentException("읽음 처리 시각은 필수입니다.");
         }
 
         this.readStatus = NotificationReadStatus.READ;
-        this.readAt = readAt;
+        this.lastViewedAt = lastViewedAt;
         markAsUpdated(updatedBy);
-        return true;
     }
 }

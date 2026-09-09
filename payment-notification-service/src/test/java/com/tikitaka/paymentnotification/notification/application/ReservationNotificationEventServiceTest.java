@@ -4,6 +4,7 @@ import com.tikitaka.paymentnotification.global.exception.BusinessException;
 import com.tikitaka.paymentnotification.global.exception.CommonErrorCode;
 import com.tikitaka.paymentnotification.notification.application.command.ReservationConfirmedNotificationCommand;
 import com.tikitaka.paymentnotification.notification.application.command.ReservationFailedNotificationCommand;
+import com.tikitaka.paymentnotification.notification.application.service.ReservationNotificationEventService;
 import com.tikitaka.paymentnotification.notification.domain.entity.Notification;
 import com.tikitaka.paymentnotification.notification.domain.entity.NotificationInbox;
 import com.tikitaka.paymentnotification.notification.domain.enums.NotificationReadStatus;
@@ -63,6 +64,7 @@ class ReservationNotificationEventServiceTest {
         assertThat(notification.getSourceEventId()).isEqualTo(eventId);
         assertThat(notification.getUserId()).isEqualTo(1L);
         assertThat(notification.getReservationId()).isEqualTo(reservationId);
+        assertThat(notification.getReservationNumber()).isEqualTo("RSV-260908-123456789012");
         assertThat(notification.getNotificationType()).isEqualTo(NotificationType.RESERVATION_CONFIRMED);
         assertThat(notification.getTitle()).isEqualTo("[예매완료]");
         assertThat(notification.getContent()).isEqualTo(
@@ -72,7 +74,7 @@ class ReservationNotificationEventServiceTest {
                         + "일시: 2026-09-13 (일) 16:30"
         );
         assertThat(notification.getReadStatus()).isEqualTo(NotificationReadStatus.UNREAD);
-        assertThat(notification.getReadAt()).isNull();
+        assertThat(notification.getLastViewedAt()).isNull();
 
         NotificationInbox inbox = inboxCaptor.getValue();
         assertThat(inbox.getEventId()).isEqualTo(eventId);
@@ -103,6 +105,7 @@ class ReservationNotificationEventServiceTest {
         Notification notification = notificationCaptor.getValue();
         assertThat(result).isTrue();
         assertThat(notification.getNotificationType()).isEqualTo(NotificationType.RESERVATION_FAILED);
+        assertThat(notification.getReservationNumber()).isEqualTo("RSV-260908-123456789012");
         assertThat(notification.getTitle()).isEqualTo("[예매 실패]");
         assertThat(notification.getContent()).isEqualTo(
                 "고객님, 예매가 실패하였습니다.\n"
@@ -110,7 +113,7 @@ class ReservationNotificationEventServiceTest {
                         + "사유: 결제에 실패하였습니다."
         );
         assertThat(notification.getReadStatus()).isEqualTo(NotificationReadStatus.UNREAD);
-        assertThat(notification.getReadAt()).isNull();
+        assertThat(notification.getLastViewedAt()).isNull();
         assertThat(inboxCaptor.getValue().getEventType()).isEqualTo(NotificationType.RESERVATION_FAILED);
     }
 

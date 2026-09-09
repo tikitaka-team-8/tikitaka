@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tikitaka.paymentnotification.global.exception.BusinessException;
-import com.tikitaka.paymentnotification.notification.application.ReservationNotificationEventService;
+import com.tikitaka.paymentnotification.notification.application.service.ReservationNotificationEventService;
 import com.tikitaka.paymentnotification.notification.application.command.ReservationConfirmedNotificationCommand;
 import com.tikitaka.paymentnotification.notification.application.command.ReservationFailedNotificationCommand;
 import com.tikitaka.paymentnotification.notification.exception.NotificationErrorCode;
