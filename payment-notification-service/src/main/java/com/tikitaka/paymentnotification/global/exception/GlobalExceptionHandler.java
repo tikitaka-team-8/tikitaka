@@ -9,6 +9,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -60,6 +61,15 @@ public class GlobalExceptionHandler {
         return createValidationResponse(Map.of(
                 exception.getParameterName(),
                 "필수 요청 파라미터입니다."
+        ));
+    }
+
+    // 필수 Header 누락 처리
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    public ResponseEntity<ApiErrorResponse> handleMissingHeader(MissingRequestHeaderException exception) {
+        return createValidationResponse(Map.of(
+                exception.getHeaderName(),
+                "필수 요청 헤더입니다."
         ));
     }
 
