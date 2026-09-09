@@ -24,7 +24,6 @@ public class OrganizerEventController {
   private final EventService eventService;
 
   @PostMapping
-  // TODO 인가처리
   public ResponseEntity<ApiResponse<EventCreateResponse>> createEvent(
       @AuthenticationPrincipal AuthenticatedUser user,
       @Valid @RequestBody EventCreateRequest request
