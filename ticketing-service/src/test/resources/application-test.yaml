@@ -9,6 +9,10 @@ spring:
     out-of-order: false
     clean-disabled: true
 
+internal:
+  service:
+    key: internal-service-key-for-tests
+
 clients:
   platform-service:
     url: http://localhost:8081

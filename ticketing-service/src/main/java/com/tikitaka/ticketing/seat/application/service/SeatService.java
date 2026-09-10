@@ -93,6 +93,18 @@ public class SeatService implements SeatHoldReservationValidator {
         ScheduleSeat seat = scheduleSeatRepository
                 .findByIdForUpdate(eventSessionId, scheduleSeatId)
                 .orElseThrow(() -> new BusinessException(SeatErrorCode.SESSION_OR_SEAT_NOT_FOUND));
+
+        // 락을 획득한 후 Idempotency 재확인
+        existingHold =
+                seatHoldRepository.findByUserIdAndIdempotencyKey(
+                        userId,
+                        idempotencyKey
+                );
+
+        if (existingHold.isPresent()) {
+            return SeatHoldResponse.from(existingHold.get());
+        }
+
         seat.hold();
 
         Instant heldAt = Instant.now(clock);

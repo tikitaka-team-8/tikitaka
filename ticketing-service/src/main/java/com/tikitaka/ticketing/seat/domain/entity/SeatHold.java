@@ -109,6 +109,12 @@ public class SeatHold extends BaseEntity {
         this.releasedAt = releasedAt;
     }
 
+    public void expire(Instant expiredAt) {
+        validateStatusTransition(HoldStatus.EXPIRED);
+        this.holdStatus = HoldStatus.EXPIRED;
+        this.releasedAt = expiredAt;
+    }
+
     private void validateStatusTransition(HoldStatus nextStatus) {
         if (!holdStatus.canTransitionTo(nextStatus)) {
             throw new BusinessException(

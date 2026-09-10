@@ -123,4 +123,29 @@ class SeatHoldTest {
         assertThat(seatHold.getExpiresAt()).isEqualTo(expiresAfterFirstExtension);
         assertThat(seatHold.getExtendedAt()).isEqualTo(firstExtendAt);
     }
+
+    @Test
+    void HOLDING_상태의_선점이_만료되면_EXPIRED_상태가_되고_만료_시각이_기록된다() {
+
+        SeatHold seatHold = SeatHold.hold(userId, scheduleSeatId, idempotencyKey, heldAt, expiresAt);
+        Instant expiredAt = expiresAt.plusSeconds(1);
+
+        seatHold.expire(expiredAt);
+
+        assertThat(seatHold.getHoldStatus()).isEqualTo(HoldStatus.EXPIRED);
+        assertThat(seatHold.getReleasedAt()).isEqualTo(expiredAt);
+        assertThat(seatHold.getReleaseReason()).isNull();
+    }
+
+    @Test
+    void 이미_RELEASED된_선점을_만료처리하려하면_예외가_발생한다() {
+
+        SeatHold seatHold = SeatHold.hold(userId, scheduleSeatId, idempotencyKey, heldAt, expiresAt);
+        seatHold.release(ReleaseReason.USER_CANCEL, expiresAt.minusSeconds(60));
+
+        assertThatThrownBy(() -> seatHold.expire(expiresAt))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(SeatErrorCode.INVALID_STATUS_TRANSITION);
+    }
 }
