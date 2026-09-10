@@ -251,7 +251,18 @@ public class SeatService implements SeatHoldReservationValidator {
             scheduleSeatRepository.saveAll(scheduleSeatsToCreate);
         }
 
-        return CreateScheduleSeatsResponse.of(scheduleSeatsToCreate.size(), skippedCount);
+        return CreateScheduleSeatsResponse.of(command.eventSessionId(), scheduleSeatsToCreate.size(), skippedCount);
+    }
+
+
+    @Transactional
+    public List<CreateScheduleSeatsResponse> createScheduleSeatsBatch(List<CreateScheduleSeatsCommand> commands) {
+        if (commands == null || commands.isEmpty()) {
+            throw new BusinessException(SeatErrorCode.INVALID_INPUT);
+        }
+        return commands.stream()
+                .map(this::createScheduleSeats)
+                .toList();
     }
 
     private SeatHold getSeatHoldOrThrow(UUID seatHoldId) {
