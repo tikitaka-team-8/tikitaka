@@ -39,7 +39,7 @@ class QueueAdmissionServiceTest {
     void setUp() {
         queueAdmissionService = new QueueAdmissionService(
                 queueRepository,
-                new QueueProperties(Duration.ofMinutes(10), Duration.ofHours(1), 50, 50),
+                new QueueProperties(Duration.ofMinutes(3), Duration.ofHours(1), 50, 50, Duration.ofMinutes(2)),
                 Clock.fixed(NOW, ZoneOffset.UTC)
         );
     }
@@ -57,13 +57,13 @@ class QueueAdmissionServiceTest {
                 eq(first.admit(NOW)),
                 argThat(token -> validTokenFor(token, first.userId())),
                 eq(Duration.ofHours(2)),
-                eq(Duration.ofMinutes(10))
+                eq(Duration.ofMinutes(3))
         );
         verify(queueRepository).admitIfWaiting(
                 eq(second.admit(NOW)),
                 argThat(token -> validTokenFor(token, second.userId())),
                 eq(Duration.ofHours(2)),
-                eq(Duration.ofMinutes(10))
+                eq(Duration.ofMinutes(3))
         );
     }
 
@@ -92,8 +92,8 @@ class QueueAdmissionServiceTest {
 
         verify(queueRepository).findWaitingEntries(SESSION_ID, 50);
         verify(queueRepository).findWaitingEntries(otherSessionId, 50);
-        verify(queueRepository).admitIfWaiting(eq(first.admit(NOW)), any(), eq(Duration.ofHours(2)), eq(Duration.ofMinutes(10)));
-        verify(queueRepository).admitIfWaiting(eq(second.admit(NOW)), any(), eq(Duration.ofHours(2)), eq(Duration.ofMinutes(10)));
+        verify(queueRepository).admitIfWaiting(eq(first.admit(NOW)), any(), eq(Duration.ofHours(2)), eq(Duration.ofMinutes(3)));
+        verify(queueRepository).admitIfWaiting(eq(second.admit(NOW)), any(), eq(Duration.ofHours(2)), eq(Duration.ofMinutes(3)));
     }
 
     @Test
@@ -111,7 +111,7 @@ class QueueAdmissionServiceTest {
                 eq(succeedingEntry.admit(NOW)),
                 argThat(token -> validTokenFor(token, succeedingEntry.userId())),
                 eq(Duration.ofHours(2)),
-                eq(Duration.ofMinutes(10))
+                eq(Duration.ofMinutes(3))
         );
     }
 
@@ -137,6 +137,28 @@ class QueueAdmissionServiceTest {
     }
 
     @Test
+    void heartbeat_유예시간을_초과한_WAITING_사용자를_정리한다() {
+        Instant inactiveSince = NOW.minus(Duration.ofMinutes(2));
+        when(queueRepository.findWaitingSessionIds()).thenReturn(Set.of(SESSION_ID));
+        when(queueRepository.findInactiveWaitingUserIds(SESSION_ID, inactiveSince, 50)).thenReturn(List.of(100L));
+
+        queueAdmissionService.expireInactiveWaitingUsers();
+
+        verify(queueRepository).removeWaitingEntryIfHeartbeatExpired(SESSION_ID, 100L, inactiveSince);
+    }
+
+    @Test
+    void 비활성_WAITING_사용자가_없는_회차는_waiting_registry_정리를_시도한다() {
+        Instant inactiveSince = NOW.minus(Duration.ofMinutes(2));
+        when(queueRepository.findWaitingSessionIds()).thenReturn(Set.of(SESSION_ID));
+        when(queueRepository.findInactiveWaitingUserIds(SESSION_ID, inactiveSince, 50)).thenReturn(List.of());
+
+        queueAdmissionService.expireInactiveWaitingUsers();
+
+        verify(queueRepository).removeWaitingSessionIfEmpty(SESSION_ID);
+    }
+
+    @Test
     void 한_사용자_만료_처리_실패가_다른_사용자_처리를_막지_않는다() {
         QueueEntry failedEntry = waitingEntry(100L, 1L).admit(NOW.minus(Duration.ofMinutes(10)));
         QueueEntry succeedingEntry = waitingEntry(200L, 2L).admit(NOW.minus(Duration.ofMinutes(10)));
@@ -151,6 +173,20 @@ class QueueAdmissionServiceTest {
         verify(queueRepository).expireIfAdmitted(succeedingEntry.expire(NOW), NOW);
     }
 
+    @Test
+    void 한_사용자_heartbeat_정리_실패가_다른_사용자_정리를_막지_않는다() {
+        Instant inactiveSince = NOW.minus(Duration.ofMinutes(2));
+        when(queueRepository.findWaitingSessionIds()).thenReturn(Set.of(SESSION_ID));
+        when(queueRepository.findInactiveWaitingUserIds(SESSION_ID, inactiveSince, 50))
+                .thenReturn(List.of(100L, 200L));
+        when(queueRepository.removeWaitingEntryIfHeartbeatExpired(SESSION_ID, 100L, inactiveSince))
+                .thenThrow(new IllegalStateException("invalid entry"));
+
+        queueAdmissionService.expireInactiveWaitingUsers();
+
+        verify(queueRepository).removeWaitingEntryIfHeartbeatExpired(SESSION_ID, 200L, inactiveSince);
+    }
+
     private QueueEntry waitingEntry(long userId, long sequence) {
         return QueueEntry.waiting(SESSION_ID, userId, sequence, NOW.minusSeconds(1), NOW.plus(Duration.ofHours(2)));
     }
@@ -159,7 +195,7 @@ class QueueAdmissionServiceTest {
         assertThat(token.status()).isEqualTo(AdmissionTokenStatus.ACTIVE);
         assertThat(token.sessionId()).isEqualTo(SESSION_ID);
         assertThat(token.userId()).isEqualTo(userId);
-        assertThat(token.expiresAt()).isEqualTo(NOW.plus(Duration.ofMinutes(10)));
+        assertThat(token.expiresAt()).isEqualTo(NOW.plus(Duration.ofMinutes(3)));
         return true;
     }
 }

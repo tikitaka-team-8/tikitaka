@@ -34,10 +34,11 @@ spring:
 
 
 queue:
-  admission-token-ttl: PT10M
+  admission-token-ttl: PT3M
   retention-after-sales-close: PT1H
   admission-batch-size: 50
   expiration-batch-size: 50
+  waiting-heartbeat-timeout: PT2M
   admission-interval: PT1S
 
 management:
