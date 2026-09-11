@@ -133,22 +133,19 @@ public class SeatService implements SeatHoldReservationValidator {
     @Transactional
     public void validateAndExtend(UUID seatHoldId) {
 
-        Instant now = Instant.now(clock);
-
         if (seatHoldId == null) {
             throw new BusinessException(SeatErrorCode.SEAT_HOLD_NOT_FOUND);
         }
         SeatHold seatHold = getSeatHoldOrThrow(seatHoldId);
 
-        if (seatHold.getHoldStatus() != HoldStatus.HOLDING) {
-            throw new BusinessException(SeatErrorCode.SEAT_STATUS_CONFLICT);
-        }
-
-        if (seatHold.isExpired(now)) {
+        Instant now = Instant.now(clock);
+        if (seatHold.getHoldStatus() != HoldStatus.HOLDING || seatHold.isExpired(now)) {
             throw new BusinessException(SeatErrorCode.SEAT_HOLD_ALREADY_CLOSED);
         }
 
-        seatHold.extendExpiry(now, HOLD_EXTENSION_DURATION);
+        seatHold.reserve(now);
+//      만료시간 10분 연장
+//      seatHold.extendExpiry(now, HOLD_EXTENSION_DURATION);
     }
     public List<UUID> findOverdueHoldIds(int batchSize) {
         Instant now = Instant.now(clock);
@@ -186,7 +183,9 @@ public class SeatService implements SeatHoldReservationValidator {
         }
         ScheduleSeat seat = getScheduleSeatForUpdateOrThrow(seatHold.getScheduleSeatId());
 
-        if (seatHold.getHoldStatus() != HoldStatus.HOLDING) {
+        // 결제 이벤트는 신뢰하고 처리한다 - 만료 시각을 다시 확인하지 않고,
+        // 좌석 선점이 RESERVED 상태인지만 검증한다.
+        if (seatHold.getHoldStatus() != HoldStatus.RESERVED) {
             throw new BusinessException(SeatErrorCode.SEAT_HOLD_ALREADY_CLOSED);
         }
         seatHold.confirm(Instant.now(clock));
@@ -202,7 +201,8 @@ public class SeatService implements SeatHoldReservationValidator {
         }
         ScheduleSeat seat = getScheduleSeatForUpdateOrThrow(seatHold.getScheduleSeatId());
 
-        if (seatHold.getHoldStatus() != HoldStatus.HOLDING) {
+        // 결제 실패/타임아웃은 HOLDING(결제 시작 전)과 RESERVED(결제 처리 중) 양쪽에서 다 일어날 수 있다.
+        if (!seatHold.getHoldStatus().canTransitionTo(HoldStatus.RELEASED)) {
             throw new BusinessException(SeatErrorCode.SEAT_HOLD_ALREADY_CLOSED);
         }
         releaseIfHolding(seatHold, seat, reason);
@@ -276,7 +276,7 @@ public class SeatService implements SeatHoldReservationValidator {
     }
 
     private void releaseIfHolding(SeatHold seatHold, ScheduleSeat seat, ReleaseReason reason) {
-        if (seatHold.getHoldStatus() == HoldStatus.HOLDING) {
+        if (seatHold.getHoldStatus().canTransitionTo(HoldStatus.RELEASED)) {
             seatHold.release(reason, Instant.now(clock));
             seat.release();
         }

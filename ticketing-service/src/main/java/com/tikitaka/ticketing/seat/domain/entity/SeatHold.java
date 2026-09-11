@@ -45,6 +45,9 @@ public class SeatHold extends BaseEntity {
     @Column(name = "released_at")
     private Instant releasedAt;
 
+    @Column(name = "reserved_at")
+    private Instant reservedAt;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "release_reason", length = 30)
     private ReleaseReason releaseReason;
@@ -94,6 +97,12 @@ public class SeatHold extends BaseEntity {
                 || !heldAt.isBefore(expiresAt)) {
             throw new BusinessException(SeatErrorCode.INVALID_INPUT);
         }
+    }
+
+    public void reserve(Instant reservedAt) {
+        validateStatusTransition(HoldStatus.RESERVED);
+        this.holdStatus = HoldStatus.RESERVED;
+        this.reservedAt = reservedAt;
     }
 
     public void release(ReleaseReason reason, Instant releasedAt) {
