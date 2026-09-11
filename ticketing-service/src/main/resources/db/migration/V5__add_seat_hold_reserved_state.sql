@@ -3,7 +3,7 @@
 -- 제외되어, 결제 처리 중인 좌석 선점이 만료 처리와 경쟁하지 않는다.
 
 ALTER TABLE p_seat_hold
-    ADD COLUMN reserved_at TIMESTAMPZ;
+    ADD COLUMN reserved_at TIMESTAMPTZ;
 
 ALTER TABLE p_seat_hold
     DROP CONSTRAINT ck_seat_hold_status;
