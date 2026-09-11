@@ -6,12 +6,15 @@ import java.util.Enumeration;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletRequestWrapper;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -22,6 +25,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class GatewayTraceIdFilter extends OncePerRequestFilter {
 
+    private static final Logger log = LoggerFactory.getLogger(GatewayTraceIdFilter.class);
     public static final String TRACE_ID_HEADER = "X-Trace-Id";
     public static final String TRACE_ID_MDC_KEY = "traceId";
 
@@ -31,6 +35,7 @@ public class GatewayTraceIdFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
+        long startedAtNanos = System.nanoTime();
         String traceId = UUID.randomUUID().toString();
 
         MDC.put(TRACE_ID_MDC_KEY, traceId);
@@ -39,7 +44,18 @@ public class GatewayTraceIdFilter extends OncePerRequestFilter {
         try {
             filterChain.doFilter(new TraceIdHeaderRequest(request, traceId), response);
         } finally {
-            MDC.remove(TRACE_ID_MDC_KEY);
+            try {
+                long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAtNanos);
+                log.info(
+                        "HTTP 요청 완료: method={}, path={}, status={}, durationMs={}",
+                        request.getMethod(),
+                        request.getRequestURI(),
+                        response.getStatus(),
+                        durationMs
+                );
+            } finally {
+                MDC.remove(TRACE_ID_MDC_KEY);
+            }
         }
     }
 
