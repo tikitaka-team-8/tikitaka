@@ -58,4 +58,6 @@ public interface EventSessionRepository extends JpaRepository<EventSession,UUID>
   """)
   List<EventSession> findAllForPublication(
       @Param("eventId") UUID eventId);
+
+  List<EventSession> findAllByEventId(UUID eventId);
 }

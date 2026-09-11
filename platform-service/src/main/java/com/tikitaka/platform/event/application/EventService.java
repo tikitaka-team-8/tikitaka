@@ -2,14 +2,16 @@ package com.tikitaka.platform.event.application;
 
 import com.tikitaka.platform.event.application.query.PublicEventSearchCondition;
 import com.tikitaka.platform.event.domain.Event;
+import com.tikitaka.platform.event.domain.EventSession;
 import com.tikitaka.platform.event.domain.EventStatus;
 import com.tikitaka.platform.event.exception.EventErrorCode;
 import com.tikitaka.platform.event.infrastructure.EventRepository;
+import com.tikitaka.platform.event.infrastructure.EventSessionRepository;
 import com.tikitaka.platform.event.infrastructure.client.ticketing.TicketingSeatInventoryClient;
+import com.tikitaka.platform.event.infrastructure.client.ticketing.dto.CreateScheduleSeatsResponse;
 import com.tikitaka.platform.event.infrastructure.client.ticketing.dto.CreateScheduleSeatsRequest;
 import com.tikitaka.platform.event.presentation.dto.organizer.request.EventCreateRequest;
 import com.tikitaka.platform.event.presentation.dto.organizer.request.EventStatusUpdateRequest;
-import com.tikitaka.platform.event.infrastructure.client.ticketing.dto.CreateScheduleSeatsResponse;
 import com.tikitaka.platform.event.presentation.dto.organizer.response.EventCreateResponse;
 import com.tikitaka.platform.event.presentation.dto.organizer.response.EventStatusUpdateResponse;
 import com.tikitaka.platform.event.presentation.dto.query.PublicEventDetailResponse;
@@ -31,7 +33,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -43,6 +45,7 @@ public class EventService {
   private final VenueRepository venueRepository;
   private final EventPublicationValidator eventPublicationValidator;
   private final TicketingSeatInventoryClient ticketingSeatInventoryClient;
+  private final EventSessionRepository eventSessionRepository;
 
   // 공개 공연 목록 조회
   public Page<PublicEventSummaryResponse> getPublicEvents(
@@ -133,25 +136,41 @@ public class EventService {
         );
 
     EventStatus previousStatus = event.getStatus();
-    EventStatus targetStatus =
-        EventStatus.valueOf(request.targetStatus().name());
 
-    if (targetStatus == EventStatus.CANCELED) {
+    return switch (request.targetStatus()) {
+      case UPCOMING -> publish(event, previousStatus);
+      case CANCELED -> cancel(event, previousStatus);
 
-      event.changeStatus(EventStatus.CANCELED);
+    };
+  }
 
-      return new EventStatusUpdateResponse(
-          event.getId(),
-          previousStatus,
-          event.getStatus(),
-          0,
-          0,
-          0
-      );
-    }
+  // 공연 취소
+  private EventStatusUpdateResponse cancel(
+      Event event,
+      EventStatus previousStatus
+  ) {
 
-    // 공연 상태 변경 및 좌석 재고 생성
-    return publish(event, previousStatus);
+    // 공연 회차 상태 취소
+    event.cancel();
+    cancelEventSessions(event.getId());
+
+    return new EventStatusUpdateResponse(
+        event.getId(),
+        previousStatus,
+        event.getStatus(),
+        0,
+        0,
+        0
+    );
+  }
+
+  // 공연회차 상태 취소
+  private void cancelEventSessions(UUID eventId) {
+
+    List<EventSession> sessions =
+        eventSessionRepository.findAllByEventId(eventId);
+
+    sessions.forEach(EventSession::cancel);
   }
 
   // 공연 공개
@@ -166,28 +185,27 @@ public class EventService {
         OffsetDateTime.now()
     );
 
-    int inventorySessionCount = 0;
-    int totalCreatedSeatCount = 0;
-    int totalSkippedSeatCount = 0;
+    List<CreateScheduleSeatsRequest> requests = publicationPlan.sessions().stream()
+        .map(session -> CreateScheduleSeatsRequest.from(
+            publicationPlan.venueId(),
+            session
+        ))
+        .toList();
 
-    // Ticketing Service에 회차별 좌석 생성 요청
-    for (EventPublicationPlan.SessionSeats session
-        : publicationPlan.sessions()) {
+    // Feign 호출 전체 목록 한번에 전달
+    List<CreateScheduleSeatsResponse> responses =
+        requestEventSeatInventoryCreation(requests);
 
-      CreateScheduleSeatsRequest request =
-          CreateScheduleSeatsRequest.from(
-              publicationPlan.venueId(),
-              session
-          );
+    // 모든 회차가 정상 처리되었는지 확인
+    validateSeatInventoryResponses(requests, responses);
 
-      // Feign 호출
-      CreateScheduleSeatsResponse response =
-          requestScheduleSeatCreation(session.eventSessionId(), request);
+    int totalCreatedCount = responses.stream()
+        .mapToInt(CreateScheduleSeatsResponse::createdCount)
+        .sum();
 
-      totalCreatedSeatCount += response.createdCount();
-      totalSkippedSeatCount += response.skippedCount();
-      inventorySessionCount++;
-    }
+    int totalSkippedCount = responses.stream()
+        .mapToInt(CreateScheduleSeatsResponse::skippedCount)
+        .sum();
 
     // UPCOMING
     event.publish();
@@ -196,24 +214,67 @@ public class EventService {
         event.getId(),
         previousStatus,
         event.getStatus(),
-        inventorySessionCount,
-        totalCreatedSeatCount,
-        totalSkippedSeatCount
+        responses.size(),
+        totalCreatedCount,
+        totalSkippedCount
     );
   }
 
-  private CreateScheduleSeatsResponse requestScheduleSeatCreation(
-      UUID eventSessionId,
-      CreateScheduleSeatsRequest request
+  private void validateSeatInventoryResponses(
+      List<CreateScheduleSeatsRequest> requests,
+      List<CreateScheduleSeatsResponse> responses
+  ) {
+
+    if (responses.size() != requests.size()) {
+      throw new BusinessException(CommonErrorCode.DOWNSTREAM_SERVICE_FAILURE);
+    }
+
+    Map<UUID, Integer> requestedSeatCounts = new HashMap<>();
+
+    for (CreateScheduleSeatsRequest request : requests) {
+      requestedSeatCounts.put(
+          request.eventSessionId(),
+          request.seats().size()
+      );
+    }
+
+    Set<UUID> processedSessionIds = new HashSet<>();
+
+    // 회차별 요청 수와 처리 결과 수 확인
+    for (CreateScheduleSeatsResponse response : responses) {
+
+      UUID sessionId = response.eventSessionId();
+
+      Integer requestedSeatCount =
+          requestedSeatCounts.get(response.eventSessionId());
+
+      // 같은 회차 응답 중복
+      if (!processedSessionIds.add(sessionId)) {
+        throw new BusinessException(
+            CommonErrorCode.DOWNSTREAM_SERVICE_FAILURE
+        );
+      }
+
+      long processedSeatCount =
+          (long) response.createdCount() + response.skippedCount();
+
+
+      if (processedSeatCount != requestedSeatCount.longValue()) {
+        throw new BusinessException(
+            CommonErrorCode.DOWNSTREAM_SERVICE_FAILURE
+        );
+      }
+    }
+  }
+
+  private List<CreateScheduleSeatsResponse> requestEventSeatInventoryCreation(
+      List<CreateScheduleSeatsRequest> requests
   ) {
 
     try {
 
       return ticketingSeatInventoryClient
-          .createScheduleSeats(
-              eventSessionId,
-              request
-          );
+          .createScheduleSeats(requests);
 
     } catch (RetryableException exception) {
       throw new BusinessException(

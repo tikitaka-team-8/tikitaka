@@ -235,6 +235,21 @@ public class EventSession {
     }
   }
 
+  // 상태 취소
+  public void cancel() {
+
+    if (status == EventSessionStatus.CANCELED) {
+      return;
+    }
+
+    if (status != EventSessionStatus.SCHEDULED) {
+      throw new BusinessException(
+          EventErrorCode.INVALID_EVENT_SESSION_STATUS
+      );
+    }
+    status = EventSessionStatus.CANCELED;
+  }
+
   // 판매 시작 및 좌석 재고 생성은 Service에서 검증
   private void validateModifiableStatus() {
     if (this.event.getStatus() != EventStatus.DRAFT

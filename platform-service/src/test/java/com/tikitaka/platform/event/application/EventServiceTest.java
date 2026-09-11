@@ -5,14 +5,15 @@ import com.tikitaka.platform.event.application.EventPublicationPlan.SessionSeats
 import com.tikitaka.platform.event.application.query.PublicEventSearchCondition;
 import com.tikitaka.platform.event.application.query.PublicEventSummaryResult;
 import com.tikitaka.platform.event.domain.Event;
+import com.tikitaka.platform.event.domain.EventSession;
 import com.tikitaka.platform.event.domain.EventStatus;
 import com.tikitaka.platform.event.infrastructure.EventRepository;
+import com.tikitaka.platform.event.infrastructure.EventSessionRepository;
 import com.tikitaka.platform.event.infrastructure.client.ticketing.TicketingSeatInventoryClient;
-import com.tikitaka.platform.event.infrastructure.client.ticketing.dto.CreateScheduleSeatsRequest;
+import com.tikitaka.platform.event.infrastructure.client.ticketing.dto.CreateScheduleSeatsResponse;
 import com.tikitaka.platform.event.presentation.dto.organizer.request.EventCreateRequest;
 import com.tikitaka.platform.event.presentation.dto.organizer.request.EventStatusChangeTarget;
 import com.tikitaka.platform.event.presentation.dto.organizer.request.EventStatusUpdateRequest;
-import com.tikitaka.platform.event.infrastructure.client.ticketing.dto.CreateScheduleSeatsResponse;
 import com.tikitaka.platform.event.presentation.dto.organizer.response.EventCreateResponse;
 import com.tikitaka.platform.event.presentation.dto.organizer.response.EventStatusUpdateResponse;
 import com.tikitaka.platform.event.presentation.dto.query.PublicEventDetailResponse;
@@ -68,6 +69,9 @@ class EventServiceTest {
 
   @Mock
   private TicketingSeatInventoryClient ticketingSeatInventoryClient;
+
+  @Mock
+  private EventSessionRepository eventSessionRepository;
 
   @InjectMocks
   private EventService eventService;
@@ -205,6 +209,8 @@ class EventServiceTest {
     UUID eventId = UUID.randomUUID();
     UUID sessionId1 = UUID.randomUUID();
     UUID sessionId2 = UUID.randomUUID();
+    UUID venueSeatId1 = UUID.randomUUID();
+    UUID venueSeatId2 = UUID.randomUUID();
 
     Organizer organizer = activeOrganizer(userId);
     Venue venue = createVenue();
@@ -230,7 +236,7 @@ class EventServiceTest {
         sessionId1,
         List.of(
             new SeatSnapshot(
-                UUID.randomUUID(),
+                venueSeatId1,
                 "A",
                 "1",
                 "1",
@@ -244,7 +250,7 @@ class EventServiceTest {
         sessionId2,
         List.of(
             new SeatSnapshot(
-                UUID.randomUUID(),
+                venueSeatId2,
                 "B",
                 "2",
                 "10",
@@ -274,17 +280,12 @@ class EventServiceTest {
     )).willReturn(publicationPlan);
 
     given(ticketingSeatInventoryClient.createScheduleSeats(
-        eq(sessionId1),
-        any(CreateScheduleSeatsRequest.class)
+        anyList()
     )).willReturn(
-        new CreateScheduleSeatsResponse(100, 0)
-    );
-
-    given(ticketingSeatInventoryClient.createScheduleSeats(
-        eq(sessionId2),
-        any(CreateScheduleSeatsRequest.class)
-    )).willReturn(
-        new CreateScheduleSeatsResponse(80, 20)
+        List.of(
+            new CreateScheduleSeatsResponse(sessionId1, 1, 0),
+            new CreateScheduleSeatsResponse(sessionId2, 0, 1)
+        )
     );
 
     EventStatusUpdateRequest request =
@@ -305,17 +306,9 @@ class EventServiceTest {
     assertThat(response.previousStatus())
         .isEqualTo(EventStatus.DRAFT);
 
-    assertThat(response.status())
-        .isEqualTo(EventStatus.UPCOMING);
-
-    assertThat(response.inventorySessionCount())
-        .isEqualTo(2);
-
-    assertThat(response.createdSeatCount())
-        .isEqualTo(180);
-
-    assertThat(response.skippedSeatCount())
-        .isEqualTo(20);
+    assertThat(response.inventorySessionCount()).isEqualTo(2);
+    assertThat(response.createdSeatCount()).isEqualTo(1);
+    assertThat(response.skippedSeatCount()).isEqualTo(1);
   }
 
   @Test
@@ -330,6 +323,9 @@ class EventServiceTest {
         organizer,
         createVenue()
     );
+
+    EventSession firstSession = mock(EventSession.class);
+    EventSession secondSession = mock(EventSession.class);
 
     ReflectionTestUtils.setField(
         organizer,
@@ -350,6 +346,9 @@ class EventServiceTest {
         organizerId
     )).willReturn(Optional.of(event));
 
+    given(eventSessionRepository.findAllByEventId(eventId))
+        .willReturn(List.of(firstSession, secondSession));
+
     EventStatusUpdateResponse response =
         eventService.changeStatus(
             userId,
@@ -360,6 +359,12 @@ class EventServiceTest {
         );
 
     assertThat(event.getStatus())
+        .isEqualTo(EventStatus.CANCELED);
+
+    assertThat(response.previousStatus())
+        .isEqualTo(EventStatus.DRAFT);
+
+    assertThat(response.status())
         .isEqualTo(EventStatus.CANCELED);
 
     assertThat(response.inventorySessionCount())

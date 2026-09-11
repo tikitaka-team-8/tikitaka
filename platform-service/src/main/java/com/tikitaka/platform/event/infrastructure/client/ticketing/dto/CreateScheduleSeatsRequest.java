@@ -6,8 +6,9 @@ import java.util.List;
 import java.util.UUID;
 
 public record CreateScheduleSeatsRequest(
+    UUID eventSessionId,
     UUID venueId,
-    List<SeatRequest> seats
+    List<SeatItem> seats
 ) {
 
   public static CreateScheduleSeatsRequest from(
@@ -15,8 +16,8 @@ public record CreateScheduleSeatsRequest(
       EventPublicationPlan.SessionSeats session
   ) {
 
-    List<SeatRequest> seats = session.seats().stream()
-        .map(seat -> new SeatRequest(
+    List<SeatItem> seats = session.seats().stream()
+        .map(seat -> new SeatItem(
             seat.venueSeatId(),
             seat.section(),
             seat.rowLabel(),
@@ -27,12 +28,13 @@ public record CreateScheduleSeatsRequest(
         .toList();
 
     return new CreateScheduleSeatsRequest(
+        session.eventSessionId(),
         venueId,
         seats
     );
   }
 
-  public record SeatRequest(
+  public record SeatItem(
       UUID venueSeatId,
       String section,
       String rowLabel,

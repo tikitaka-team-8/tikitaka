@@ -145,18 +145,18 @@ public class Event {
     return status.isPubliclyVisible();
   }
 
-  // 현재 DRAFT 상태에서 UPCOMING과 CANCELED만 가능
-  public void changeStatus(EventStatus targetStatus) {
+  // 공연 취소 DRAFT 상태에서만 가능
+  public void cancel() {
+
+    if (status == EventStatus.CANCELED) {
+      return;
+    }
+
     if (status != EventStatus.DRAFT) {
       throw new BusinessException(EventErrorCode.INVALID_EVENT_STATUS);
     }
 
-    if (targetStatus != EventStatus.UPCOMING
-        && targetStatus != EventStatus.CANCELED) {
-      throw new BusinessException(EventErrorCode.INVALID_EVENT_STATUS);
-    }
-
-    this.status = targetStatus;
+    status = EventStatus.CANCELED;
   }
 
   private void validateModifiableStatus() {

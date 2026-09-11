@@ -1,7 +1,10 @@
 package com.tikitaka.platform.event.infrastructure.client.ticketing.dto;
 
+import java.util.UUID;
+
 public record CreateScheduleSeatsResponse(
-    int createdCount,
-    int skippedCount
+    UUID eventSessionId,
+    Integer createdCount,
+    Integer skippedCount
 ) {
 }
