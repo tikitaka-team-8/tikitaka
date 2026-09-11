@@ -162,15 +162,13 @@ public class Payment {
 
 
     public void approve(
-            PaymentMethod paymentMethod,
-            String pgPaymentKey
+            PaymentMethod paymentMethod
     ) {
         validateApprovable();
 
         OffsetDateTime now = OffsetDateTime.now();
 
         this.paymentMethod = paymentMethod;
-        this.pgPaymentKey = pgPaymentKey;
         this.status = PaymentStatus.APPROVED;
         this.approvedAt = now;
         this.updatedAt = now;
@@ -203,6 +201,27 @@ public class Payment {
             );
         }
     }
+
+    // PG 호출 전에 paymentKey 보존
+    public void bindPaymentKey(String paymentKey) {
+        // 프로세싱일 때만 key를 저장할 수 있음.
+        validateStatus(PaymentStatus.PROCESSING);
+
+        if (paymentKey == null || paymentKey.isBlank()) {
+            throw new PaymentException(
+                    PaymentErrorCode.INVALID_PAYMENT_REQUEST
+            );
+        }
+
+        this.pgPaymentKey = paymentKey;
+        this.updatedAt = OffsetDateTime.now();
+    }
+
+
+
+
+
+
     private void validateStatus(PaymentStatus expectedStatus) {
         if (this.status != expectedStatus) {
             throw new PaymentException(PaymentErrorCode.PAYMENT_NOT_ALLOWED);

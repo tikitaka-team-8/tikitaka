@@ -37,3 +37,6 @@ internal:
 payment:
   outbox:
     publish-delay-ms: 1000
+  toss:
+    base-url: https://api.tosspayments.com
+    secret-key: ${TOSS_SECRET_KEY}

@@ -35,7 +35,6 @@ public class PaymentApprovalResultProcessor {
     @Transactional
     public PaymentApproveResult process(
             UUID paymentId,
-            PaymentMethod paymentMethod,
             PaymentGatewayResult result,
             OffsetDateTime requestedAt
     ) {
@@ -45,7 +44,6 @@ public class PaymentApprovalResultProcessor {
             case SUCCESS ->
                     handleApproveSuccess(
                             payment,
-                            paymentMethod,
                             result,
                             requestedAt
                     );
@@ -100,20 +98,16 @@ public class PaymentApprovalResultProcessor {
     // 승인 + 성공 Outbox
     private void handleApproveSuccess(
             Payment payment,
-            PaymentMethod paymentMethod,
             PaymentGatewayResult result,
             OffsetDateTime requestedAt
     ) {
-        payment.approve(
-                paymentMethod,
-                result.pgPaymentKey()
-        );
+        payment.approve(result.paymentMethod());
 
         paymentTransactionRepository.save(
                 PaymentTransaction.createApproveSuccess(
                         payment,
                         payment.getPaymentProvider(),
-                        result.pgPaymentKey(),
+                        payment.getPgPaymentKey(),
                         payment.getAmount(),
                         1,
                         requestedAt

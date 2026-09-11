@@ -73,8 +73,13 @@ class PaymentApprovalResultProcessorTest {
     @Test
     void 결제_승인에_성공하면_APPROVED_상태와_성공_거래이력_Outbox를_저장한다() {
         // given
+        payment.bindPaymentKey("MOCK-success-key");
+
         PaymentGatewayResult gatewayResult =
-                PaymentGatewayResult.success("MOCK-success-key");
+                PaymentGatewayResult.success(
+                        "MOCK-success-key",
+                        PaymentMethod.CARD
+                );
 
         when(paymentEventSerializer.serialize(any(PaymentSucceededEvent.class)))
                 .thenReturn("{\"eventType\":\"PAYMENT_SUCCEEDED\"}");
@@ -82,7 +87,6 @@ class PaymentApprovalResultProcessorTest {
         // when
         PaymentApproveResult result = processor.process(
                 paymentId,
-                PaymentMethod.CARD,
                 gatewayResult,
                 OffsetDateTime.now()
         );
@@ -150,7 +154,6 @@ class PaymentApprovalResultProcessorTest {
         // when
         processor.process(
                 paymentId,
-                PaymentMethod.CARD,
                 gatewayResult,
                 OffsetDateTime.now()
         );
@@ -210,7 +213,6 @@ class PaymentApprovalResultProcessorTest {
         // when
         processor.process(
                 paymentId,
-                PaymentMethod.CARD,
                 gatewayResult,
                 OffsetDateTime.now()
         );

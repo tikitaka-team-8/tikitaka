@@ -3,11 +3,8 @@ package com.tikitaka.paymentnotification.payment.presentation;
 
 import com.tikitaka.paymentnotification.global.response.ApiResponse;
 import com.tikitaka.paymentnotification.payment.application.PaymentService;
-import com.tikitaka.paymentnotification.payment.application.command.PaymentCreateCommand;
 import com.tikitaka.paymentnotification.payment.application.result.PaymentApproveResult;
-import com.tikitaka.paymentnotification.payment.application.result.PaymentCreateResult;
 import com.tikitaka.paymentnotification.payment.application.result.PaymentDetailResult;
-import com.tikitaka.paymentnotification.payment.domain.payment.PaymentProvider;
 import com.tikitaka.paymentnotification.payment.presentation.dto.*;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
@@ -65,7 +62,7 @@ public class PaymentController {
                 paymentService.approvePayment(
                         paymentId,
                         loginUserId,
-                        request.paymentMethod()
+                        request.paymentKey()
                 );
 
         return ResponseEntity.ok(

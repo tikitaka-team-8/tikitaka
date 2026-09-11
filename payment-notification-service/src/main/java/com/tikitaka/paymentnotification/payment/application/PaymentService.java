@@ -10,7 +10,6 @@ import com.tikitaka.paymentnotification.payment.application.result.PaymentCreate
 import com.tikitaka.paymentnotification.payment.application.result.PaymentDetailResult;
 import com.tikitaka.paymentnotification.payment.application.result.ReservationPaymentValidationResult;
 import com.tikitaka.paymentnotification.payment.domain.payment.Payment;
-import com.tikitaka.paymentnotification.payment.domain.payment.PaymentMethod;
 import com.tikitaka.paymentnotification.payment.domain.payment.PaymentProvider;
 import com.tikitaka.paymentnotification.payment.domain.payment.PaymentRepository;
 import com.tikitaka.paymentnotification.payment.exception.PaymentErrorCode;
@@ -32,6 +31,8 @@ import java.util.UUID;
 public class PaymentService {
 
     private final ReservationPaymentValidator reservationPaymentValidator;
+
+    private final PaymentKeyBinder paymentKeyBinder;
 
     private final PaymentRepository paymentRepository;
     private final PaymentGateway paymentGateway;
@@ -112,7 +113,7 @@ public class PaymentService {
     public PaymentApproveResult approvePayment(
             UUID paymentId,
             Long loginUserId,
-            PaymentMethod paymentMethod
+            String paymentKey
     ) {
         // 승인에 사용할 Payment 정보 조회
         Payment payment = paymentRepository.findById(paymentId).orElseThrow(()->
@@ -130,18 +131,23 @@ public class PaymentService {
         // PG 호출 전 단계
         try{
             validateReservation(payment);
+
+            // Toss confirm 전에 paymentKey 저장
+            paymentKeyBinder.bind(paymentId, paymentKey);
+
         }catch (RuntimeException e){
             // PG 호출 전 실패이므로 PROCESSING -> READY 복구
             paymentProcessingCompensator.restoreReady(paymentId);
             throw e;
         }
 
+
         OffsetDateTime requestedAt = OffsetDateTime.now();
 
         PaymentGatewayRequest request = new PaymentGatewayRequest(
+                paymentKey,
                 payment.getOrderId(),
-                payment.getAmount(),
-                payment.getCurrency()
+                payment.getAmount()
         );
 
         PaymentGatewayResult result;
@@ -159,7 +165,6 @@ public class PaymentService {
         try {
             return paymentApprovalResultProcessor.process(
                     paymentId,
-                    paymentMethod,
                     result,
                     requestedAt
             );
