@@ -9,7 +9,6 @@ import com.tikitaka.platform.organizer.infrastructure.OrganizerRepository;
 import com.tikitaka.platform.organizer.presentation.dto.OrganizerCreateResponse;
 import com.tikitaka.platform.organizer.presentation.dto.OrganizerDetailResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

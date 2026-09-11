@@ -18,3 +18,8 @@ auth:
 internal:
   service:
     key: platform-internal-service-key-for-tests
+
+clients:
+  ticketing-service:
+    url: http://localhost:8082
+    service-key: platform-internal-service-key-for-tests

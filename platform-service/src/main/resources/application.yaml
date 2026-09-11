@@ -33,3 +33,7 @@ auth:
 internal:
   service:
     key: ${INTERNAL_SERVICE_KEY}
+
+clients:
+  ticketing-service:
+    service-key: ${INTERNAL_SERVICE_KEY}

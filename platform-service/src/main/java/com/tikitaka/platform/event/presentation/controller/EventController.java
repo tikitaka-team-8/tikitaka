@@ -1,4 +1,4 @@
-package com.tikitaka.platform.event.presentation;
+package com.tikitaka.platform.event.presentation.controller;
 
 import com.tikitaka.platform.event.application.EventService;
 import com.tikitaka.platform.event.presentation.dto.query.PublicEventDetailResponse;

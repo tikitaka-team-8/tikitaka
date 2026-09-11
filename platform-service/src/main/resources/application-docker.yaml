@@ -12,3 +12,7 @@ spring:
       port: 6379
   kafka:
     bootstrap-servers: kafka:19092
+
+clients:
+  ticketing-service:
+    url: http://ticketing-service:8082
