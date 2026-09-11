@@ -10,6 +10,8 @@ ADMISSION_POLL_MAX_ATTEMPTS="${ADMISSION_POLL_MAX_ATTEMPTS:-20}"
 ADMISSION_POLL_INTERVAL_SECONDS="${ADMISSION_POLL_INTERVAL_SECONDS:-1}"
 RESERVATION_POLL_MAX_ATTEMPTS="${RESERVATION_POLL_MAX_ATTEMPTS:-30}"
 RESERVATION_POLL_INTERVAL_SECONDS="${RESERVATION_POLL_INTERVAL_SECONDS:-1}"
+NOTIFICATION_POLL_MAX_ATTEMPTS="${NOTIFICATION_POLL_MAX_ATTEMPTS:-30}"
+NOTIFICATION_POLL_INTERVAL_SECONDS="${NOTIFICATION_POLL_INTERVAL_SECONDS:-1}"
 HTTP_CONNECT_TIMEOUT_SECONDS="${HTTP_CONNECT_TIMEOUT_SECONDS:-5}"
 HTTP_MAX_TIME_SECONDS="${HTTP_MAX_TIME_SECONDS:-15}"
 
@@ -245,9 +247,10 @@ http POST "/api/v1/reservations" "$(jq --null-input \
   '{seatHoldIds:[$seatHoldId]}')"
 assert_status 201 "예매 생성"
 RESERVATION_ID="$(jq --raw-output '.data.reservationId // empty' <<<"$HTTP_BODY")"
+RESERVATION_NUMBER="$(jq --raw-output '.data.reservationNumber // empty' <<<"$HTTP_BODY")"
 PAYMENT_ID="$(jq --raw-output '.data.paymentId // empty' <<<"$HTTP_BODY")"
-if [[ -z "$RESERVATION_ID" || -z "$PAYMENT_ID" ]]; then
-  log_fail "예매 생성 응답에서 reservationId 또는 paymentId를 찾지 못했습니다."
+if [[ -z "$RESERVATION_ID" || -z "$RESERVATION_NUMBER" || -z "$PAYMENT_ID" ]]; then
+  log_fail "예매 생성 응답에서 reservationId, reservationNumber 또는 paymentId를 찾지 못했습니다."
   exit 1
 fi
 assert_json ".data.reservationStatus == \"PAYMENT_PROCESSING\"" "예매 결제 처리 상태 확인"
@@ -289,12 +292,53 @@ if [[ "$RESERVATION_STATUS" != "CONFIRMED" ]]; then
 fi
 assert_json ".data.reservationId == \"${RESERVATION_ID}\" and .data.paymentCompletedAt != null" "예매 확정과 결제 완료 시각 확인"
 
+log_step "HAPPY_NOTIFICATION_CREATED" "예매 확정 알림 생성 폴링"
+NOTIFICATION_ID=""
+NOTIFICATION_COUNT=0
+for ((attempt = 1; attempt <= NOTIFICATION_POLL_MAX_ATTEMPTS; attempt++)); do
+  http GET "/api/v1/notifications?notificationType=RESERVATION_CONFIRMED&readStatus=UNREAD&size=50"
+  assert_status 200 "읽지 않은 예매 확정 알림 조회 ${attempt}/${NOTIFICATION_POLL_MAX_ATTEMPTS}"
+  NOTIFICATION_COUNT="$(jq --raw-output '.meta.totalElements // (.data | length) // 0' <<<"$HTTP_BODY")"
+  NOTIFICATION_ID="$(jq --raw-output \
+    --arg userId "$USER_ID" \
+    --arg reservationNumber "$RESERVATION_NUMBER" \
+    'first(.data[]? | select(
+      (.userId | tostring) == $userId
+      and .notificationType == "RESERVATION_CONFIRMED"
+      and .readStatus == "UNREAD"
+      and (.content | contains($reservationNumber))
+    ) | .notificationId) // empty' <<<"$HTTP_BODY")"
+
+  if [[ -n "$NOTIFICATION_ID" ]]; then
+    break
+  fi
+
+  sleep "$NOTIFICATION_POLL_INTERVAL_SECONDS"
+done
+
+if [[ -z "$NOTIFICATION_ID" ]]; then
+  log_fail "제한 시간 안에 예매 확정 알림이 생성되지 않았습니다. 예매번호: ${RESERVATION_NUMBER}, 마지막 조회 건수: ${NOTIFICATION_COUNT}"
+  exit 1
+fi
+log_ok "현재 예매번호와 연결된 읽지 않은 알림 확인"
+
+log_step "HAPPY_NOTIFICATION_READ" "알림 상세 조회와 읽음 처리"
+http PATCH "/api/v1/notifications/${NOTIFICATION_ID}/read"
+assert_status 200 "알림 상세 조회와 읽음 처리"
+assert_json ".data.notificationId == \"${NOTIFICATION_ID}\"" "알림 ID 확인"
+assert_json ".data.userId | tostring == \"${USER_ID}\"" "알림 사용자 ID 확인"
+assert_json ".data.reservationId == \"${RESERVATION_ID}\" and .data.reservationNumber == \"${RESERVATION_NUMBER}\"" "알림과 예매 연결 확인"
+assert_json '.data.notificationType == "RESERVATION_CONFIRMED" and .data.readStatus == "READ" and .data.lastViewedAt != null' "알림 읽음 상태와 마지막 조회 시각 확인"
+
 if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
   {
     printf 'reservation_id=%s\n' "$RESERVATION_ID"
+    printf 'reservation_number=%s\n' "$RESERVATION_NUMBER"
     printf 'seat_hold_id=%s\n' "$SEAT_HOLD_ID"
     printf 'schedule_seat_id=%s\n' "$SEAT_ID"
+    printf 'payment_id=%s\n' "$PAYMENT_ID"
+    printf 'notification_id=%s\n' "$NOTIFICATION_ID"
   } >>"$GITHUB_OUTPUT"
 fi
 
-printf '\n[OK] 결제와 예매 확정까지의 Happy Path 및 Gateway 보안 시나리오가 모두 통과했습니다.\n'
+printf '\n[OK] 결제, 예매 확정, 알림 조회와 읽음 처리까지의 Happy Path 및 Gateway 보안 시나리오가 모두 통과했습니다.\n'
