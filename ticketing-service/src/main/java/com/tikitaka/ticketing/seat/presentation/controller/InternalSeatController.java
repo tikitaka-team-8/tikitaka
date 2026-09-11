@@ -1,6 +1,7 @@
 package com.tikitaka.ticketing.seat.presentation.controller;
 
 
+import com.tikitaka.ticketing.seat.application.command.CreateScheduleSeatsCommand;
 import com.tikitaka.ticketing.seat.application.service.SeatService;
 import com.tikitaka.ticketing.seat.domain.enums.ReleaseReason;
 import com.tikitaka.ticketing.seat.presentation.dto.request.CreateScheduleSeatsRequest;
@@ -11,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 
@@ -32,13 +34,15 @@ public class InternalSeatController {
         seatService.releaseHold(seatHoldId, reason);
 
     }
-    @PostMapping("/event-sessions/{eventSessionId}/seats")
+    @PostMapping("/event-sessions/seats")
     @ResponseStatus(HttpStatus.CREATED)
-    public CreateScheduleSeatsResponse createScheduleSeats(
-            @PathVariable UUID eventSessionId,
-            @Valid @RequestBody CreateScheduleSeatsRequest request
+    public List<CreateScheduleSeatsResponse> createScheduleSeats(
+            @Valid @RequestBody List<@Valid CreateScheduleSeatsRequest> requests
     ) {
-        return seatService.createScheduleSeats(request.toCommand(eventSessionId));
+        List<CreateScheduleSeatsCommand> commands = requests.stream()
+                .map(CreateScheduleSeatsRequest::toCommand)
+                .toList();
+        return seatService.createScheduleSeatsBatch(commands);
     }
 
 }
