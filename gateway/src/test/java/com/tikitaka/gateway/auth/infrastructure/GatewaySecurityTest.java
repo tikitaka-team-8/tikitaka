@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
@@ -41,6 +42,7 @@ class GatewaySecurityTest {
     private static final String USER_ID_HEADER = "X-User-Id";
     private static final String USER_ROLE_HEADER = "X-User-Role";
     private static final String SERVICE_KEY_HEADER = "X-Service-Key";
+    private static final String TRACE_ID_HEADER = "X-Trace-Id";
     private static final String AUTHENTICATED_USER_ID = "12345";
     private static final String AUTHENTICATED_USER_ROLE = "USER";
     private static final byte[] TEST_ONLY_DUMMY_JWT_SECRET_BYTES =
@@ -77,6 +79,7 @@ class GatewaySecurityTest {
         ResponseEntity<String> response = restTemplate.getForEntity("/api/v1/users/me", String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.getHeaders().getFirst(TRACE_ID_HEADER)).isNotBlank();
         assertThat(DOWNSTREAM_HEADERS.get()).isNull();
     }
 
@@ -134,6 +137,31 @@ class GatewaySecurityTest {
         assertThat(forwardedHeaders.get(USER_ID_HEADER)).containsExactly(AUTHENTICATED_USER_ID);
         assertThat(forwardedHeaders.get(USER_ROLE_HEADER)).containsExactly(AUTHENTICATED_USER_ROLE);
         assertThat(forwardedHeaders.get(SERVICE_KEY_HEADER)).isNull();
+    }
+
+    @Test
+    void 외부_Trace_ID를_교체하고_하위_서비스와_사용자_응답에_같은_값을_전달한다() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(createAccessToken());
+        headers.put(TRACE_ID_HEADER, List.of("external-trace-id", "second-external-trace-id"));
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                "/api/v1/users/me",
+                HttpMethod.GET,
+                new HttpEntity<>(headers),
+                String.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        String responseTraceId = response.getHeaders().getFirst(TRACE_ID_HEADER);
+        assertThat(responseTraceId).isNotBlank();
+        assertThat(responseTraceId).isNotEqualTo("external-trace-id");
+        assertThat(responseTraceId).isNotEqualTo("second-external-trace-id");
+        assertThat(UUID.fromString(responseTraceId)).isNotNull();
+
+        Headers forwardedHeaders = DOWNSTREAM_HEADERS.get();
+        assertThat(forwardedHeaders).isNotNull();
+        assertThat(forwardedHeaders.get(TRACE_ID_HEADER)).containsExactly(responseTraceId);
     }
 
     private static HttpServer startDownstreamServer() {
