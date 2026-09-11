@@ -587,6 +587,7 @@ class SeatServiceTest {
                 Instant.parse("2026-09-04T03:00:00Z"),
                 Instant.parse("2026-09-04T03:10:00Z")
         );
+        seatHold.reserve(Instant.parse("2026-09-04T03:00:30Z"));
         seatHold.confirm(Instant.parse("2026-09-04T03:01:00Z"));
         ScheduleSeat seat = mock(ScheduleSeat.class);
 
