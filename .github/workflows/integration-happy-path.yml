@@ -132,6 +132,65 @@ jobs:
           printf '[OK] Reservation=%s, SeatHold=%s, ScheduleSeat=%s\n' \
             CONFIRMED CONFIRMED SOLD
 
+      - name: Reservation Outbox 최종 상태 확인
+        shell: bash
+        env:
+          RESERVATION_ID: ${{ steps.happy_path.outputs.reservation_id }}
+        run: |
+          set -euo pipefail
+
+          actual_state="$(docker compose exec -T ticketing-postgres \
+            psql -v ON_ERROR_STOP=1 \
+              -v reservation_id="$RESERVATION_ID" \
+              -U "$TICKETING_DB_USERNAME" \
+              -d "$TICKETING_DB_NAME" \
+              --tuples-only \
+              --no-align \
+            < scripts/integration-test/verify-ticketing-event-state.sql \
+            | tr -d '[:space:]')"
+
+          expected_state="1|1"
+          if [[ "$actual_state" != "$expected_state" ]]; then
+            printf '[FAIL] Reservation Outbox 최종 상태 불일치: expected=%s, actual=%s\n' \
+              "$expected_state" "${actual_state:-ROW_NOT_FOUND}" >&2
+            exit 1
+          fi
+
+          printf '[OK] Reservation Outbox=%s, Published=%s\n' 1 1
+
+      - name: Payment Notification 최종 상태 확인
+        shell: bash
+        env:
+          RESERVATION_ID: ${{ steps.happy_path.outputs.reservation_id }}
+          RESERVATION_NUMBER: ${{ steps.happy_path.outputs.reservation_number }}
+          PAYMENT_ID: ${{ steps.happy_path.outputs.payment_id }}
+          NOTIFICATION_ID: ${{ steps.happy_path.outputs.notification_id }}
+        run: |
+          set -euo pipefail
+
+          actual_state="$(docker compose exec -T payment-postgres \
+            psql -v ON_ERROR_STOP=1 \
+              -v reservation_id="$RESERVATION_ID" \
+              -v reservation_number="$RESERVATION_NUMBER" \
+              -v payment_id="$PAYMENT_ID" \
+              -v notification_id="$NOTIFICATION_ID" \
+              -U "$PAYMENT_DB_USERNAME" \
+              -d "$PAYMENT_DB_NAME" \
+              --tuples-only \
+              --no-align \
+            < scripts/integration-test/verify-payment-notification-state.sql \
+            | tr -d '[:space:]')"
+
+          expected_state="APPROVED|1|1|1|READ|VIEWED|1"
+          if [[ "$actual_state" != "$expected_state" ]]; then
+            printf '[FAIL] Payment Notification 최종 상태 불일치: expected=%s, actual=%s\n' \
+              "$expected_state" "${actual_state:-ROW_NOT_FOUND}" >&2
+            exit 1
+          fi
+
+          printf '[OK] Payment=%s, PaymentOutbox=%s, Notification=%s, NotificationInbox=%s\n' \
+            APPROVED PUBLISHED READ PROCESSED
+
       - name: 실패 진단 자료 수집
         if: failure()
         shell: bash
@@ -146,6 +205,22 @@ jobs:
           docker compose logs --no-color --timestamps ticketing-postgres > integration-test-artifacts/ticketing-postgres.log 2>&1 || true
           docker compose logs --no-color --timestamps payment-postgres > integration-test-artifacts/payment-postgres.log 2>&1 || true
           docker compose logs --no-color --timestamps platform-redis ticketing-redis kafka > integration-test-artifacts/infrastructure.log 2>&1 || true
+          docker compose exec -T ticketing-postgres \
+            psql -U "$TICKETING_DB_USERNAME" -d "$TICKETING_DB_NAME" \
+              --command="SELECT event_id, reservation_id, event_type, status, created_at, published_at FROM p_reservation_outbox ORDER BY created_at DESC LIMIT 20;" \
+            > integration-test-artifacts/reservation-outbox.txt 2>&1 || true
+          docker compose exec -T payment-postgres \
+            psql -U "$PAYMENT_DB_USERNAME" -d "$PAYMENT_DB_NAME" \
+              --command="SELECT outbox_id, payment_id, event_type, status, retry_count, created_at, published_at FROM p_payment_outbox ORDER BY created_at DESC LIMIT 20;" \
+            > integration-test-artifacts/payment-outbox.txt 2>&1 || true
+          docker compose exec -T payment-postgres \
+            psql -U "$PAYMENT_DB_USERNAME" -d "$PAYMENT_DB_NAME" \
+              --command="SELECT event_id, reservation_id, event_type, processed_at FROM p_notification_inbox ORDER BY processed_at DESC LIMIT 20;" \
+            > integration-test-artifacts/notification-inbox.txt 2>&1 || true
+          docker compose exec -T payment-postgres \
+            psql -U "$PAYMENT_DB_USERNAME" -d "$PAYMENT_DB_NAME" \
+              --command="SELECT notification_id, source_event_id, user_id, reservation_id, reservation_number, notification_type, read_status, last_viewed_at, created_at FROM p_notification ORDER BY created_at DESC LIMIT 20;" \
+            > integration-test-artifacts/notifications.txt 2>&1 || true
 
       - name: 실패 진단 자료 보존
         if: failure()

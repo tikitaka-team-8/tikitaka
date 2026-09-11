@@ -1,0 +1,351 @@
+{
+  "info": {
+    "_postman_id": "57c30bb8-85c7-4cff-a355-0a113e534c2f",
+    "name": "Tikitaka Local Happy Path",
+    "description": "Gateway를 통해 회원가입부터 예매 확정 알림 읽음 처리까지 수동 검증하는 S01 Happy Path Collection입니다. Platform/Ticketing seed 적용 후 번호 순서대로 실행합니다. 대기열 승인, 예매 확정, 알림 생성은 비동기 처리이므로 각 요청 설명에 따라 동일 요청을 다시 전송합니다.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.request.headers.remove('X-User-Id');",
+          "pm.request.headers.remove('X-User-Role');",
+          "pm.request.headers.remove('X-Service-Key');"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    { "key": "seatHoldIdempotencyKey", "value": "" },
+    { "key": "reservationIdempotencyKey", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "01 회원가입",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const runId = `${Date.now()}-${pm.variables.replaceIn('{{$randomInt}}')}`;",
+              "pm.environment.set('runId', runId);",
+              "pm.environment.set('email', `postman.${runId}@test.tikitaka.local`);",
+              "pm.environment.set('password', `Tikitaka!Aa1-${runId.slice(0, 16)}`);",
+              "pm.environment.set('nickname', `postman-${runId}`.slice(0, 30));",
+              "pm.collectionVariables.set('seatHoldIdempotencyKey', `seat-hold-${runId}`);",
+              "pm.collectionVariables.set('reservationIdempotencyKey', `reservation-${runId}`);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('회원가입 HTTP 201', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.test('회원가입 성공 응답', () => {",
+              "  pm.expect(body.code).to.eql('SUCCESS');",
+              "  pm.expect(body.data.userId).to.exist;",
+              "  pm.expect(body.data.role).to.eql('USER');",
+              "});",
+              "pm.environment.set('userId', String(body.data.userId));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"name\": \"Postman 테스트 사용자\",\n  \"nickname\": \"{{nickname}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/v1/auth/signup",
+        "description": "로그인 전 공개 API이므로 반드시 No Auth로 실행합니다. 실행할 때마다 새 사용자 정보와 멱등 키를 생성합니다."
+      }
+    },
+    {
+      "name": "02 로그인",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('로그인 HTTP 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('Access Token 발급', () => pm.expect(body.data.accessToken).to.be.a('string').and.not.empty);",
+              "pm.environment.set('accessToken', body.data.accessToken);",
+              "if (body.data.refreshToken) pm.environment.set('refreshToken', body.data.refreshToken);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/v1/auth/login",
+        "description": "공개 API이므로 No Auth로 실행하고 이후 요청에서 사용할 accessToken을 저장합니다."
+      }
+    },
+    {
+      "name": "03 공연 목록 조회",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('공연 목록 HTTP 200', () => pm.response.to.have.status(200));",
+        "const body = pm.response.json();",
+        "pm.test('테스트 공연 포함', () => pm.expect(body.data.some(event => event.eventId === pm.environment.get('eventId'))).to.be.true);"
+      ] } }],
+      "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/events" }
+    },
+    {
+      "name": "04 공연 상세 조회",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('공연 상세 HTTP 200', () => pm.response.to.have.status(200));",
+        "const body = pm.response.json();",
+        "pm.test('공연 ID 일치', () => pm.expect(body.data.eventId).to.eql(pm.environment.get('eventId')));"
+      ] } }],
+      "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/events/{{eventId}}" }
+    },
+    {
+      "name": "05 공연 회차 및 가격 조회",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('공연 회차 HTTP 200', () => pm.response.to.have.status(200));",
+        "const body = pm.response.json();",
+        "pm.test('회차와 가격 일치', () => {",
+        "  pm.expect(body.data.sessionId).to.eql(pm.environment.get('sessionId'));",
+        "  pm.expect(body.data.sectionPrices.some(price => Number(price.priceAmount) === Number(pm.environment.get('expectedPrice')))).to.be.true;",
+        "});"
+      ] } }],
+      "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/events/{{eventId}}/sessions/{{sessionId}}" }
+    },
+    {
+      "name": "06 대기열 진입",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('대기열 진입 HTTP 200', () => pm.response.to.have.status(200));",
+        "const body = pm.response.json();",
+        "pm.test('인증 사용자 ID 일치', () => pm.expect(String(body.data.userId)).to.eql(pm.environment.get('userId')));"
+      ] } }],
+      "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/event-sessions/{{sessionId}}/queue" }
+    },
+    {
+      "name": "07 대기열 입장 확인",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('대기열 상태 HTTP 200', () => pm.response.to.have.status(200));",
+        "const body = pm.response.json();",
+        "if (body.data.status === 'ADMITTED') {",
+        "  pm.test('입장 토큰 발급', () => pm.expect(body.data.admissionToken).to.be.a('string').and.not.empty);",
+        "  pm.environment.set('admissionToken', body.data.admissionToken);",
+        "} else {",
+        "  console.log(`현재 대기열 상태: ${body.data.status}. 잠시 후 이 요청을 다시 전송하세요.`);",
+        "}"
+      ] } }],
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/event-sessions/{{sessionId}}/queue/me",
+        "description": "status가 ADMITTED가 되고 admissionToken이 저장될 때까지 약 1초 간격으로 동일 요청을 다시 전송합니다."
+      }
+    },
+    {
+      "name": "08 좌석 목록 조회",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('좌석 목록 HTTP 200', () => pm.response.to.have.status(200));",
+        "const body = pm.response.json();",
+        "const seat = body.data.seats.find(item => item.seatStatus === 'AVAILABLE' && Number(item.price) === Number(pm.environment.get('expectedPrice')));",
+        "pm.test('예매 가능한 테스트 좌석 존재', () => pm.expect(seat).to.exist);",
+        "if (seat) pm.environment.set('scheduleSeatId', seat.scheduleSeatId);"
+      ] } }],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "X-Queue-Token", "value": "{{admissionToken}}" }],
+        "url": "{{baseUrl}}/api/v1/schedules/{{sessionId}}/seats"
+      }
+    },
+    {
+      "name": "09 좌석 상세 조회",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('좌석 상세 HTTP 200', () => pm.response.to.have.status(200));",
+        "const body = pm.response.json();",
+        "pm.test('좌석 상세 일치', () => {",
+        "  pm.expect(body.data.scheduleSeatId).to.eql(pm.environment.get('scheduleSeatId'));",
+        "  pm.expect(Number(body.data.price)).to.eql(Number(pm.environment.get('expectedPrice')));",
+        "  pm.expect(body.data.seatStatus).to.eql('AVAILABLE');",
+        "});"
+      ] } }],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "X-Queue-Token", "value": "{{admissionToken}}" }],
+        "url": "{{baseUrl}}/api/v1/schedules/{{sessionId}}/seats/{{scheduleSeatId}}"
+      }
+    },
+    {
+      "name": "10 좌석 선점",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('좌석 선점 HTTP 200', () => pm.response.to.have.status(200));",
+        "const body = pm.response.json();",
+        "pm.test('선점 정보 생성', () => {",
+        "  pm.expect(body.data.seatHoldId).to.exist;",
+        "  pm.expect(body.data.holdToken).to.exist;",
+        "  pm.expect(body.data.expiresAt).to.exist;",
+        "});",
+        "pm.environment.set('seatHoldId', body.data.seatHoldId);"
+      ] } }],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "X-Queue-Token", "value": "{{admissionToken}}" },
+          { "key": "Idempotency-Key", "value": "{{seatHoldIdempotencyKey}}" }
+        ],
+        "url": "{{baseUrl}}/api/v1/schedules/{{sessionId}}/seats/{{scheduleSeatId}}/hold"
+      }
+    },
+    {
+      "name": "11 예매 생성",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('예매 생성 HTTP 201', () => pm.response.to.have.status(201));",
+        "const body = pm.response.json();",
+        "pm.test('예매와 결제 정보 생성', () => {",
+        "  pm.expect(body.data.reservationStatus).to.eql('PAYMENT_PROCESSING');",
+        "  pm.expect(Number(body.data.seatCount)).to.eql(1);",
+        "  pm.expect(Number(body.data.totalAmount)).to.eql(Number(pm.environment.get('expectedPrice')));",
+        "});",
+        "pm.environment.set('reservationId', body.data.reservationId);",
+        "pm.environment.set('reservationNumber', body.data.reservationNumber);",
+        "pm.environment.set('paymentId', body.data.paymentId);"
+      ] } }],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Idempotency-Key", "value": "{{reservationIdempotencyKey}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"seatHoldIds\": [\n    \"{{seatHoldId}}\"\n  ]\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/v1/reservations"
+      }
+    },
+    {
+      "name": "12 결제 READY 조회",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('결제 조회 HTTP 200', () => pm.response.to.have.status(200));",
+        "const body = pm.response.json();",
+        "pm.test('결제 READY와 예매 연결', () => {",
+        "  pm.expect(body.data.paymentId).to.eql(pm.environment.get('paymentId'));",
+        "  pm.expect(body.data.reservationId).to.eql(pm.environment.get('reservationId'));",
+        "  pm.expect(body.data.status).to.eql('READY');",
+        "  pm.expect(Number(body.data.amount)).to.eql(Number(pm.environment.get('expectedPrice')));",
+        "});"
+      ] } }],
+      "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/payments/{{paymentId}}" }
+    },
+    {
+      "name": "13 결제 승인",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('결제 승인 HTTP 200', () => pm.response.to.have.status(200));",
+        "const body = pm.response.json();",
+        "pm.test('결제 APPROVED', () => {",
+        "  pm.expect(body.data.paymentId).to.eql(pm.environment.get('paymentId'));",
+        "  pm.expect(body.data.status).to.eql('APPROVED');",
+        "});"
+      ] } }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"paymentMethod\": \"CARD\"\n}", "options": { "raw": { "language": "json" } } },
+        "url": "{{baseUrl}}/api/v1/payments/{{paymentId}}/approve"
+      }
+    },
+    {
+      "name": "14 예매 확정 조회",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('예매 조회 HTTP 200', () => pm.response.to.have.status(200));",
+        "const body = pm.response.json();",
+        "if (body.data.reservationStatus === 'CONFIRMED') {",
+        "  pm.test('예매 확정과 결제 완료 시각', () => {",
+        "    pm.expect(body.data.reservationId).to.eql(pm.environment.get('reservationId'));",
+        "    pm.expect(body.data.paymentCompletedAt).to.exist;",
+        "  });",
+        "} else {",
+        "  console.log(`현재 예매 상태: ${body.data.reservationStatus}. 잠시 후 이 요청을 다시 전송하세요.`);",
+        "}"
+      ] } }],
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/reservations/{{reservationId}}",
+        "description": "payment-events가 처리되어 reservationStatus가 CONFIRMED가 될 때까지 약 1초 간격으로 동일 요청을 다시 전송합니다."
+      }
+    },
+    {
+      "name": "15 예매 확정 알림 조회",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('알림 목록 HTTP 200', () => pm.response.to.have.status(200));",
+        "const body = pm.response.json();",
+        "const userId = pm.environment.get('userId');",
+        "const reservationNumber = pm.environment.get('reservationNumber');",
+        "const notification = body.data.find(item =>",
+        "  String(item.userId) === String(userId) &&",
+        "  item.notificationType === 'RESERVATION_CONFIRMED' &&",
+        "  item.readStatus === 'UNREAD' &&",
+        "  item.content.includes(reservationNumber)",
+        ");",
+        "if (notification) {",
+        "  pm.environment.set('notificationId', notification.notificationId);",
+        "  pm.test('현재 예매의 읽지 않은 알림 확인', () => pm.expect(notification).to.exist);",
+        "} else {",
+        "  console.log(`예매번호 ${reservationNumber}의 알림이 아직 없습니다. 잠시 후 이 요청을 다시 전송하세요.`);",
+        "}"
+      ] } }],
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/notifications?notificationType=RESERVATION_CONFIRMED&readStatus=UNREAD&size=50",
+        "description": "reservation-events가 처리되어 현재 reservationNumber의 알림이 조회되고 notificationId가 저장될 때까지 약 1초 간격으로 동일 요청을 다시 전송합니다. 목록 조회 자체가 목적이 아니라 읽음 처리 대상 notificationId를 찾기 위한 단계입니다."
+      }
+    },
+    {
+      "name": "16 알림 상세 조회 및 읽음 처리",
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('알림 읽음 처리 HTTP 200', () => pm.response.to.have.status(200));",
+        "const body = pm.response.json();",
+        "pm.test('알림과 예매 연결 및 READ 전환', () => {",
+        "  pm.expect(body.data.notificationId).to.eql(pm.environment.get('notificationId'));",
+        "  pm.expect(String(body.data.userId)).to.eql(pm.environment.get('userId'));",
+        "  pm.expect(body.data.reservationId).to.eql(pm.environment.get('reservationId'));",
+        "  pm.expect(body.data.reservationNumber).to.eql(pm.environment.get('reservationNumber'));",
+        "  pm.expect(body.data.notificationType).to.eql('RESERVATION_CONFIRMED');",
+        "  pm.expect(body.data.readStatus).to.eql('READ');",
+        "  pm.expect(body.data.lastViewedAt).to.exist;",
+        "});"
+      ] } }],
+      "request": {
+        "method": "PATCH",
+        "url": "{{baseUrl}}/api/v1/notifications/{{notificationId}}/read",
+        "description": "별도 상세 조회 API가 없으므로 읽음 처리 응답을 통해 알림 상세와 READ 상태를 함께 검증합니다."
+      }
+    }
+  ]
+}
