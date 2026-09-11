@@ -622,7 +622,7 @@ class ReservationServiceTest {
         Reservation reservation = createPaymentProcessingReservation();
         PaymentValidationCommand command = new PaymentValidationCommand(RESERVATION_ID, OWNER_ID);
         SeatHoldValidationInfo seatHold = createSeatHoldValidationInfo(
-                OWNER_ID, HoldStatus.HOLDING, Instant.now().plus(Duration.ofMinutes(10)));
+                OWNER_ID, HoldStatus.RESERVED, Instant.now().plus(Duration.ofMinutes(10)));
 
         given(reservationRepositoryPort.findById(RESERVATION_ID)).willReturn(Optional.of(reservation));
         given(seatHoldQueryPort.findAllByIds(List.of(SEAT_HOLD_ID))).willReturn(List.of(seatHold));
@@ -750,24 +750,21 @@ class ReservationServiceTest {
     }
 
     @Test
-    void 만료된_좌석_선점은_결제_검증을_할_수_없다() {
+    void 만료_시각이_지난_RESERVED_좌석도_결제_검증을_할_수_있다() {
         // given
         Reservation reservation = createPaymentProcessingReservation();
         PaymentValidationCommand command = new PaymentValidationCommand(RESERVATION_ID, OWNER_ID);
         SeatHoldValidationInfo seatHold = createSeatHoldValidationInfo(
-                OWNER_ID, HoldStatus.HOLDING,Instant.now().minusSeconds(1));
+                OWNER_ID, HoldStatus.RESERVED, Instant.now().minusSeconds(1));
 
         given(reservationRepositoryPort.findById(RESERVATION_ID)).willReturn(Optional.of(reservation));
         given(seatHoldQueryPort.findAllByIds(List.of(SEAT_HOLD_ID))).willReturn(List.of(seatHold));
 
         // when
-        BusinessException exception = catchThrowableOfType(
-                () -> reservationService.validatePayment(command),
-                BusinessException.class
-        );
+        PaymentValidationResult result = reservationService.validatePayment(command);
 
         // then
-        assertThat(exception.getErrorCode()).isEqualTo(ReservationErrorCode.SEAT_HOLD_EXPIRED);
+        assertThat(result.getReservationId()).isEqualTo(RESERVATION_ID);
     }
 
     private Reservation createReservation() {
