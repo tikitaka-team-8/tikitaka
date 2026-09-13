@@ -17,7 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
+import static org.mockito.ArgumentMatchers.argThat;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -130,7 +130,14 @@ class PaymentServiceTest {
                 .acquire(paymentId);
 
         verify(paymentGateway)
-                .approve(any());
+                .approve(argThat(request ->
+                        request.paymentKey().equals("test-payment-key")
+                                && request.orderId().equals(payment.getOrderId())
+                                && request.amount().equals(payment.getAmount())
+                                && request.idempotencyKey().equals(
+                                "PAYMENT-APPROVE-" + paymentId
+                        )
+                ));
 
         verify(paymentApprovalResultProcessor)
                 .process(

@@ -90,8 +90,6 @@ public class TossPaymentGateway implements PaymentGateway , PaymentQueryGateway 
     @Override
     public PaymentQueryResult getPayment(String paymentKey) {
 
-        String secretKey = tossPaymentProperties.secretKey();
-
         TossPaymentResponse response =
                 tossPaymentsFeignClient.getPayment(
                         createAuthorization(),

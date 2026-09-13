@@ -3,14 +3,10 @@ package com.tikitaka.paymentnotification.payment.infrastructure.pg.toss;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGatewayResult;
-import com.tikitaka.paymentnotification.payment.domain.payment.PaymentMethod;
-import com.tikitaka.paymentnotification.payment.domain.payment.PaymentStatus;
 import com.tikitaka.paymentnotification.payment.infrastructure.pg.toss.dto.TossErrorResponse;
 import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-
-import java.time.OffsetDateTime;
 
 @Component
 @RequiredArgsConstructor
