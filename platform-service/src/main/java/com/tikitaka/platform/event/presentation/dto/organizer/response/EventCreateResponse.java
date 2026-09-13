@@ -1,4 +1,4 @@
-package com.tikitaka.platform.event.presentation.dto.organizer;
+package com.tikitaka.platform.event.presentation.dto.organizer.response;
 
 import com.tikitaka.platform.event.domain.Event;
 

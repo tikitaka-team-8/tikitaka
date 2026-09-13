@@ -8,8 +8,8 @@ import com.tikitaka.platform.event.infrastructure.EventRepository;
 import com.tikitaka.platform.event.infrastructure.EventSessionRepository;
 import com.tikitaka.platform.event.infrastructure.SessionSectionPriceRepository;
 import com.tikitaka.platform.event.presentation.dto.SessionSectionPricesResponse;
-import com.tikitaka.platform.event.presentation.dto.organizer.SessionSectionPricesCreateRequest;
-import com.tikitaka.platform.event.presentation.dto.organizer.SessionSectionPricesCreateRequest.SectionPriceRequest;
+import com.tikitaka.platform.event.presentation.dto.organizer.request.SessionSectionPricesCreateRequest;
+import com.tikitaka.platform.event.presentation.dto.organizer.request.SessionSectionPricesCreateRequest.SectionPriceRequest;
 import com.tikitaka.platform.global.exception.BusinessException;
 import com.tikitaka.platform.organizer.domain.Organizer;
 import com.tikitaka.platform.organizer.infrastructure.OrganizerRepository;
@@ -32,7 +32,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class SessionSectionPriceServiceTest {

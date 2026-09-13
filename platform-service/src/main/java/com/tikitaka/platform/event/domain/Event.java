@@ -3,13 +3,11 @@ package com.tikitaka.platform.event.domain;
 import com.tikitaka.platform.event.exception.EventErrorCode;
 import com.tikitaka.platform.global.exception.BusinessException;
 import com.tikitaka.platform.organizer.domain.Organizer;
-import com.tikitaka.platform.organizer.exception.OrganizerErrorCode;
 import com.tikitaka.platform.venue.domain.Venue;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.apache.kafka.common.errors.ApiException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -143,12 +141,23 @@ public class Event {
     }
   }
 
-
-
   public boolean isPubliclyVisible() {
     return status.isPubliclyVisible();
   }
 
+  // 공연 취소 DRAFT 상태에서만 가능
+  public void cancel() {
+
+    if (status == EventStatus.CANCELED) {
+      return;
+    }
+
+    if (status != EventStatus.DRAFT) {
+      throw new BusinessException(EventErrorCode.INVALID_EVENT_STATUS);
+    }
+
+    status = EventStatus.CANCELED;
+  }
 
   private void validateModifiableStatus() {
     if (this.status != EventStatus.DRAFT) {
@@ -161,4 +170,6 @@ public class Event {
       throw new BusinessException(EventErrorCode.INVALID_EVENT_STATUS);
     }
   }
+
+
 }
