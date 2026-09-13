@@ -2,6 +2,9 @@ package com.tikitaka.gateway.auth.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpServer;
@@ -55,6 +58,9 @@ class GatewaySecurityTest {
     @Autowired
     private TestRestTemplate restTemplate;
 
+    @Autowired
+    private ObjectMapper objectMapper;
+
     @DynamicPropertySource
     static void registerTestProperties(DynamicPropertyRegistry registry) {
         String downstreamUrl = "http://127.0.0.1:" + DOWNSTREAM_SERVER.getAddress().getPort();
@@ -75,16 +81,16 @@ class GatewaySecurityTest {
     }
 
     @Test
-    void 보호_API에_토큰이_없으면_접근을_거부한다() {
+    void 보호_API에_토큰이_없으면_접근을_거부한다() throws Exception {
         ResponseEntity<String> response = restTemplate.getForEntity("/api/v1/users/me", String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(response.getHeaders().getFirst(TRACE_ID_HEADER)).isNotBlank();
+        assertResponseTraceId(response);
         assertThat(DOWNSTREAM_HEADERS.get()).isNull();
     }
 
     @Test
-    void 보호_API에_유효하지_않은_JWT를_전달하면_접근을_거부한다() {
+    void 보호_API에_유효하지_않은_JWT를_전달하면_접근을_거부한다() throws Exception {
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth("invalid-jwt");
 
@@ -96,11 +102,12 @@ class GatewaySecurityTest {
         );
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertResponseTraceId(response);
         assertThat(DOWNSTREAM_HEADERS.get()).isNull();
     }
 
     @Test
-    void 내부_API에_대한_외부_접근을_차단한다() {
+    void 내부_API에_대한_외부_접근을_차단한다() throws Exception {
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(createAccessToken());
         headers.set(SERVICE_KEY_HEADER, "forged-service-key");
@@ -113,6 +120,8 @@ class GatewaySecurityTest {
         );
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertResponseTraceId(response);
+        assertThat(objectMapper.readTree(response.getBody()).path("code").asText()).isEqualTo("U-006");
         assertThat(DOWNSTREAM_HEADERS.get()).isNull();
     }
 
@@ -196,5 +205,13 @@ class GatewaySecurityTest {
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
 
         return jwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
+    }
+
+    private void assertResponseTraceId(ResponseEntity<String> response) throws JsonProcessingException {
+        String headerTraceId = response.getHeaders().getFirst(TRACE_ID_HEADER);
+        JsonNode responseBody = objectMapper.readTree(response.getBody());
+
+        assertThat(headerTraceId).isNotBlank();
+        assertThat(responseBody.path("traceId").asText()).isEqualTo(headerTraceId);
     }
 }
