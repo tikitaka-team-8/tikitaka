@@ -45,18 +45,27 @@ public class GatewayTraceIdFilter extends OncePerRequestFilter {
             filterChain.doFilter(new TraceIdHeaderRequest(request, traceId), response);
         } finally {
             try {
-                long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAtNanos);
-                log.info(
-                        "HTTP 요청 완료: method={}, path={}, status={}, durationMs={}",
-                        request.getMethod(),
-                        request.getRequestURI(),
-                        response.getStatus(),
-                        durationMs
-                );
+                if (!isMonitoringRequest(request) || response.getStatus() >= 400) {
+                    long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAtNanos);
+                    log.info(
+                            "HTTP 요청 완료: method={}, path={}, status={}, durationMs={}",
+                            request.getMethod(),
+                            request.getRequestURI(),
+                            response.getStatus(),
+                            durationMs
+                    );
+                }
             } finally {
                 MDC.remove(TRACE_ID_MDC_KEY);
             }
         }
+    }
+
+    private boolean isMonitoringRequest(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return path.equals("/actuator/health")
+                || path.startsWith("/actuator/health/")
+                || path.equals("/actuator/prometheus");
     }
 
     private static final class TraceIdHeaderRequest extends HttpServletRequestWrapper {

@@ -42,18 +42,27 @@ public class TraceIdFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
         } finally {
             try {
-                long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAtNanos);
-                log.info(
-                        "HTTP 요청 완료: method={}, path={}, status={}, durationMs={}",
-                        request.getMethod(),
-                        request.getRequestURI(),
-                        response.getStatus(),
-                        durationMs
-                );
+                if (!isMonitoringRequest(request) || response.getStatus() >= 400) {
+                    long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAtNanos);
+                    log.info(
+                            "HTTP 요청 완료: method={}, path={}, status={}, durationMs={}",
+                            request.getMethod(),
+                            request.getRequestURI(),
+                            response.getStatus(),
+                            durationMs
+                    );
+                }
             } finally {
                 MDC.remove(TRACE_ID_MDC_KEY);
             }
         }
+    }
+
+    private boolean isMonitoringRequest(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return path.equals("/actuator/health")
+                || path.startsWith("/actuator/health/")
+                || path.equals("/actuator/prometheus");
     }
 
     private String resolveTraceId(HttpServletRequest request) {
