@@ -1,10 +1,7 @@
 package com.tikitaka.paymentnotification.payment.application;
 
 import com.tikitaka.paymentnotification.payment.application.command.PaymentCreateCommand;
-import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGateway;
-import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGatewayRequest;
-import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGatewayResult;
-import com.tikitaka.paymentnotification.payment.application.gateway.ReservationPaymentValidator;
+import com.tikitaka.paymentnotification.payment.application.gateway.*;
 import com.tikitaka.paymentnotification.payment.application.result.PaymentApproveResult;
 import com.tikitaka.paymentnotification.payment.application.result.PaymentCreateResult;
 import com.tikitaka.paymentnotification.payment.application.result.PaymentDetailResult;
@@ -41,6 +38,7 @@ public class PaymentService {
     private final PaymentProcessingAcquirer paymentProcessingAcquirer;
     private final PaymentApprovalResultProcessor paymentApprovalResultProcessor;
 
+    private final PaymentQueryGateway paymentQueryGateway;
 
     // 결제 정보 단건 조회
     @Transactional(readOnly = true)
@@ -99,7 +97,7 @@ public class PaymentService {
                 orderId,
                 command.idempotencyKey(),
                 command.totalAmount(),
-                PaymentProvider.MOCK //MVP MOCK 처리
+                PaymentProvider.TOSS //MVP MOCK 처리
         );
 
         Payment savedPayment = paymentRepository.save(payment);
@@ -205,12 +203,16 @@ public class PaymentService {
                         new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
 
         return switch (payment.getStatus()){
-            case APPROVED, UNKNOWN -> PaymentApproveResult.from(payment);
+            case APPROVED ->
+                    PaymentApproveResult.from(payment);
+
+            case UNKNOWN ->
+                    recoverUnknownPayment(payment);
 
             case READY, PROCESSING, FAILED, CANCELED ->
-                throw new PaymentException(
-                        PaymentErrorCode.PAYMENT_NOT_ALLOWED
-                );
+                    throw new PaymentException(
+                            PaymentErrorCode.PAYMENT_NOT_ALLOWED
+                    );
         };
     }
 
@@ -229,6 +231,43 @@ public class PaymentService {
                     paymentId,
                     e
             );
+        }
+    }
+
+
+    private PaymentApproveResult recoverUnknownPayment(Payment payment) {
+        String paymentKey = payment.getPgPaymentKey();
+
+        if (paymentKey == null || paymentKey.isBlank()) {
+            throw new PaymentException(PaymentErrorCode.PAYMENT_NOT_ALLOWED);
+        }
+
+        PaymentQueryResult queryResult = paymentQueryGateway.getPayment(paymentKey);
+
+        validateQueriedPayment(payment, queryResult);
+
+        if (!"DONE".equals(queryResult.status())) { return PaymentApproveResult.from(payment); }
+
+        return paymentApprovalResultProcessor.recoverApproved(
+                payment.getPaymentId(),
+                queryResult
+        );
+    }
+
+
+    private void validateQueriedPayment(Payment payment, PaymentQueryResult queryResult) {
+        if (!Objects.equals(
+                payment.getPgPaymentKey(),
+                queryResult.paymentKey()
+        )) {
+            throw new PaymentException(PaymentErrorCode.PAYMENT_NOT_ALLOWED);
+        }
+
+        if (!Objects.equals(
+                payment.getOrderId(),
+                queryResult.orderId()
+        )) {
+            throw new PaymentException(PaymentErrorCode.PAYMENT_NOT_ALLOWED);
         }
     }
 

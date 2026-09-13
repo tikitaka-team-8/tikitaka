@@ -50,6 +50,7 @@ class TossPaymentGatewayTest {
                         new TossPaymentResponse(
                                 "test-payment-key",
                                 "PAY-test-order",
+                                150000L,
                                 "DONE",
                                 "카드"
                         )
@@ -84,6 +85,7 @@ class TossPaymentGatewayTest {
                         new TossPaymentResponse(
                                 "test-payment-key",
                                 "PAY-test-order",
+                                150000L,
                                 "DONE",
                                 "간편결제"
                         )
@@ -115,7 +117,8 @@ class TossPaymentGatewayTest {
                         new TossPaymentResponse(
                                 "test-payment-key",
                                 "PAY-test-order",
-                                "IN_PROGRESS",
+                                150000L,
+                                "WAITING_FOR_DEPOSIT",
                                 "카드"
                         )
                 );
@@ -146,8 +149,9 @@ class TossPaymentGatewayTest {
                         new TossPaymentResponse(
                                 "test-payment-key",
                                 "PAY-test-order",
+                                150000L,
                                 "DONE",
-                                "계좌이체"
+                                "가상계좌"
                         )
                 );
 

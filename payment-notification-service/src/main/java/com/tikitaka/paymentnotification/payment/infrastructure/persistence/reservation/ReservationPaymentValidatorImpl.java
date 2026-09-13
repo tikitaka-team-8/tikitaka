@@ -11,11 +11,13 @@ import com.tikitaka.paymentnotification.payment.infrastructure.reservation.Reser
 import feign.FeignException;
 import feign.RetryableException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.net.SocketTimeoutException;
 import java.util.UUID;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class ReservationPaymentValidatorImpl implements ReservationPaymentValidator {
@@ -59,6 +61,13 @@ public class ReservationPaymentValidatorImpl implements ReservationPaymentValida
 
         } catch (FeignException.FeignClientException e) {
 
+            log.warn(
+                    "Reservation payment validation failed. reservationId={}, userId={}, status={}, body={}",
+                    reservationId,
+                    userId,
+                    e.status(),
+                    e.contentUTF8()
+            );
             throw new PaymentException(
                     PaymentErrorCode.PAYMENT_NOT_ALLOWED
             );

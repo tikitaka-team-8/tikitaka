@@ -152,14 +152,48 @@ public class PaymentTransaction {
         transaction.status = PaymentTransactionStatus.UNKNOWN;
         transaction.attemptNo = attemptNo;
         transaction.requestedAt = requestedAt;
-        transaction.completedAt = now;
+        transaction.completedAt = null;
         transaction.createdAt = now;
         transaction.updatedAt = now;
 
         return transaction;
     }
 
+    public void resolveSuccess(String pgTransactionId) {
 
+        if (this.status != PaymentTransactionStatus.UNKNOWN) {
+            throw new IllegalStateException(
+                    "UNKNOWN transaction만 성공으로 확정할 수 있습니다."
+            );
+        }
+
+        OffsetDateTime now = OffsetDateTime.now();
+
+        this.pgTransactionId = pgTransactionId;
+        this.status = PaymentTransactionStatus.SUCCESS;
+        this.failureCode = null;
+        this.failureReason = null;
+        this.completedAt = now;
+        this.updatedAt = now;
+    }
+
+
+    public void resolveFailed(
+            String failureCode,
+            String failureReason
+    ) {
+        if (this.status != PaymentTransactionStatus.UNKNOWN) {
+            throw new IllegalStateException();
+        }
+
+        OffsetDateTime now = OffsetDateTime.now();
+
+        this.status = PaymentTransactionStatus.FAILED;
+        this.failureCode = failureCode;
+        this.failureReason = failureReason;
+        this.completedAt = now;
+        this.updatedAt = now;
+    }
 
 
 }

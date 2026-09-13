@@ -218,6 +218,20 @@ public class Payment {
     }
 
 
+    public void recoverApproved(
+            PaymentMethod paymentMethod
+    ) {
+        validateStatus(PaymentStatus.UNKNOWN);
+
+        OffsetDateTime now = OffsetDateTime.now();
+
+        this.paymentMethod = paymentMethod;
+        this.status = PaymentStatus.APPROVED;
+        this.approvedAt = now;
+        this.failureCode = null;
+        this.failureReason = null;
+        this.updatedAt = now;
+    }
 
 
 

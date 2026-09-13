@@ -1,8 +1,6 @@
 package com.tikitaka.paymentnotification.payment.infrastructure.pg.toss;
 
-import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGateway;
-import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGatewayRequest;
-import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGatewayResult;
+import com.tikitaka.paymentnotification.payment.application.gateway.*;
 import com.tikitaka.paymentnotification.payment.domain.payment.PaymentMethod;
 import com.tikitaka.paymentnotification.payment.infrastructure.pg.toss.dto.TossConfirmRequest;
 import com.tikitaka.paymentnotification.payment.infrastructure.pg.toss.dto.TossPaymentResponse;
@@ -20,7 +18,7 @@ import java.util.Base64;
         name = "payment.provider",
         havingValue = "toss"
 )
-public class TossPaymentGateway implements PaymentGateway {
+public class TossPaymentGateway implements PaymentGateway , PaymentQueryGateway {
 
     private final TossPaymentsFeignClient tossPaymentsFeignClient;
     private final TossPaymentProperties tossPaymentProperties;
@@ -87,10 +85,24 @@ public class TossPaymentGateway implements PaymentGateway {
     }
 
 
+    // UNKNOWN 상태를 복구하기 위한 조회
+    @Override
+    public PaymentQueryResult getPayment(String paymentKey) {
 
+        String secretKey = tossPaymentProperties.secretKey();
 
+        TossPaymentResponse response =
+                tossPaymentsFeignClient.getPayment(
+                        createAuthorization(),
+                        paymentKey
+                );
 
-
-
-
+        return new PaymentQueryResult(
+                response.paymentKey(),
+                response.orderId(),
+                response.totalAmount(),
+                response.status(),
+                mapPaymentMethod(response.method())
+        );
+    }
 }

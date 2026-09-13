@@ -2,6 +2,7 @@ package com.tikitaka.paymentnotification.payment.application;
 
 import com.tikitaka.paymentnotification.payment.application.gateway.PaymentEventSerializer;
 import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGatewayResult;
+import com.tikitaka.paymentnotification.payment.application.gateway.PaymentQueryResult;
 import com.tikitaka.paymentnotification.payment.application.result.PaymentApproveResult;
 import com.tikitaka.paymentnotification.payment.domain.event.PaymentFailedEvent;
 import com.tikitaka.paymentnotification.payment.domain.event.PaymentSucceededEvent;
@@ -95,6 +96,35 @@ public class PaymentApprovalResultProcessor {
     }
 
 
+    @Transactional
+    public PaymentApproveResult recoverApproved(UUID paymentId, PaymentQueryResult queryResult) {
+        Payment payment = findPayment(paymentId);
+
+        PaymentTransaction transaction =
+                paymentTransactionRepository
+                        .findLatestApproveTransaction(paymentId)
+                        .orElseThrow(() ->
+                                new PaymentException(
+                                        PaymentErrorCode.PAYMENT_NOT_FOUND
+                                )
+                        );
+
+        payment.recoverApproved(queryResult.paymentMethod());
+
+        transaction.resolveSuccess(queryResult.paymentKey());
+
+        PaymentSucceededEvent event = PaymentSucceededEvent.from(payment);
+
+        saveOutbox(
+                payment,
+                event.eventType(),
+                paymentEventSerializer.serialize(event)
+        );
+
+        return PaymentApproveResult.from(payment);
+    }
+
+
     // 승인 + 성공 Outbox
     private void handleApproveSuccess(
             Payment payment,
@@ -170,6 +200,7 @@ public class PaymentApprovalResultProcessor {
                 )
         );
     }
+
 
     // 아웃박스 저장
     private void saveOutbox(
