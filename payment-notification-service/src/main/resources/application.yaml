@@ -37,6 +37,9 @@ internal:
 payment:
   outbox:
     publish-delay-ms: 1000
+  reconciliation:
+    processing-delay-ms: 60000
+    processing-timeout-minutes: 5
   toss:
     base-url: https://api.tosspayments.com
     secret-key: ${TOSS_SECRET_KEY}

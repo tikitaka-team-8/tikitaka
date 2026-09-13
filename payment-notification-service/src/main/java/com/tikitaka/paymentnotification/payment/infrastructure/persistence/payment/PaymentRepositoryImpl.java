@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -44,5 +45,11 @@ public class PaymentRepositoryImpl implements PaymentRepository {
     public boolean tryRestoreReady(UUID paymentId) {
         return paymentJpaRepository.tryRestoreReady(paymentId) == 1;
     }
+
+    @Override
+    public List<Payment> findStaleProcessingPayments(OffsetDateTime threshold, int limit) {
+        return paymentJpaRepository.findStaleProcessingPayments(threshold, limit);
+    }
+
 
 }

@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -42,4 +43,21 @@ public interface PaymentJpaRepository extends JpaRepository<Payment, UUID> {
                com.tikitaka.paymentnotification.payment.domain.payment.PaymentStatus.PROCESSING
         """)
     int tryRestoreReady(@Param("paymentId") UUID paymentId);
+
+
+
+    @Query(
+            value = """
+                SELECT *
+                FROM p_payment
+                WHERE status = 'PROCESSING'
+                  AND updated_at < :threshold
+                ORDER BY updated_at ASC
+                LIMIT :limit
+                FOR UPDATE SKIP LOCKED
+                """,
+            nativeQuery = true
+    )
+    List<Payment> findStaleProcessingPayments(@Param("threshold") OffsetDateTime threshold, @Param("limit") int limit);
+
 }

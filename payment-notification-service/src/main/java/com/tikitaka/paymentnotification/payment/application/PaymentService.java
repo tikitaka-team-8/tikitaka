@@ -39,7 +39,7 @@ public class PaymentService {
     private final PaymentProcessingAcquirer paymentProcessingAcquirer;
     private final PaymentApprovalResultProcessor paymentApprovalResultProcessor;
 
-    private final PaymentQueryGateway paymentQueryGateway;
+    private final PaymentUnknownReconciler paymentUnknownReconciler;
 
     // 결제 정보 단건 조회
     @Transactional(readOnly = true)
@@ -208,7 +208,7 @@ public class PaymentService {
                     PaymentApproveResult.from(payment);
 
             case UNKNOWN ->
-                    recoverUnknownPayment(payment);
+                    paymentUnknownReconciler.reconcile(payment);
 
             case READY, PROCESSING, FAILED, CANCELED ->
                     throw new PaymentException(
@@ -235,42 +235,6 @@ public class PaymentService {
         }
     }
 
-
-    private PaymentApproveResult recoverUnknownPayment(Payment payment) {
-        String paymentKey = payment.getPgPaymentKey();
-
-        if (paymentKey == null || paymentKey.isBlank()) {
-            throw new PaymentException(PaymentErrorCode.PAYMENT_NOT_ALLOWED);
-        }
-
-        PaymentQueryResult queryResult = paymentQueryGateway.getPayment(paymentKey);
-
-        validateQueriedPayment(payment, queryResult);
-
-        if (!"DONE".equals(queryResult.status())) { return PaymentApproveResult.from(payment); }
-
-        return paymentApprovalResultProcessor.recoverApproved(
-                payment.getPaymentId(),
-                queryResult
-        );
-    }
-
-
-    private void validateQueriedPayment(Payment payment, PaymentQueryResult queryResult) {
-        if (!Objects.equals(
-                payment.getPgPaymentKey(),
-                queryResult.paymentKey()
-        )) {
-            throw new PaymentException(PaymentErrorCode.PAYMENT_NOT_ALLOWED);
-        }
-
-        if (!Objects.equals(
-                payment.getOrderId(),
-                queryResult.orderId()
-        )) {
-            throw new PaymentException(PaymentErrorCode.PAYMENT_NOT_ALLOWED);
-        }
-    }
 
 
 
