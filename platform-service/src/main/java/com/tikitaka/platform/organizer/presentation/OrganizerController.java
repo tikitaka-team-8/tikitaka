@@ -1,5 +1,6 @@
 package com.tikitaka.platform.organizer.presentation;
 
+import com.tikitaka.platform.auth.infrastructure.security.AuthenticatedUser;
 import com.tikitaka.platform.global.response.ApiResponse;
 import com.tikitaka.platform.organizer.application.OrganizerService;
 import com.tikitaka.platform.organizer.presentation.dto.OrganizerCreateRequest;
@@ -10,6 +11,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -21,12 +23,12 @@ public class OrganizerController {
 
   @PostMapping
   public ResponseEntity<ApiResponse<OrganizerCreateResponse>> create(
-      @RequestHeader("X-User-Id") Long userId,
+      @AuthenticationPrincipal AuthenticatedUser user,
       @Valid @RequestBody OrganizerCreateRequest request
   ) {
 
     OrganizerCreateResponse response =
-        organizerService.createOrganizer(request.toCommand(userId));
+        organizerService.createOrganizer(request.toCommand(user.userId()));
 
     return ResponseEntity
         .status(HttpStatus.CREATED)
@@ -39,9 +41,9 @@ public class OrganizerController {
 
   @GetMapping("/me")
   public ResponseEntity<ApiResponse<OrganizerDetailResponse>> getMyOrganizer(
-      @RequestHeader("X-User-Id") Long userId
+      @AuthenticationPrincipal AuthenticatedUser user
   ) {
-    OrganizerDetailResponse response = organizerService.getMyOrganizer(userId);
+    OrganizerDetailResponse response = organizerService.getMyOrganizer(user.userId());
 
     return ResponseEntity.ok(
         ApiResponse.success(
@@ -54,11 +56,11 @@ public class OrganizerController {
 
   @PatchMapping("/me")
   public ResponseEntity<ApiResponse<OrganizerDetailResponse>> updateMyOrganizer(
-      @RequestHeader("X-User-Id") Long userId,
+      @AuthenticationPrincipal AuthenticatedUser user,
       @Valid @RequestBody OrganizerUpdateRequest request
   ) {
     OrganizerDetailResponse response =
-        organizerService.updateOrganizer(request.toCommand(userId));
+        organizerService.updateOrganizer(request.toCommand(user.userId()));
 
     return ResponseEntity.ok(
         ApiResponse.success(

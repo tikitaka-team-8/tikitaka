@@ -1,13 +1,15 @@
-package com.tikitaka.platform.event.presentation;
+package com.tikitaka.platform.event.presentation.controller;
 
+import com.tikitaka.platform.auth.infrastructure.security.AuthenticatedUser;
 import com.tikitaka.platform.event.application.EventSessionService;
-import com.tikitaka.platform.event.presentation.dto.organizer.EventSessionCreateRequest;
-import com.tikitaka.platform.event.presentation.dto.organizer.EventSessionCreateResponse;
+import com.tikitaka.platform.event.presentation.dto.organizer.request.EventSessionCreateRequest;
+import com.tikitaka.platform.event.presentation.dto.organizer.response.EventSessionCreateResponse;
 import com.tikitaka.platform.global.response.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -21,13 +23,13 @@ public class OrganizerEventSessionController {
 
   @PostMapping
   public ResponseEntity<ApiResponse<EventSessionCreateResponse>> createEventSession(
-      @RequestHeader("X-User-Id") Long userId,
+      @AuthenticationPrincipal AuthenticatedUser user,
       @PathVariable UUID eventId,
       @Valid @RequestBody EventSessionCreateRequest request
   ) {
 
     EventSessionCreateResponse response =
-        eventSessionService.createEventSession(userId, eventId, request);
+        eventSessionService.createEventSession(user.userId(), eventId, request);
 
     return ResponseEntity
         .status(HttpStatus.CREATED)

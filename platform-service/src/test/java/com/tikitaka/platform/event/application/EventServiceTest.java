@@ -1,12 +1,21 @@
 package com.tikitaka.platform.event.application;
 
+import com.tikitaka.platform.event.application.EventPublicationPlan.SeatSnapshot;
+import com.tikitaka.platform.event.application.EventPublicationPlan.SessionSeats;
 import com.tikitaka.platform.event.application.query.PublicEventSearchCondition;
 import com.tikitaka.platform.event.application.query.PublicEventSummaryResult;
 import com.tikitaka.platform.event.domain.Event;
+import com.tikitaka.platform.event.domain.EventSession;
 import com.tikitaka.platform.event.domain.EventStatus;
 import com.tikitaka.platform.event.infrastructure.EventRepository;
-import com.tikitaka.platform.event.presentation.dto.organizer.EventCreateRequest;
-import com.tikitaka.platform.event.presentation.dto.organizer.EventCreateResponse;
+import com.tikitaka.platform.event.infrastructure.EventSessionRepository;
+import com.tikitaka.platform.event.infrastructure.client.ticketing.TicketingSeatInventoryClient;
+import com.tikitaka.platform.event.infrastructure.client.ticketing.dto.CreateScheduleSeatsResponse;
+import com.tikitaka.platform.event.presentation.dto.organizer.request.EventCreateRequest;
+import com.tikitaka.platform.event.presentation.dto.organizer.request.EventStatusChangeTarget;
+import com.tikitaka.platform.event.presentation.dto.organizer.request.EventStatusUpdateRequest;
+import com.tikitaka.platform.event.presentation.dto.organizer.response.EventCreateResponse;
+import com.tikitaka.platform.event.presentation.dto.organizer.response.EventStatusUpdateResponse;
 import com.tikitaka.platform.event.presentation.dto.query.PublicEventDetailResponse;
 import com.tikitaka.platform.event.presentation.dto.query.PublicEventListRequest;
 import com.tikitaka.platform.event.presentation.dto.query.PublicEventSummaryResponse;
@@ -27,10 +36,12 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.tikitaka.platform.fixture.EventFixture.createEvent;
 import static com.tikitaka.platform.fixture.EventFixture.createPublicEvent;
 import static com.tikitaka.platform.fixture.OrganizerFixture.activeOrganizer;
 import static com.tikitaka.platform.fixture.OrganizerFixture.createOrganizer;
@@ -52,6 +63,15 @@ class EventServiceTest {
 
   @Mock
   private VenueRepository venueRepository;
+
+  @Mock
+  private EventPublicationValidator eventPublicationValidator;
+
+  @Mock
+  private TicketingSeatInventoryClient ticketingSeatInventoryClient;
+
+  @Mock
+  private EventSessionRepository eventSessionRepository;
 
   @InjectMocks
   private EventService eventService;
@@ -179,6 +199,183 @@ class EventServiceTest {
           assertThat(exception.getErrorCode())
               .isEqualTo(VenueErrorCode.INACTIVE_VENUE);
         });
+  }
+
+  @Test
+  void 공연을_공개하면_회차별_좌석_생성_결과를_합산한다() {
+    Long userId = 1L;
+    UUID organizerId = UUID.randomUUID();
+    UUID venueId = UUID.randomUUID();
+    UUID eventId = UUID.randomUUID();
+    UUID sessionId1 = UUID.randomUUID();
+    UUID sessionId2 = UUID.randomUUID();
+    UUID venueSeatId1 = UUID.randomUUID();
+    UUID venueSeatId2 = UUID.randomUUID();
+
+    Organizer organizer = activeOrganizer(userId);
+    Venue venue = createVenue();
+    Event event = createEvent(organizer, venue);
+
+    ReflectionTestUtils.setField(
+        organizer,
+        "id",
+        organizerId
+    );
+    ReflectionTestUtils.setField(
+        venue,
+        "id",
+        venueId
+    );
+    ReflectionTestUtils.setField(
+        event,
+        "id",
+        eventId
+    );
+
+    SessionSeats firstSession = new SessionSeats(
+        sessionId1,
+        List.of(
+            new SeatSnapshot(
+                venueSeatId1,
+                "A",
+                "1",
+                "1",
+                "VIP",
+                150_000L
+            )
+        )
+    );
+
+    SessionSeats secondSession = new SessionSeats(
+        sessionId2,
+        List.of(
+            new SeatSnapshot(
+                venueSeatId2,
+                "B",
+                "2",
+                "10",
+                "R",
+                100_000L
+            )
+        )
+    );
+
+    EventPublicationPlan publicationPlan =
+        new EventPublicationPlan(
+            venueId,
+            List.of(firstSession, secondSession)
+        );
+
+    given(organizerRepository.findByUserId(userId))
+        .willReturn(Optional.of(organizer));
+
+    given(eventRepository.findByIdAndOrganizerId(
+        eventId,
+        organizerId
+    )).willReturn(Optional.of(event));
+
+    given(eventPublicationValidator.validateAndCreate(
+        eq(event),
+        any(OffsetDateTime.class)
+    )).willReturn(publicationPlan);
+
+    given(ticketingSeatInventoryClient.createScheduleSeats(
+        anyList()
+    )).willReturn(
+        List.of(
+            new CreateScheduleSeatsResponse(sessionId1, 1, 0),
+            new CreateScheduleSeatsResponse(sessionId2, 0, 1)
+        )
+    );
+
+    EventStatusUpdateRequest request =
+        new EventStatusUpdateRequest(
+            EventStatusChangeTarget.UPCOMING
+        );
+
+    EventStatusUpdateResponse response =
+        eventService.changeStatus(
+            userId,
+            eventId,
+            request
+        );
+
+    assertThat(event.getStatus())
+        .isEqualTo(EventStatus.UPCOMING);
+
+    assertThat(response.previousStatus())
+        .isEqualTo(EventStatus.DRAFT);
+
+    assertThat(response.inventorySessionCount()).isEqualTo(2);
+    assertThat(response.createdSeatCount()).isEqualTo(1);
+    assertThat(response.skippedSeatCount()).isEqualTo(1);
+  }
+
+  @Test
+  void 공연을_취소하면_좌석_재고를_생성하지_않는다() {
+
+    Long userId = 1L;
+    UUID organizerId = UUID.randomUUID();
+    UUID eventId = UUID.randomUUID();
+
+    Organizer organizer = activeOrganizer(userId);
+    Event event = createEvent(
+        organizer,
+        createVenue()
+    );
+
+    EventSession firstSession = mock(EventSession.class);
+    EventSession secondSession = mock(EventSession.class);
+
+    ReflectionTestUtils.setField(
+        organizer,
+        "id",
+        organizerId
+    );
+    ReflectionTestUtils.setField(
+        event,
+        "id",
+        eventId
+    );
+
+    given(organizerRepository.findByUserId(userId))
+        .willReturn(Optional.of(organizer));
+
+    given(eventRepository.findByIdAndOrganizerId(
+        eventId,
+        organizerId
+    )).willReturn(Optional.of(event));
+
+    given(eventSessionRepository.findAllByEventId(eventId))
+        .willReturn(List.of(firstSession, secondSession));
+
+    EventStatusUpdateResponse response =
+        eventService.changeStatus(
+            userId,
+            eventId,
+            new EventStatusUpdateRequest(
+                EventStatusChangeTarget.CANCELED
+            )
+        );
+
+    assertThat(event.getStatus())
+        .isEqualTo(EventStatus.CANCELED);
+
+    assertThat(response.previousStatus())
+        .isEqualTo(EventStatus.DRAFT);
+
+    assertThat(response.status())
+        .isEqualTo(EventStatus.CANCELED);
+
+    assertThat(response.inventorySessionCount())
+        .isZero();
+
+    assertThat(response.createdSeatCount())
+        .isZero();
+
+    assertThat(response.skippedSeatCount())
+        .isZero();
+
   }
 
   private PublicEventListRequest publicEventListRequest(UUID venueId) {
