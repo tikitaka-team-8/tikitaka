@@ -101,13 +101,7 @@ public class PaymentApprovalResultProcessor {
         Payment payment = findPayment(paymentId);
 
         PaymentTransaction transaction =
-                paymentTransactionRepository
-                        .findLatestApproveTransaction(paymentId)
-                        .orElseThrow(() ->
-                                new PaymentException(
-                                        PaymentErrorCode.PAYMENT_NOT_FOUND
-                                )
-                        );
+                findOrCreateUnknownApproveTransaction(payment);
 
         payment.recoverApproved(queryResult.paymentMethod());
 
@@ -123,6 +117,55 @@ public class PaymentApprovalResultProcessor {
 
         return PaymentApproveResult.from(payment);
     }
+
+    private PaymentTransaction findOrCreateUnknownApproveTransaction(Payment payment) {
+        return paymentTransactionRepository
+                .findLatestApproveTransaction(payment.getPaymentId())
+                .orElseGet(() -> {
+                    PaymentTransaction transaction =
+                            PaymentTransaction.createApproveUnknown(
+                                    payment,
+                                    payment.getPaymentProvider(),
+                                    payment.getAmount(),
+                                    1,
+                                    OffsetDateTime.now()
+                            );
+
+                    paymentTransactionRepository.save(transaction);
+
+                    return transaction;
+                });
+    }
+
+    @Transactional
+    public PaymentApproveResult recoverFailed(UUID paymentId, PaymentQueryResult queryResult) {
+        Payment payment = findPayment(paymentId);
+
+        PaymentTransaction transaction = findOrCreateUnknownApproveTransaction(payment);
+
+        String failureCode = "TOSS_" + queryResult.status();
+
+        String failureReason = "Toss payment status confirmed as " + queryResult.status();
+
+        payment.recoverFailed(failureCode, failureReason);
+
+        transaction.resolveFailed(failureCode, failureReason);
+
+        PaymentFailedEvent event = PaymentFailedEvent.from(payment);
+
+        saveOutbox(
+                payment,
+                event.eventType(),
+                paymentEventSerializer.serialize(event)
+        );
+
+        return PaymentApproveResult.from(payment);
+    }
+
+
+
+
+
 
 
     // 승인 + 성공 Outbox

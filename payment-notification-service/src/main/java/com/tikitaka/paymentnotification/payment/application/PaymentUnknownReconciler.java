@@ -5,7 +5,6 @@ import com.tikitaka.paymentnotification.payment.application.gateway.PaymentQuery
 import com.tikitaka.paymentnotification.payment.application.result.PaymentApproveResult;
 import com.tikitaka.paymentnotification.payment.domain.payment.Payment;
 import com.tikitaka.paymentnotification.payment.domain.payment.PaymentRepository;
-import com.tikitaka.paymentnotification.payment.domain.payment.PaymentStatus;
 import com.tikitaka.paymentnotification.payment.exception.PaymentErrorCode;
 import com.tikitaka.paymentnotification.payment.exception.PaymentException;
 import lombok.RequiredArgsConstructor;
@@ -41,14 +40,23 @@ public class PaymentUnknownReconciler {
 
         validateQueriedPayment(payment, queryResult);
 
-        if (!"DONE".equals(queryResult.status())) {
-            return PaymentApproveResult.from(payment);
-        }
+        return switch (queryResult.status()) {
 
-        return paymentApprovalResultProcessor.recoverApproved(
-                payment.getPaymentId(),
-                queryResult
-        );
+            case "DONE" ->
+                    paymentApprovalResultProcessor.recoverApproved(
+                            payment.getPaymentId(),
+                            queryResult
+                    );
+
+            case "ABORTED", "EXPIRED" ->
+                    paymentApprovalResultProcessor.recoverFailed(
+                            payment.getPaymentId(),
+                            queryResult
+                    );
+
+            default ->
+                    PaymentApproveResult.from(payment);
+        };
     }
 
     private void validateQueriedPayment(Payment payment, PaymentQueryResult queryResult) {

@@ -174,6 +174,18 @@ public class Payment {
         this.updatedAt = now;
     }
 
+    public void recoverFailed(
+            String failureCode,
+            String failureReason
+    ) {
+        validateStatus(PaymentStatus.UNKNOWN);
+
+        this.status = PaymentStatus.FAILED;
+        this.failureCode = failureCode;
+        this.failureReason = failureReason;
+        this.updatedAt = OffsetDateTime.now();
+    }
+
     private void validateCancelable() {
         if (this.status == PaymentStatus.CANCELED) {
             throw new PaymentException(

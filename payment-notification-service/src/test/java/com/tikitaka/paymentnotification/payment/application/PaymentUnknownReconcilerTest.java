@@ -135,4 +135,65 @@ class PaymentUnknownReconcilerTest {
         verifyNoInteractions(paymentApprovalResultProcessor);
     }
 
+    @Test
+    void UNKNOWN_결제가_Toss_ABORTED이면_FAILED로_복구한다() {
+        // given
+        UUID paymentId = UUID.randomUUID();
+
+        Payment payment = mock(Payment.class);
+
+        PaymentQueryResult queryResult =
+                new PaymentQueryResult(
+                        "payment-key",
+                        "order-id",
+                        150000L,
+                        "ABORTED",
+                        PaymentMethod.OTHER
+                );
+
+        PaymentApproveResult expectedResult =
+                mock(PaymentApproveResult.class);
+
+        when(payment.getPaymentId())
+                .thenReturn(paymentId);
+
+        when(payment.getPgPaymentKey())
+                .thenReturn("payment-key");
+
+        when(payment.getOrderId())
+                .thenReturn("order-id");
+
+        when(payment.getAmount())
+                .thenReturn(150000L);
+
+        when(paymentQueryGateway.getPayment("payment-key"))
+                .thenReturn(queryResult);
+
+        when(paymentApprovalResultProcessor.recoverFailed(
+                paymentId,
+                queryResult
+        )).thenReturn(expectedResult);
+
+        // when
+        PaymentApproveResult result =
+                paymentUnknownReconciler.reconcile(payment);
+
+        // then
+        verify(paymentQueryGateway)
+                .getPayment("payment-key");
+
+        verify(paymentApprovalResultProcessor)
+                .recoverFailed(
+                        paymentId,
+                        queryResult
+                );
+
+        verify(paymentApprovalResultProcessor, never())
+                .recoverApproved(any(), any());
+
+        assertThat(result)
+                .isSameAs(expectedResult);
+    }
+
+
 }

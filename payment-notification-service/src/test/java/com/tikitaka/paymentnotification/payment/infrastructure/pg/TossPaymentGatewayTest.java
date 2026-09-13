@@ -3,12 +3,15 @@ package com.tikitaka.paymentnotification.payment.infrastructure.pg;
 import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGatewayRequest;
 import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGatewayResult;
 import com.tikitaka.paymentnotification.payment.domain.payment.PaymentMethod;
+import com.tikitaka.paymentnotification.payment.exception.PaymentErrorCode;
+import com.tikitaka.paymentnotification.payment.exception.PaymentException;
 import com.tikitaka.paymentnotification.payment.infrastructure.pg.toss.TossPaymentGateway;
 import com.tikitaka.paymentnotification.payment.infrastructure.pg.toss.TossPaymentProperties;
 import com.tikitaka.paymentnotification.payment.infrastructure.pg.toss.TossPaymentsFeignClient;
 import com.tikitaka.paymentnotification.payment.infrastructure.pg.toss.dto.TossConfirmRequest;
 import com.tikitaka.paymentnotification.payment.infrastructure.pg.toss.TossErrorMapper;
 import com.tikitaka.paymentnotification.payment.infrastructure.pg.toss.dto.TossPaymentResponse;
+import feign.FeignException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -16,8 +19,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class TossPaymentGatewayTest {
@@ -176,5 +180,34 @@ class TossPaymentGatewayTest {
         assertThat(result.failureCode())
                 .isEqualTo("TOSS_UNSUPPORTED_PAYMENT_METHOD");
     }
+
+    @Test
+    void 결제_상태_조회에_실패하면_상태확인_예외를_발생시킨다() {
+        // given
+        FeignException feignException =
+                mock(FeignException.class);
+
+        when(tossPaymentProperties.secretKey())
+                .thenReturn("test_sk_test");
+
+        when(tossPaymentsFeignClient.getPayment(
+                anyString(),
+                eq("test-payment-key")
+        )).thenThrow(feignException);
+
+        // when & then
+        assertThatThrownBy(() ->
+                tossPaymentGateway.getPayment("test-payment-key")
+        )
+                .isInstanceOf(PaymentException.class)
+                .satisfies(exception ->
+                        assertThat(
+                                ((PaymentException) exception).getErrorCode()
+                        ).isEqualTo(
+                                PaymentErrorCode.PAYMENT_STATUS_CONFIRMATION_REQUIRED
+                        )
+                );
+    }
+
 }
 
