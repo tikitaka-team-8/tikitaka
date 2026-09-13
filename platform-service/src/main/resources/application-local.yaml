@@ -12,3 +12,7 @@ spring:
       port: 6380
   kafka:
     bootstrap-servers: localhost:9092
+
+clients:
+  ticketing-service:
+    url: http://localhost:8082

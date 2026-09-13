@@ -12,6 +12,9 @@ import java.util.UUID;
 
 public record CreateScheduleSeatsRequest(
         @NotNull
+        UUID eventSessionId,
+
+        @NotNull
         UUID venueId,
 
         @NotEmpty
@@ -40,7 +43,7 @@ public record CreateScheduleSeatsRequest(
     ) {
     }
 
-    public CreateScheduleSeatsCommand toCommand(UUID eventSessionId) {
+    public CreateScheduleSeatsCommand toCommand() {
         return new CreateScheduleSeatsCommand(
                 eventSessionId,
                 venueId,
