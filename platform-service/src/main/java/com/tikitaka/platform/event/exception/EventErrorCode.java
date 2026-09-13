@@ -18,9 +18,15 @@ public enum EventErrorCode implements ErrorCode {
     EVENT_SESSION_CREATE_NOT_ALLOWED("E-013", HttpStatus.CONFLICT, "작성 중인 공연에만 회차를 등록할 수 있습니다."),
     INVALID_SECTION_PRICE("E-014", HttpStatus.BAD_REQUEST, "좌석 등급 또는 가격 설정이 올바르지 않습니다."),
     DUPLICATE_SECTION_PRICE("E-015", HttpStatus.BAD_REQUEST, "같은 공연장 구역의 가격이 중복되었습니다."),
-    ;
+    EVENT_SESSION_REQUIRED("E-016", HttpStatus.CONFLICT, "공연 공개를 위해 최소 한 개의 회차가 필요합니다."),
+    EVENT_SESSION_NOT_SCHEDULED("E-017", HttpStatus.CONFLICT, "모든 공연 회차가 SCHEDULED 상태여야 합니다."),
+    ACTIVE_VENUE_SEAT_REQUIRED("E-018", HttpStatus.CONFLICT, "공연장에 활성 좌석이 존재하지 않습니다."),
+    SECTION_PRICE_REQUIRED("E-019", HttpStatus.CONFLICT, "활성 좌석이 있는 모든 구역에 가격 정책을 설정해야 합니다."),
+    SECTION_PRICE_VENUE_MISMATCH("E-020", HttpStatus.CONFLICT, "가격 정책의 구역이 해당 공연장에 속하지 않습니다."),
+  SELLABLE_SECTION_PRICE_REQUIRED("E-021", HttpStatus.CONFLICT, "각 회차에 판매 가능한 가격 정책이 최소 한 개 필요합니다."),
+  ;
 
-    private final String code;
+  private final String code;
     private final HttpStatus status;
     private final String message;
 
