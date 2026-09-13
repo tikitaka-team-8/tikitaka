@@ -13,6 +13,7 @@ public interface TossPaymentsFeignClient {
 
     @PostMapping("/v1/payments/confirm")
     TossPaymentResponse confirm(@RequestHeader("Authorization") String authorization,
+                                @RequestHeader("Idempotency-Key") String idempotencyKey,
                                 @RequestBody TossConfirmRequest request);
 
 

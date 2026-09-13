@@ -15,9 +15,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 
 @ExtendWith(MockitoExtension.class)
 class TossPaymentGatewayTest {
@@ -39,13 +39,15 @@ class TossPaymentGatewayTest {
         PaymentGatewayRequest request = new PaymentGatewayRequest(
                 "test-payment-key",
                 "PAY-test-order",
-                150000L
+                150000L,
+                "PAYMENT-APPROVE-test"
         );
+
 
         when(tossPaymentProperties.secretKey())
                 .thenReturn("test_sk_test");
 
-        when(tossPaymentsFeignClient.confirm(anyString(), any()))
+        when(tossPaymentsFeignClient.confirm(anyString(),anyString(), any()))
                 .thenReturn(
                         new TossPaymentResponse(
                                 "test-payment-key",
@@ -67,6 +69,13 @@ class TossPaymentGatewayTest {
 
         assertThat(result.paymentMethod())
                 .isEqualTo(PaymentMethod.CARD);
+
+        // Toss confirm 요청에 멱등키가 전달됐는지 검증
+        verify(tossPaymentsFeignClient).confirm(
+                anyString(),
+                eq("PAYMENT-APPROVE-test"),
+                any(TossConfirmRequest.class)
+        );
     }
 
     @Test
@@ -74,13 +83,14 @@ class TossPaymentGatewayTest {
         PaymentGatewayRequest request = new PaymentGatewayRequest(
                 "test-payment-key",
                 "PAY-test-order",
-                150000L
+                150000L,
+                "PAYMENT-APPROVE-test"
         );
 
         when(tossPaymentProperties.secretKey())
                 .thenReturn("test_sk_test");
 
-        when(tossPaymentsFeignClient.confirm(anyString(), any()))
+        when(tossPaymentsFeignClient.confirm(anyString(), anyString(),any()))
                 .thenReturn(
                         new TossPaymentResponse(
                                 "test-payment-key",
@@ -106,13 +116,14 @@ class TossPaymentGatewayTest {
         PaymentGatewayRequest request = new PaymentGatewayRequest(
                 "test-payment-key",
                 "PAY-test-order",
-                150000L
+                150000L,
+                "PAYMENT-APPROVE-test"
         );
 
         when(tossPaymentProperties.secretKey())
                 .thenReturn("test_sk_test");
 
-        when(tossPaymentsFeignClient.confirm(anyString(), any()))
+        when(tossPaymentsFeignClient.confirm(anyString(),anyString(), any()))
                 .thenReturn(
                         new TossPaymentResponse(
                                 "test-payment-key",
@@ -138,13 +149,14 @@ class TossPaymentGatewayTest {
         PaymentGatewayRequest request = new PaymentGatewayRequest(
                 "test-payment-key",
                 "PAY-test-order",
-                150000L
+                150000L,
+                "PAYMENT-APPROVE-test"
         );
 
         when(tossPaymentProperties.secretKey())
                 .thenReturn("test_sk_test");
 
-        when(tossPaymentsFeignClient.confirm(anyString(), any()))
+        when(tossPaymentsFeignClient.confirm(anyString(), anyString(),any()))
                 .thenReturn(
                         new TossPaymentResponse(
                                 "test-payment-key",

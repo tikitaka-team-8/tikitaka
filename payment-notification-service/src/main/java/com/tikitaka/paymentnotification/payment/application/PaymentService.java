@@ -146,7 +146,8 @@ public class PaymentService {
         PaymentGatewayRequest request = new PaymentGatewayRequest(
                 paymentKey,
                 payment.getOrderId(),
-                payment.getAmount()
+                payment.getAmount(),
+                "PAYMENT-APPROVE-" + paymentId
         );
 
         PaymentGatewayResult result;

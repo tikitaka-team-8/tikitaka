@@ -16,7 +16,8 @@ class MockPaymentGatewayTest {
         PaymentGatewayRequest request = new PaymentGatewayRequest(
                 "test-payment-key",
                 "PAY-test-order",
-                150000L
+                150000L,
+                "PAYMENT-APPROVE-test"
         );
 
         // when
@@ -40,7 +41,8 @@ class MockPaymentGatewayTest {
         PaymentGatewayRequest request = new PaymentGatewayRequest(
                 "test-payment-key",
                 "PAY-FAIL",
-                150000L
+                150000L,
+                "PAYMENT-APPROVE-test"
         );
 
         PaymentGatewayResult result =
@@ -62,7 +64,8 @@ class MockPaymentGatewayTest {
                 new PaymentGatewayRequest(
                         "test-payment-key",
                         "PAY-UNKNOWN",
-                        150000L
+                        150000L,
+                        "PAYMENT-APPROVE-test"
                 );
 
         PaymentGatewayResult result =

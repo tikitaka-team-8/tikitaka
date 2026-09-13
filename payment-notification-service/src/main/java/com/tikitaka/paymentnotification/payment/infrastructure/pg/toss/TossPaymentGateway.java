@@ -31,6 +31,7 @@ public class TossPaymentGateway implements PaymentGateway , PaymentQueryGateway 
             TossPaymentResponse response =
                     tossPaymentsFeignClient.confirm(
                             createAuthorization(),
+                            request.idempotencyKey(),
                             new TossConfirmRequest(
                                     request.paymentKey(),
                                     request.orderId(),
