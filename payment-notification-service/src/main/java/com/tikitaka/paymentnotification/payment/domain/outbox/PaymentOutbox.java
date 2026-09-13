@@ -103,4 +103,17 @@ public class PaymentOutbox {
         }
     }
 
+    public void retry() {
+        if (this.status != PaymentOutboxStatus.FAILED) {
+            throw new IllegalStateException(
+                    "FAILED 상태의 Outbox만 재처리할 수 있습니다."
+            );
+        }
+
+        this.status = PaymentOutboxStatus.PENDING;
+        this.retryCount = 0;
+        this.publishedAt = null;
+        this.updatedAt = OffsetDateTime.now();
+    }
+
 }

@@ -21,7 +21,13 @@ public enum PaymentErrorCode implements ErrorCode {
     PAYMENT_CANCELLATION_FAILED("P-015", HttpStatus.BAD_GATEWAY, "결제 취소 또는 환불 처리에 실패했습니다."),
     DUPLICATE_REFUND_REQUEST("P-016", HttpStatus.CONFLICT, "이미 처리 중이거나 완료된 환불 요청입니다."),
     PAYMENT_INTERNAL_ERROR("P-017", HttpStatus.INTERNAL_SERVER_ERROR, "결제 처리 중 오류가 발생했습니다."),
-    PAYMENT_EVENT_SAVE_FAILED("P-018", HttpStatus.INTERNAL_SERVER_ERROR, "결제 이벤트 처리 중 오류가 발생했습니다.");
+    PAYMENT_EVENT_SAVE_FAILED("P-018", HttpStatus.INTERNAL_SERVER_ERROR, "결제 이벤트 처리 중 오류가 발생했습니다."),
+    PAYMENT_OUTBOX_NOT_FOUND("P-019", HttpStatus.NOT_FOUND, "해당 결제 Outbox를 찾을 수 없습니다."),
+    PAYMENT_OUTBOX_RETRY_NOT_ALLOWED("P-020", HttpStatus.CONFLICT, "FAILED 상태의 Outbox만 재처리할 수 있습니다.");
+
+
+
+
 
     private final String code;
     private final HttpStatus status;

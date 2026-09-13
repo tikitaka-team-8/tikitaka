@@ -6,6 +6,7 @@ import com.tikitaka.paymentnotification.payment.application.result.PaymentApprov
 import com.tikitaka.paymentnotification.payment.application.result.PaymentCreateResult;
 import com.tikitaka.paymentnotification.payment.application.result.PaymentDetailResult;
 import com.tikitaka.paymentnotification.payment.application.result.ReservationPaymentValidationResult;
+import com.tikitaka.paymentnotification.payment.domain.outbox.PaymentOutbox;
 import com.tikitaka.paymentnotification.payment.domain.payment.Payment;
 import com.tikitaka.paymentnotification.payment.domain.payment.PaymentProvider;
 import com.tikitaka.paymentnotification.payment.domain.payment.PaymentRepository;
@@ -270,6 +271,8 @@ public class PaymentService {
             throw new PaymentException(PaymentErrorCode.PAYMENT_NOT_ALLOWED);
         }
     }
+
+
 
 
 }
