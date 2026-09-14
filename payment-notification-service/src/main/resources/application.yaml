@@ -35,6 +35,7 @@ internal:
   service:
     key: ${INTERNAL_SERVICE_KEY}
 payment:
+  provider: ${PAYMENT_PROVIDER:mock}
   outbox:
     publish-delay-ms: 1000
   reconciliation:
@@ -42,4 +43,4 @@ payment:
     processing-timeout-minutes: 5
   toss:
     base-url: https://api.tosspayments.com
-    secret-key: ${TOSS_SECRET_KEY}
+    secret-key: ${TOSS_SECRET_KEY:}
