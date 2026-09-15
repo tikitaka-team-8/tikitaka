@@ -7,6 +7,7 @@ import com.tikitaka.ticketing.global.exception.CommonErrorCode;
 import com.tikitaka.ticketing.reservation.application.ReservationPaymentEventService;
 import com.tikitaka.ticketing.reservation.application.command.PaymentFailedCommand;
 import com.tikitaka.ticketing.reservation.application.command.PaymentSucceededCommand;
+import com.tikitaka.ticketing.reservation.infrastructure.kafka.consumer.PaymentEventConsumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
