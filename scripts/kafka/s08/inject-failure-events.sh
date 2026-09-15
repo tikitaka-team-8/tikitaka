@@ -6,6 +6,7 @@ set -euo pipefail
 TARGET="${1:-}"
 FAILURE_SEED="${FAILURE_SEED:-20260915}"
 FAILURE_COUNT="${FAILURE_COUNT:-10}"
+FAILURE_PROFILE="${FAILURE_PROFILE:-unsupported}"
 KAFKA_CONTAINER="${KAFKA_CONTAINER:-tikitaka-kafka}"
 DRY_RUN="${DRY_RUN:-false}"
 
@@ -19,19 +20,21 @@ require_command() {
   }
 }
 
-# 대상 Consumer에 따라 Topic, 주입 시간 범위와 처리 불가능한 이벤트 유형을 선택합니다.
+# 대상 Consumer에 따라 Topic, 주입 시간 범위와 이벤트 유형을 선택합니다.
 case "$TARGET" in
   payment)
     TOPIC="payment-events"
     DEFAULT_WINDOW_MS=5000
     EVENT_ID_PREFIX="f1000000"
-    EVENT_TYPE="UNSUPPORTED_PAYMENT_EVENT"
+    UNSUPPORTED_EVENT_TYPE="UNSUPPORTED_PAYMENT_EVENT"
+    RETRYABLE_EVENT_TYPE="PAYMENT_SUCCEEDED"
     ;;
   reservation)
     TOPIC="reservation-events"
     DEFAULT_WINDOW_MS=12000
     EVENT_ID_PREFIX="f2000000"
-    EVENT_TYPE="UNSUPPORTED_RESERVATION_EVENT"
+    UNSUPPORTED_EVENT_TYPE="UNSUPPORTED_RESERVATION_EVENT"
+    RETRYABLE_EVENT_TYPE="RESERVATION_CONFIRMED"
     ;;
   *)
     log_fail "사용법: $0 <payment|reservation>"
@@ -52,6 +55,14 @@ if (( INJECTION_WINDOW_MS <= 400 )); then
 fi
 if [[ "$DRY_RUN" != "true" && "$DRY_RUN" != "false" ]]; then
   log_fail "DRY_RUN은 true 또는 false여야 합니다."
+  exit 1
+fi
+if [[ "$FAILURE_PROFILE" != "unsupported" && "$FAILURE_PROFILE" != "mixed" ]]; then
+  log_fail "FAILURE_PROFILE은 unsupported 또는 mixed여야 합니다."
+  exit 1
+fi
+if [[ "$FAILURE_PROFILE" == "mixed" && $((FAILURE_COUNT % 2)) -ne 0 ]]; then
+  log_fail "mixed 프로필의 FAILURE_COUNT는 두 오류 유형을 같은 수로 만들 수 있도록 짝수여야 합니다."
   exit 1
 fi
 
@@ -107,7 +118,17 @@ for ((i = 0; i < ${#sorted_delays[@]}; i++)); do
   done
 done
 
-# 실제 이벤트 계약은 유지하고 eventType만 Consumer가 처리할 수 없는 값으로 구성합니다.
+# 기존 Baseline은 모든 eventType을 지원하지 않는 값으로 만들고, mixed는 홀짝 순서로 두 실패 유형을 교차합니다.
+resolve_event_type() {
+  local failure_index="$1"
+
+  if [[ "$FAILURE_PROFILE" == "mixed" && $((failure_index % 2)) -eq 0 ]]; then
+    printf '%s' "$RETRYABLE_EVENT_TYPE"
+  else
+    printf '%s' "$UNSUPPORTED_EVENT_TYPE"
+  fi
+}
+
 build_payload() {
   local failure_index="$1"
   local occurred_at="$2"
@@ -116,19 +137,21 @@ build_payload() {
   local reservation_id
   local payment_id
   local user_id
+  local event_type
 
   printf -v suffix '%012d' "$failure_index"
   event_id="${EVENT_ID_PREFIX}-0000-0000-0000-${suffix}"
   reservation_id="81000000-0000-0000-0000-${suffix}"
   payment_id="82000000-0000-0000-0000-${suffix}"
   user_id=$((9100000 + failure_index))
+  event_type="$(resolve_event_type "$failure_index")"
 
   if [[ "$TARGET" == "payment" ]]; then
     printf '{"eventId":"%s","eventType":"%s","occurredAt":"%s","aggregateId":"%s","version":1,"paymentId":"%s","reservationId":"%s","userId":%d,"amount":150000,"approvedAt":"%s"}' \
-      "$event_id" "$EVENT_TYPE" "$occurred_at" "$reservation_id" "$payment_id" "$reservation_id" "$user_id" "$occurred_at"
+      "$event_id" "$event_type" "$occurred_at" "$reservation_id" "$payment_id" "$reservation_id" "$user_id" "$occurred_at"
   else
     printf '{"eventId":"%s","eventType":"%s","eventVersion":1,"occurredAt":"%s","reservationId":"%s","reservationNumber":"S08F-RES-%s","userId":%d,"eventTitle":"[S08] Kafka 실패 격리 테스트 공연","sessionStartAt":"%s"}' \
-      "$event_id" "$EVENT_TYPE" "$occurred_at" "$reservation_id" "$suffix" "$user_id" "$occurred_at"
+      "$event_id" "$event_type" "$occurred_at" "$reservation_id" "$suffix" "$user_id" "$occurred_at"
   fi
 }
 
@@ -143,6 +166,8 @@ emit_failure_events() {
   local reservation_suffix
   local reservation_id
   local payload
+  local event_type
+  local failure_class
 
   for scheduled_delay in "${sorted_delays[@]}"; do
     wait_ms=$((scheduled_delay - previous_delay))
@@ -153,8 +178,14 @@ emit_failure_events() {
     printf -v reservation_suffix '%012d' "$failure_index"
     reservation_id="81000000-0000-0000-0000-${reservation_suffix}"
     payload="$(build_payload "$failure_index" "$occurred_at")"
+    event_type="$(resolve_event_type "$failure_index")"
+    if [[ "$event_type" == "$UNSUPPORTED_EVENT_TYPE" ]]; then
+      failure_class="non-retryable"
+    else
+      failure_class="retryable"
+    fi
 
-    log_info "target=${TARGET} index=${failure_index}/${FAILURE_COUNT} scheduledMs=${scheduled_delay} eventType=${EVENT_TYPE} eventId=${EVENT_ID_PREFIX}-0000-0000-0000-${reservation_suffix} emittedAt=${occurred_at}"
+    log_info "target=${TARGET} index=${failure_index}/${FAILURE_COUNT} scheduledMs=${scheduled_delay} failureClass=${failure_class} eventType=${event_type} eventId=${EVENT_ID_PREFIX}-0000-0000-0000-${reservation_suffix} emittedAt=${occurred_at}"
     printf '%s|%s\n' "$reservation_id" "$payload"
 
     previous_delay=$scheduled_delay
@@ -163,7 +194,7 @@ emit_failure_events() {
 }
 
 # 전후 테스트에서 같은 장애 조건을 재현할 수 있도록 Seed와 전체 주입 일정을 기록합니다.
-log_info "target=${TARGET} topic=${TOPIC} seed=${FAILURE_SEED} count=${FAILURE_COUNT} windowMs=${INJECTION_WINDOW_MS} dryRun=${DRY_RUN}"
+log_info "target=${TARGET} topic=${TOPIC} profile=${FAILURE_PROFILE} seed=${FAILURE_SEED} count=${FAILURE_COUNT} windowMs=${INJECTION_WINDOW_MS} dryRun=${DRY_RUN}"
 log_info "scheduledMs=$(IFS=,; printf '%s' "${sorted_delays[*]}")"
 
 # Dry Run은 발행 계획만 검증하고, 실제 실행은 하나의 Console Producer로 순서대로 전송합니다.
