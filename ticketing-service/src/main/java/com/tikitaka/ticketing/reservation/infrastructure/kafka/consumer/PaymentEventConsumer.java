@@ -1,4 +1,4 @@
-package com.tikitaka.ticketing.reservation.infrastructure.kafka;
+package com.tikitaka.ticketing.reservation.infrastructure.kafka.consumer;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -8,6 +8,7 @@ import com.tikitaka.ticketing.global.exception.CommonErrorCode;
 import com.tikitaka.ticketing.reservation.application.ReservationPaymentEventService;
 import com.tikitaka.ticketing.reservation.application.command.PaymentFailedCommand;
 import com.tikitaka.ticketing.reservation.application.command.PaymentSucceededCommand;
+import com.tikitaka.ticketing.reservation.infrastructure.kafka.KafkaTopics;
 import com.tikitaka.ticketing.reservation.infrastructure.kafka.event.PaymentFailedEvent;
 import com.tikitaka.ticketing.reservation.infrastructure.kafka.event.PaymentSucceededEvent;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +29,11 @@ public class PaymentEventConsumer {
         this.reservationPaymentEventService = reservationPaymentEventService;
     }
 
-    @KafkaListener(topics = KafkaTopics.PAYMENT_EVENTS, autoStartup = "${reservation.kafka.consumer.auto-startup}")
+    @KafkaListener(
+            topics = KafkaTopics.PAYMENT_EVENTS,
+            containerFactory = "reservationKafkaListenerContainerFactory",
+            autoStartup = "${reservation.kafka.consumer.auto-startup}"
+    )
     public void consume(String payload) throws JsonProcessingException {
 
         // 같은 토픽의 결제 이벤트를 eventType으로 구분

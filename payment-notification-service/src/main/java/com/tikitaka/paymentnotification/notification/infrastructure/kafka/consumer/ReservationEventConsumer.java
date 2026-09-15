@@ -1,4 +1,4 @@
-package com.tikitaka.paymentnotification.notification.infrastructure.kafka;
+package com.tikitaka.paymentnotification.notification.infrastructure.kafka.consumer;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -8,6 +8,7 @@ import com.tikitaka.paymentnotification.notification.application.service.Reserva
 import com.tikitaka.paymentnotification.notification.application.command.ReservationConfirmedNotificationCommand;
 import com.tikitaka.paymentnotification.notification.application.command.ReservationFailedNotificationCommand;
 import com.tikitaka.paymentnotification.notification.exception.NotificationErrorCode;
+import com.tikitaka.paymentnotification.notification.infrastructure.kafka.KafkaTopics;
 import com.tikitaka.paymentnotification.notification.infrastructure.kafka.event.ReservationConfirmedEvent;
 import com.tikitaka.paymentnotification.notification.infrastructure.kafka.event.ReservationFailedEvent;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +29,11 @@ public class ReservationEventConsumer {
         this.reservationNotificationEventService = reservationNotificationEventService;
     }
 
-    @KafkaListener(topics = KafkaTopics.RESERVATION_EVENTS, autoStartup = "${notification.kafka.consumer.auto-startup}")
+    @KafkaListener(
+            topics = KafkaTopics.RESERVATION_EVENTS,
+            containerFactory = "notificationKafkaListenerContainerFactory",
+            autoStartup = "${notification.kafka.consumer.auto-startup}"
+    )
     public void consume(String payload) throws JsonProcessingException {
 
         // 같은 토픽의 예매 이벤트를 eventType으로 구분
