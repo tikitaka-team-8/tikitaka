@@ -170,7 +170,8 @@ log_info "scheduledMs=$(IFS=,; printf '%s' "${sorted_delays[*]}")"
 if [[ "$DRY_RUN" == "true" ]]; then
   emit_failure_events >/dev/null
 else
-  emit_failure_events | docker exec -i "$KAFKA_CONTAINER" \
+  # Git Bash가 컨테이너의 /opt 경로를 Windows 경로로 바꾸지 않도록 이 명령에서만 변환을 끕니다.
+  emit_failure_events | MSYS_NO_PATHCONV=1 docker exec -i "$KAFKA_CONTAINER" \
     /opt/kafka/bin/kafka-console-producer.sh \
     --bootstrap-server localhost:9092 \
     --topic "$TOPIC" \
