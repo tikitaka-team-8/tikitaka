@@ -2,6 +2,7 @@ package com.tikitaka.paymentnotification.payment.application;
 
 import com.tikitaka.paymentnotification.payment.application.gateway.PaymentEventSerializer;
 import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGatewayResult;
+import com.tikitaka.paymentnotification.payment.application.gateway.PaymentQueryResult;
 import com.tikitaka.paymentnotification.payment.application.result.PaymentApproveResult;
 import com.tikitaka.paymentnotification.payment.domain.event.PaymentFailedEvent;
 import com.tikitaka.paymentnotification.payment.domain.event.PaymentSucceededEvent;
@@ -35,7 +36,6 @@ public class PaymentApprovalResultProcessor {
     @Transactional
     public PaymentApproveResult process(
             UUID paymentId,
-            PaymentMethod paymentMethod,
             PaymentGatewayResult result,
             OffsetDateTime requestedAt
     ) {
@@ -45,7 +45,6 @@ public class PaymentApprovalResultProcessor {
             case SUCCESS ->
                     handleApproveSuccess(
                             payment,
-                            paymentMethod,
                             result,
                             requestedAt
                     );
@@ -97,23 +96,95 @@ public class PaymentApprovalResultProcessor {
     }
 
 
+    @Transactional
+    public PaymentApproveResult recoverApproved(UUID paymentId, PaymentQueryResult queryResult) {
+        Payment payment = findPayment(paymentId);
+
+        PaymentTransaction transaction =
+                findOrCreateUnknownApproveTransaction(payment);
+
+        payment.recoverApproved(queryResult.paymentMethod());
+
+        transaction.resolveSuccess(queryResult.paymentKey());
+
+        PaymentSucceededEvent event = PaymentSucceededEvent.from(payment);
+
+        saveOutbox(
+                payment,
+                event.eventType(),
+                paymentEventSerializer.serialize(event)
+        );
+
+        return PaymentApproveResult.from(payment);
+    }
+
+    private PaymentTransaction findOrCreateUnknownApproveTransaction(Payment payment) {
+        return paymentTransactionRepository
+                .findLatestApproveTransaction(payment.getPaymentId())
+                .orElseGet(() -> {
+                    PaymentTransaction transaction =
+                            PaymentTransaction.createApproveUnknown(
+                                    payment,
+                                    payment.getPaymentProvider(),
+                                    payment.getAmount(),
+                                    1,
+                                    OffsetDateTime.now()
+                            );
+
+                    paymentTransactionRepository.save(transaction);
+
+                    return transaction;
+                });
+    }
+
+    @Transactional
+    public PaymentApproveResult recoverFailed(UUID paymentId, PaymentQueryResult queryResult) {
+        Payment payment = findPayment(paymentId);
+
+        PaymentTransaction transaction = findOrCreateUnknownApproveTransaction(payment);
+
+        String failureCode = "TOSS_" + queryResult.status();
+
+        String failureReason = "Toss payment status confirmed as " + queryResult.status();
+
+        payment.recoverFailed(failureCode, failureReason);
+
+        transaction.resolveFailed(failureCode, failureReason);
+
+        PaymentFailedEvent event = PaymentFailedEvent.from(payment);
+
+        saveOutbox(
+                payment,
+                event.eventType(),
+                paymentEventSerializer.serialize(event)
+        );
+
+        return PaymentApproveResult.from(payment);
+    }
+
+
+
+
+
+
+
     // 승인 + 성공 Outbox
     private void handleApproveSuccess(
             Payment payment,
-            PaymentMethod paymentMethod,
             PaymentGatewayResult result,
             OffsetDateTime requestedAt
     ) {
         payment.approve(
-                paymentMethod,
+                result.paymentMethod(),
                 result.pgPaymentKey()
         );
+
 
         paymentTransactionRepository.save(
                 PaymentTransaction.createApproveSuccess(
                         payment,
                         payment.getPaymentProvider(),
-                        result.pgPaymentKey(),
+                        payment.getPgPaymentKey(),
                         payment.getAmount(),
                         1,
                         requestedAt
@@ -176,6 +247,7 @@ public class PaymentApprovalResultProcessor {
                 )
         );
     }
+
 
     // 아웃박스 저장
     private void saveOutbox(

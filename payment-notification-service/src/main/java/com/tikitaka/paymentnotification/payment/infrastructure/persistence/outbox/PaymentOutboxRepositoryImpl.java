@@ -6,6 +6,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 @Repository
 @RequiredArgsConstructor
@@ -22,5 +24,10 @@ public class PaymentOutboxRepositoryImpl implements PaymentOutboxRepository {
     public List<PaymentOutbox> findPendingOutboxes(int limit) {
         return paymentOutboxJpaRepository
                 .findPendingOutboxesForUpdate(limit);
+    }
+
+    @Override
+    public Optional<PaymentOutbox> findById(UUID outboxId) {
+        return paymentOutboxJpaRepository.findById(outboxId);
     }
 }

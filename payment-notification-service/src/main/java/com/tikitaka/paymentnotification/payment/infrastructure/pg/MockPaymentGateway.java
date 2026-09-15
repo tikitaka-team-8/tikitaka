@@ -1,14 +1,21 @@
 package com.tikitaka.paymentnotification.payment.infrastructure.pg;
 
-import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGatewayRequest;
-import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGatewayResult;
-import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGateway;
+import com.tikitaka.paymentnotification.payment.application.gateway.*;
+import com.tikitaka.paymentnotification.payment.domain.payment.PaymentMethod;
+import com.tikitaka.paymentnotification.payment.exception.PaymentErrorCode;
+import com.tikitaka.paymentnotification.payment.exception.PaymentException;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.UUID;
 
 @Component
-public class MockPaymentGateway implements PaymentGateway {
+@ConditionalOnProperty(
+        name = "payment.provider",
+        havingValue = "mock",
+        matchIfMissing = true
+)
+public class MockPaymentGateway implements PaymentGateway{
 
 
     @Override
@@ -21,9 +28,6 @@ public class MockPaymentGateway implements PaymentGateway {
             );
         }
 
-        if (request.orderId().contains("UNKNOWN")) {
-            return PaymentGatewayResult.unknown();}
-
-        return PaymentGatewayResult.success("MOCK-" + UUID.randomUUID());
+        return PaymentGatewayResult.success("MOCK-" + UUID.randomUUID(), PaymentMethod.CARD);
     }
 }
