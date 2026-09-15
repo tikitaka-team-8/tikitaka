@@ -13,19 +13,19 @@ scrape_configs:
       - targets:
           - host.docker.internal:8000
 
-  # Platform Service 메트릭
+  # 같은 Docker 네트워크에서 실행 중인 Platform Service 메트릭
   - job_name: platform-service
     metrics_path: /actuator/prometheus
     static_configs:
       - targets:
-          - host.docker.internal:8081
+          - tikitaka-platform-service:8081
 
-  # Ticketing Service 메트릭
+  # 같은 Docker 네트워크에서 실행 중인 Ticketing Service 메트릭
   - job_name: ticketing-service
     metrics_path: /actuator/prometheus
     static_configs:
       - targets:
-          - host.docker.internal:8082
+          - tikitaka-ticketing-service:8082
 
   # Payment & Notification Service 메트릭
   - job_name: payment-notification-service

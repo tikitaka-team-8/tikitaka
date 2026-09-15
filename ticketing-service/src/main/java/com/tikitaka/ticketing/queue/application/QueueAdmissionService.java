@@ -21,11 +21,14 @@ public class QueueAdmissionService {
     private final QueueRepository queueRepository;
     private final QueueProperties queueProperties;
     private final Clock clock;
+    private final QueueMetrics metrics;
 
-    public QueueAdmissionService(QueueRepository queueRepository, QueueProperties queueProperties, Clock clock) {
+    public QueueAdmissionService(QueueRepository queueRepository, QueueProperties queueProperties, Clock clock,
+                                 QueueMetrics metrics) {
         this.queueRepository = queueRepository;
         this.queueProperties = queueProperties;
         this.clock = clock;
+        this.metrics = metrics;
     }
 
     public void admitWaitingUsers() {
@@ -121,6 +124,7 @@ public class QueueAdmissionService {
             try {
                 if (queueRepository.removeWaitingEntryIfHeartbeatExpired(sessionId, userId, inactiveSince)) {
                     removedCount++;
+                    metrics.heartbeatExpired();
                 }
             } catch (RedisConnectionFailureException exception) {
                 throw exception;
@@ -186,11 +190,13 @@ public class QueueAdmissionService {
                 AdmissionTokenStatus.ACTIVE
         );
         Duration sessionTtl = Duration.between(now, entry.expiresAt());
-        queueRepository.admitIfWaiting(
+        if (queueRepository.admitIfWaiting(
                 entry.admit(now),
                 token,
                 sessionTtl,
                 queueProperties.admissionTokenTtl()
-        );
+        )) {
+            metrics.admitted();
+        }
     }
 }
