@@ -1,0 +1,770 @@
+[
+  {
+    "sourceFile": "20260912-133210-s09-vu-50.json",
+    "data": {
+      "vus": 50,
+      "started": 2651,
+      "completed": 2651,
+      "requests": 13255,
+      "failed": 0,
+      "wait": {
+        "avg": 2063.1927574500187,
+        "med": 2026,
+        "p(95)": 2220.5,
+        "p(99)": 2901,
+        "max": 3030
+      },
+      "http": {
+        "med": 6.952066,
+        "p(95)": 69.6034463,
+        "p(99)": 211.6941262399998,
+        "max": 721.996849,
+        "avg": 18.973818614107778
+      },
+      "waitingSampleMax": 42,
+      "postProcessRecoverySeconds": 23.80106019973755
+    }
+  },
+  {
+    "sourceFile": "20260912-133210-s09-vu-environment.json",
+    "data": {
+      "commit": "1c22905a263a915ecb99827b437f2067838d8cc9",
+      "authentication": "Local fixture JWT, HS256 same claims, 15 minute TTL; real Gateway validation; Auth endpoints excluded",
+      "images": [
+        {
+          "name": "/tikitaka-gateway",
+          "image": "sha256:b0951d2a34caf17fcd0aa7780fd5e93b1c063f76dd3d970b1d6990e65448a68a",
+          "labels": {
+            "com.docker.compose.config-hash": "f5e707293082e7081ac9620f5cfec5adee5de8f698cdf1fdc4bc34dc2427ffc5",
+            "com.docker.compose.container-number": "1",
+            "com.docker.compose.depends_on": "",
+            "com.docker.compose.image": "sha256:7d026cd33e4a89b3beedd29d3dc4211e5999de976ce5392079379014961181dc",
+            "com.docker.compose.oneoff": "False",
+            "com.docker.compose.project": "tikitaka-local",
+            "com.docker.compose.service": "gateway",
+            "com.docker.compose.version": "2.33.1"
+          },
+          "restartCount": 0
+        },
+        {
+          "name": "/tikitaka-ticketing-service",
+          "image": "sha256:f811386bc823a6d30b4a7427d47764f848a81adaf1a7ed7de6d2c86d4d81e4fc",
+          "labels": {
+            "com.docker.compose.config-hash": "b978f9125b3eed9e2b8a766abf903f57b1e03e3c06dfde905a1bcf6de0c2ef25",
+            "com.docker.compose.container-number": "1",
+            "com.docker.compose.depends_on": "",
+            "com.docker.compose.image": "sha256:f811386bc823a6d30b4a7427d47764f848a81adaf1a7ed7de6d2c86d4d81e4fc",
+            "com.docker.compose.oneoff": "False",
+            "com.docker.compose.project": "tikitaka-local",
+            "com.docker.compose.replace": "ad250da6b76600847ecf0ae6833b17f9db78db24f70342b34d095ab1c5b793ff",
+            "com.docker.compose.service": "ticketing-service",
+            "com.docker.compose.version": "2.33.1",
+            "dev.tikitaka.base-revision": "1c22905a263a915ecb99827b437f2067838d8cc9",
+            "dev.tikitaka.source-sha256": "ee7a8a0944ea368a530c302d48ad12400c8a61c93e8fe720bb78dfb631206785",
+            "dev.tikitaka.working-tree": "true"
+          },
+          "restartCount": 0
+        },
+        {
+          "name": "/tikitaka-platform-service",
+          "image": "sha256:ade044f3b058006041236aad826420289219de52f2a330f59c7cb224842d5367",
+          "labels": {
+            "com.docker.compose.config-hash": "6202398677bf65669737c31cec231b003e93e67ad239574ae2f74df591c750d1",
+            "com.docker.compose.container-number": "1",
+            "com.docker.compose.depends_on": "",
+            "com.docker.compose.image": "sha256:ade044f3b058006041236aad826420289219de52f2a330f59c7cb224842d5367",
+            "com.docker.compose.oneoff": "False",
+            "com.docker.compose.project": "tikitaka-local",
+            "com.docker.compose.replace": "1bdeb3d4ca57cb54f8b57c1ac897af7a13ac4a05e0afa14158a3f5b9de3d5b4a",
+            "com.docker.compose.service": "platform-service",
+            "com.docker.compose.version": "2.33.1",
+            "org.opencontainers.image.revision": "1c22905a263a915ecb99827b437f2067838d8cc9"
+          },
+          "restartCount": 0
+        }
+      ],
+      "vus": [
+        50,
+        100,
+        300,
+        500,
+        1000
+      ],
+      "seconds": 120,
+      "pollSeconds": 2,
+      "heartbeatSeconds": 15,
+      "thinkSeconds": 0.2,
+      "k6": "grafana/k6@sha256:5221b620a4f874faff6e32ba597aa667c058391fe4898b1c6f6377f062c6cdec",
+      "collectorNote": "heapBytes in baseline/samples/recovery is invalid: original text parser split spaces inside G1 pool labels. Use prometheus.json heap series or Docker memory. CPU/queue/Redis metrics unaffected. Parser corrected in source for subsequent runs.",
+      "scripts": {
+        "executed-queue-vu.js": "a3abb6edc9c84d9fc0ff2869d897310b6efc2ef5b549c412e4eef873b391dc7a",
+        "executed-run-vu.py": "9f50dd71cac8d68c288f24acd758b82c35692b6e47c97787d4cea89a25a8b833"
+      }
+    }
+  },
+  {
+    "sourceFile": "20260912-134348-s09-vu-100.json",
+    "data": {
+      "vus": 100,
+      "started": 5389,
+      "completed": 5389,
+      "requests": 26964,
+      "failed": 0,
+      "wait": {
+        "avg": 2031.781592132121,
+        "med": 2017,
+        "p(95)": 2056,
+        "p(99)": 2310.12,
+        "max": 4390
+      },
+      "http": {
+        "p(95)": 20.095628299999984,
+        "p(99)": 68.17910760999995,
+        "max": 225.300734,
+        "avg": 7.712250548286696,
+        "med": 4.4725295
+      },
+      "waitingSampleMax": 95,
+      "postProcessRecoverySeconds": 27.877131938934326
+    }
+  },
+  {
+    "sourceFile": "20260912-134348-s09-vu-1000.json",
+    "data": {
+      "vus": 1000,
+      "started": 6660,
+      "completed": 6660,
+      "requests": 95777,
+      "failed": 0,
+      "wait": {
+        "p(99)": 22440.82,
+        "max": 22558,
+        "avg": 19279.36291291291,
+        "med": 20162,
+        "p(95)": 22285.05
+      },
+      "http": {
+        "avg": 19.19125611497527,
+        "med": 5.63966,
+        "p(95)": 73.21552479999997,
+        "p(99)": 269.61625876000215,
+        "max": 572.063544
+      },
+      "waitingSampleMax": 975,
+      "postProcessRecoverySeconds": 27.01939058303833
+    }
+  },
+  {
+    "sourceFile": "20260912-134348-s09-vu-300.json",
+    "data": {
+      "vus": 300,
+      "started": 5932,
+      "completed": 5932,
+      "requests": 41224,
+      "failed": 0,
+      "wait": {
+        "p(95)": 6157,
+        "p(99)": 6484.69,
+        "max": 7325,
+        "avg": 5976.930883344572,
+        "med": 6043
+      },
+      "http": {
+        "avg": 13.417669476057455,
+        "med": 6.0747975,
+        "p(95)": 50.95119489999998,
+        "p(99)": 103.61996740999992,
+        "max": 233.499141
+      },
+      "waitingSampleMax": 250,
+      "postProcessRecoverySeconds": 28.355801343917847
+    }
+  },
+  {
+    "sourceFile": "20260912-134348-s09-vu-500.json",
+    "data": {
+      "vus": 500,
+      "started": 6184,
+      "completed": 6184,
+      "requests": 54956,
+      "failed": 0,
+      "wait": {
+        "med": 10045,
+        "p(95)": 12036,
+        "p(99)": 12063.17,
+        "max": 12129,
+        "avg": 9886.762128072445
+      },
+      "http": {
+        "p(99)": 128.7772618999994,
+        "max": 399.405882,
+        "avg": 10.945755186440165,
+        "med": 4.5052465,
+        "p(95)": 35.20995525
+      },
+      "waitingSampleMax": 474,
+      "postProcessRecoverySeconds": 29.361682415008545
+    }
+  },
+  {
+    "sourceFile": "20260912-134348-s09-vu-environment.json",
+    "data": {
+      "commit": "1c22905a263a915ecb99827b437f2067838d8cc9",
+      "authentication": "Local fixture JWT, HS256 same claims, 15 minute TTL; real Gateway validation; Auth endpoints excluded",
+      "images": [
+        {
+          "name": "/tikitaka-gateway",
+          "image": "sha256:b0951d2a34caf17fcd0aa7780fd5e93b1c063f76dd3d970b1d6990e65448a68a",
+          "labels": {
+            "com.docker.compose.config-hash": "f5e707293082e7081ac9620f5cfec5adee5de8f698cdf1fdc4bc34dc2427ffc5",
+            "com.docker.compose.container-number": "1",
+            "com.docker.compose.depends_on": "",
+            "com.docker.compose.image": "sha256:7d026cd33e4a89b3beedd29d3dc4211e5999de976ce5392079379014961181dc",
+            "com.docker.compose.oneoff": "False",
+            "com.docker.compose.project": "tikitaka-local",
+            "com.docker.compose.service": "gateway",
+            "com.docker.compose.version": "2.33.1"
+          },
+          "restartCount": 0
+        },
+        {
+          "name": "/tikitaka-ticketing-service",
+          "image": "sha256:f811386bc823a6d30b4a7427d47764f848a81adaf1a7ed7de6d2c86d4d81e4fc",
+          "labels": {
+            "com.docker.compose.config-hash": "b978f9125b3eed9e2b8a766abf903f57b1e03e3c06dfde905a1bcf6de0c2ef25",
+            "com.docker.compose.container-number": "1",
+            "com.docker.compose.depends_on": "",
+            "com.docker.compose.image": "sha256:f811386bc823a6d30b4a7427d47764f848a81adaf1a7ed7de6d2c86d4d81e4fc",
+            "com.docker.compose.oneoff": "False",
+            "com.docker.compose.project": "tikitaka-local",
+            "com.docker.compose.replace": "ad250da6b76600847ecf0ae6833b17f9db78db24f70342b34d095ab1c5b793ff",
+            "com.docker.compose.service": "ticketing-service",
+            "com.docker.compose.version": "2.33.1",
+            "dev.tikitaka.base-revision": "1c22905a263a915ecb99827b437f2067838d8cc9",
+            "dev.tikitaka.source-sha256": "ee7a8a0944ea368a530c302d48ad12400c8a61c93e8fe720bb78dfb631206785",
+            "dev.tikitaka.working-tree": "true"
+          },
+          "restartCount": 0
+        },
+        {
+          "name": "/tikitaka-platform-service",
+          "image": "sha256:ade044f3b058006041236aad826420289219de52f2a330f59c7cb224842d5367",
+          "labels": {
+            "com.docker.compose.config-hash": "6202398677bf65669737c31cec231b003e93e67ad239574ae2f74df591c750d1",
+            "com.docker.compose.container-number": "1",
+            "com.docker.compose.depends_on": "",
+            "com.docker.compose.image": "sha256:ade044f3b058006041236aad826420289219de52f2a330f59c7cb224842d5367",
+            "com.docker.compose.oneoff": "False",
+            "com.docker.compose.project": "tikitaka-local",
+            "com.docker.compose.replace": "1bdeb3d4ca57cb54f8b57c1ac897af7a13ac4a05e0afa14158a3f5b9de3d5b4a",
+            "com.docker.compose.service": "platform-service",
+            "com.docker.compose.version": "2.33.1",
+            "org.opencontainers.image.revision": "1c22905a263a915ecb99827b437f2067838d8cc9"
+          },
+          "restartCount": 0
+        }
+      ],
+      "vus": [
+        100,
+        300,
+        500,
+        1000
+      ],
+      "seconds": 120,
+      "pollSeconds": 2,
+      "heartbeatSeconds": 15,
+      "thinkSeconds": 0.2,
+      "k6": "grafana/k6@sha256:5221b620a4f874faff6e32ba597aa667c058391fe4898b1c6f6377f062c6cdec"
+    }
+  },
+  {
+    "sourceFile": "20260912-193139-s09-spike-1000.json",
+    "data": {
+      "vus": 1000,
+      "started": 1000,
+      "completed": 1000,
+      "requests": 9250,
+      "failed": 0,
+      "wait": {
+        "avg": 12832.149,
+        "med": 12956.5,
+        "p(95)": 21611.299999999952,
+        "p(99)": 23525.14,
+        "max": 23596
+      },
+      "http": {
+        "avg": 267.4318739517848,
+        "med": 41.7268725,
+        "p(95)": 1427.3531445499998,
+        "p(99)": 2186.9966124400003,
+        "max": 2516.692741
+      },
+      "waitingSampleMax": 700,
+      "postProcessRecoverySeconds": 23.083916664123535
+    }
+  },
+  {
+    "sourceFile": "20260912-193139-s09-spike-environment.json",
+    "data": {
+      "commit": "1c22905a263a915ecb99827b437f2067838d8cc9",
+      "authentication": "Local fixture JWT, HS256 same claims, 15 minute TTL; real Gateway validation; Auth endpoints excluded",
+      "images": [
+        {
+          "name": "/tikitaka-gateway",
+          "image": "sha256:b0951d2a34caf17fcd0aa7780fd5e93b1c063f76dd3d970b1d6990e65448a68a",
+          "labels": {
+            "com.docker.compose.config-hash": "f5e707293082e7081ac9620f5cfec5adee5de8f698cdf1fdc4bc34dc2427ffc5",
+            "com.docker.compose.container-number": "1",
+            "com.docker.compose.depends_on": "",
+            "com.docker.compose.image": "sha256:7d026cd33e4a89b3beedd29d3dc4211e5999de976ce5392079379014961181dc",
+            "com.docker.compose.oneoff": "False",
+            "com.docker.compose.project": "tikitaka-local",
+            "com.docker.compose.service": "gateway",
+            "com.docker.compose.version": "2.33.1"
+          },
+          "restartCount": 0
+        },
+        {
+          "name": "/tikitaka-ticketing-service",
+          "image": "sha256:f811386bc823a6d30b4a7427d47764f848a81adaf1a7ed7de6d2c86d4d81e4fc",
+          "labels": {
+            "com.docker.compose.config-hash": "b978f9125b3eed9e2b8a766abf903f57b1e03e3c06dfde905a1bcf6de0c2ef25",
+            "com.docker.compose.container-number": "1",
+            "com.docker.compose.depends_on": "",
+            "com.docker.compose.image": "sha256:f811386bc823a6d30b4a7427d47764f848a81adaf1a7ed7de6d2c86d4d81e4fc",
+            "com.docker.compose.oneoff": "False",
+            "com.docker.compose.project": "tikitaka-local",
+            "com.docker.compose.replace": "ad250da6b76600847ecf0ae6833b17f9db78db24f70342b34d095ab1c5b793ff",
+            "com.docker.compose.service": "ticketing-service",
+            "com.docker.compose.version": "2.33.1",
+            "dev.tikitaka.base-revision": "1c22905a263a915ecb99827b437f2067838d8cc9",
+            "dev.tikitaka.source-sha256": "ee7a8a0944ea368a530c302d48ad12400c8a61c93e8fe720bb78dfb631206785",
+            "dev.tikitaka.working-tree": "true"
+          },
+          "restartCount": 0
+        },
+        {
+          "name": "/tikitaka-platform-service",
+          "image": "sha256:ade044f3b058006041236aad826420289219de52f2a330f59c7cb224842d5367",
+          "labels": {
+            "com.docker.compose.config-hash": "6202398677bf65669737c31cec231b003e93e67ad239574ae2f74df591c750d1",
+            "com.docker.compose.container-number": "1",
+            "com.docker.compose.depends_on": "",
+            "com.docker.compose.image": "sha256:ade044f3b058006041236aad826420289219de52f2a330f59c7cb224842d5367",
+            "com.docker.compose.oneoff": "False",
+            "com.docker.compose.project": "tikitaka-local",
+            "com.docker.compose.replace": "1bdeb3d4ca57cb54f8b57c1ac897af7a13ac4a05e0afa14158a3f5b9de3d5b4a",
+            "com.docker.compose.service": "platform-service",
+            "com.docker.compose.version": "2.33.1",
+            "org.opencontainers.image.revision": "1c22905a263a915ecb99827b437f2067838d8cc9"
+          },
+          "restartCount": 0
+        }
+      ],
+      "mode": "spike",
+      "vus": [
+        1000
+      ],
+      "seconds": 120,
+      "pollSeconds": 2,
+      "heartbeatSeconds": 15,
+      "thinkSeconds": 0.2,
+      "k6": "grafana/k6@sha256:5221b620a4f874faff6e32ba597aa667c058391fe4898b1c6f6377f062c6cdec"
+    }
+  },
+  {
+    "sourceFile": "20260912-193303-s09-soak-300.json",
+    "data": {
+      "vus": 300,
+      "started": 29083,
+      "completed": 29083,
+      "requests": 203202,
+      "failed": 0,
+      "wait": {
+        "max": 8062,
+        "avg": 6008.45425162466,
+        "med": 6022,
+        "p(95)": 6063,
+        "p(99)": 6346.18
+      },
+      "http": {
+        "avg": 5.8997435715986875,
+        "med": 3.3642244999999997,
+        "p(95)": 14.667569849999992,
+        "p(99)": 51.80904583999979,
+        "max": 441.154457
+      },
+      "waitingSampleMax": 294,
+      "postProcessRecoverySeconds": 46.54453372955322
+    }
+  },
+  {
+    "sourceFile": "20260912-193303-s09-soak-environment.json",
+    "data": {
+      "commit": "1c22905a263a915ecb99827b437f2067838d8cc9",
+      "authentication": "Local fixture JWT, HS256 same claims, 15 minute TTL; real Gateway validation; Auth endpoints excluded",
+      "images": [
+        {
+          "name": "/tikitaka-gateway",
+          "image": "sha256:b0951d2a34caf17fcd0aa7780fd5e93b1c063f76dd3d970b1d6990e65448a68a",
+          "labels": {
+            "com.docker.compose.config-hash": "f5e707293082e7081ac9620f5cfec5adee5de8f698cdf1fdc4bc34dc2427ffc5",
+            "com.docker.compose.container-number": "1",
+            "com.docker.compose.depends_on": "",
+            "com.docker.compose.image": "sha256:7d026cd33e4a89b3beedd29d3dc4211e5999de976ce5392079379014961181dc",
+            "com.docker.compose.oneoff": "False",
+            "com.docker.compose.project": "tikitaka-local",
+            "com.docker.compose.service": "gateway",
+            "com.docker.compose.version": "2.33.1"
+          },
+          "restartCount": 0
+        },
+        {
+          "name": "/tikitaka-ticketing-service",
+          "image": "sha256:f811386bc823a6d30b4a7427d47764f848a81adaf1a7ed7de6d2c86d4d81e4fc",
+          "labels": {
+            "com.docker.compose.config-hash": "b978f9125b3eed9e2b8a766abf903f57b1e03e3c06dfde905a1bcf6de0c2ef25",
+            "com.docker.compose.container-number": "1",
+            "com.docker.compose.depends_on": "",
+            "com.docker.compose.image": "sha256:f811386bc823a6d30b4a7427d47764f848a81adaf1a7ed7de6d2c86d4d81e4fc",
+            "com.docker.compose.oneoff": "False",
+            "com.docker.compose.project": "tikitaka-local",
+            "com.docker.compose.replace": "ad250da6b76600847ecf0ae6833b17f9db78db24f70342b34d095ab1c5b793ff",
+            "com.docker.compose.service": "ticketing-service",
+            "com.docker.compose.version": "2.33.1",
+            "dev.tikitaka.base-revision": "1c22905a263a915ecb99827b437f2067838d8cc9",
+            "dev.tikitaka.source-sha256": "ee7a8a0944ea368a530c302d48ad12400c8a61c93e8fe720bb78dfb631206785",
+            "dev.tikitaka.working-tree": "true"
+          },
+          "restartCount": 0
+        },
+        {
+          "name": "/tikitaka-platform-service",
+          "image": "sha256:ade044f3b058006041236aad826420289219de52f2a330f59c7cb224842d5367",
+          "labels": {
+            "com.docker.compose.config-hash": "6202398677bf65669737c31cec231b003e93e67ad239574ae2f74df591c750d1",
+            "com.docker.compose.container-number": "1",
+            "com.docker.compose.depends_on": "",
+            "com.docker.compose.image": "sha256:ade044f3b058006041236aad826420289219de52f2a330f59c7cb224842d5367",
+            "com.docker.compose.oneoff": "False",
+            "com.docker.compose.project": "tikitaka-local",
+            "com.docker.compose.replace": "1bdeb3d4ca57cb54f8b57c1ac897af7a13ac4a05e0afa14158a3f5b9de3d5b4a",
+            "com.docker.compose.service": "platform-service",
+            "com.docker.compose.version": "2.33.1",
+            "org.opencontainers.image.revision": "1c22905a263a915ecb99827b437f2067838d8cc9"
+          },
+          "restartCount": 0
+        }
+      ],
+      "mode": "soak",
+      "vus": [
+        300
+      ],
+      "seconds": 600,
+      "pollSeconds": 2,
+      "heartbeatSeconds": 15,
+      "thinkSeconds": 0.2,
+      "k6": "grafana/k6@sha256:5221b620a4f874faff6e32ba597aa667c058391fe4898b1c6f6377f062c6cdec"
+    }
+  },
+  {
+    "sourceFile": "20260913-230122-s09-vu-300.json",
+    "data": {
+      "vus": 300,
+      "started": 6046,
+      "completed": 6046,
+      "requests": 59504,
+      "failed": 0,
+      "wait": {
+        "avg": 5899.93400595435,
+        "med": 6043,
+        "p(95)": 6097,
+        "p(99)": 6171.1,
+        "max": 7067
+      },
+      "http": {
+        "med": 3.9812665000000003,
+        "p(95)": 15.865403899999995,
+        "p(99)": 49.98115351000004,
+        "max": 178.175466,
+        "avg": 6.325130343422211
+      },
+      "waitingSampleMax": 279,
+      "postProcessRecoverySeconds": 21.481249570846558
+    }
+  },
+  {
+    "sourceFile": "20260913-230122-s09-vu-environment.json",
+    "data": {
+      "commit": "1c22905a263a915ecb99827b437f2067838d8cc9",
+      "authentication": "Local fixture JWT, HS256 same claims, 15 minute TTL; real Gateway validation; Auth endpoints excluded",
+      "images": [
+        {
+          "name": "/tikitaka-gateway",
+          "image": "sha256:b0951d2a34caf17fcd0aa7780fd5e93b1c063f76dd3d970b1d6990e65448a68a",
+          "labels": {
+            "com.docker.compose.config-hash": "f5e707293082e7081ac9620f5cfec5adee5de8f698cdf1fdc4bc34dc2427ffc5",
+            "com.docker.compose.container-number": "1",
+            "com.docker.compose.depends_on": "",
+            "com.docker.compose.image": "sha256:7d026cd33e4a89b3beedd29d3dc4211e5999de976ce5392079379014961181dc",
+            "com.docker.compose.oneoff": "False",
+            "com.docker.compose.project": "tikitaka-local",
+            "com.docker.compose.service": "gateway",
+            "com.docker.compose.version": "2.33.1"
+          },
+          "restartCount": 0,
+          "startedAt": "2026-09-13T05:35:45.596188045Z"
+        },
+        {
+          "name": "/tikitaka-ticketing-service",
+          "image": "sha256:48ca2b357fd1e0df5a7fe6fc2eb8c637f74d927b06071b27ff8a83cc5df6d6c2",
+          "labels": {
+            "com.docker.compose.config-hash": "273942647a8e479321bcc47ff93ab5fa12c8efcf38ebb83fc4f0ace6029d0ad9",
+            "com.docker.compose.container-number": "1",
+            "com.docker.compose.depends_on": "",
+            "com.docker.compose.image": "sha256:48ca2b357fd1e0df5a7fe6fc2eb8c637f74d927b06071b27ff8a83cc5df6d6c2",
+            "com.docker.compose.oneoff": "False",
+            "com.docker.compose.project": "tikitaka-local",
+            "com.docker.compose.replace": "e38ef2dbce9689f5e705eba471be60f1d7218eae3c4566451ad9b24abb7c4bb4",
+            "com.docker.compose.service": "ticketing-service",
+            "com.docker.compose.version": "2.33.1",
+            "dev.tikitaka.base-revision": "1c22905a263a915ecb99827b437f2067838d8cc9",
+            "dev.tikitaka.source-sha256": "3f1e48193d8bbc592181ec109fa4296e5e969cbc7a74cf740e0ddb21a2f4fcd9",
+            "dev.tikitaka.working-tree": "true"
+          },
+          "restartCount": 0,
+          "startedAt": "2026-09-13T07:39:55.850182317Z"
+        },
+        {
+          "name": "/tikitaka-platform-service",
+          "image": "sha256:ade044f3b058006041236aad826420289219de52f2a330f59c7cb224842d5367",
+          "labels": {
+            "com.docker.compose.config-hash": "6202398677bf65669737c31cec231b003e93e67ad239574ae2f74df591c750d1",
+            "com.docker.compose.container-number": "1",
+            "com.docker.compose.depends_on": "",
+            "com.docker.compose.image": "sha256:ade044f3b058006041236aad826420289219de52f2a330f59c7cb224842d5367",
+            "com.docker.compose.oneoff": "False",
+            "com.docker.compose.project": "tikitaka-local",
+            "com.docker.compose.replace": "1bdeb3d4ca57cb54f8b57c1ac897af7a13ac4a05e0afa14158a3f5b9de3d5b4a",
+            "com.docker.compose.service": "platform-service",
+            "com.docker.compose.version": "2.33.1",
+            "org.opencontainers.image.revision": "1c22905a263a915ecb99827b437f2067838d8cc9"
+          },
+          "restartCount": 0,
+          "startedAt": "2026-09-13T05:35:42.858691612Z"
+        }
+      ],
+      "restart": "none",
+      "healthReadyAt": 1789308082.6892877,
+      "mode": "vu",
+      "vus": [
+        300
+      ],
+      "seconds": 120,
+      "pollSeconds": 1,
+      "heartbeatSeconds": 15,
+      "thinkSeconds": 0.2,
+      "k6": "grafana/k6@sha256:5221b620a4f874faff6e32ba597aa667c058391fe4898b1c6f6377f062c6cdec"
+    }
+  },
+  {
+    "sourceFile": "20260913-230531-s09-vu-300.json",
+    "data": {
+      "vus": 300,
+      "started": 6097,
+      "completed": 6097,
+      "requests": 42083,
+      "failed": 0,
+      "wait": {
+        "p(99)": 6197,
+        "max": 6394,
+        "avg": 5847.709857306872,
+        "med": 6028,
+        "p(95)": 6081
+      },
+      "http": {
+        "avg": 7.268153922034977,
+        "med": 4.172535,
+        "p(95)": 18.489744400000006,
+        "p(99)": 65.14785814000003,
+        "max": 198.547032
+      },
+      "waitingSampleMax": 299,
+      "postProcessRecoverySeconds": 21.465684175491333
+    }
+  },
+  {
+    "sourceFile": "20260913-230531-s09-vu-environment.json",
+    "data": {
+      "commit": "1c22905a263a915ecb99827b437f2067838d8cc9",
+      "authentication": "Local fixture JWT, HS256 same claims, 15 minute TTL; real Gateway validation; Auth endpoints excluded",
+      "images": [
+        {
+          "name": "/tikitaka-gateway",
+          "image": "sha256:b0951d2a34caf17fcd0aa7780fd5e93b1c063f76dd3d970b1d6990e65448a68a",
+          "labels": {
+            "com.docker.compose.config-hash": "f5e707293082e7081ac9620f5cfec5adee5de8f698cdf1fdc4bc34dc2427ffc5",
+            "com.docker.compose.container-number": "1",
+            "com.docker.compose.depends_on": "",
+            "com.docker.compose.image": "sha256:7d026cd33e4a89b3beedd29d3dc4211e5999de976ce5392079379014961181dc",
+            "com.docker.compose.oneoff": "False",
+            "com.docker.compose.project": "tikitaka-local",
+            "com.docker.compose.service": "gateway",
+            "com.docker.compose.version": "2.33.1"
+          },
+          "restartCount": 0,
+          "startedAt": "2026-09-13T05:35:45.596188045Z"
+        },
+        {
+          "name": "/tikitaka-ticketing-service",
+          "image": "sha256:48ca2b357fd1e0df5a7fe6fc2eb8c637f74d927b06071b27ff8a83cc5df6d6c2",
+          "labels": {
+            "com.docker.compose.config-hash": "273942647a8e479321bcc47ff93ab5fa12c8efcf38ebb83fc4f0ace6029d0ad9",
+            "com.docker.compose.container-number": "1",
+            "com.docker.compose.depends_on": "",
+            "com.docker.compose.image": "sha256:48ca2b357fd1e0df5a7fe6fc2eb8c637f74d927b06071b27ff8a83cc5df6d6c2",
+            "com.docker.compose.oneoff": "False",
+            "com.docker.compose.project": "tikitaka-local",
+            "com.docker.compose.replace": "e38ef2dbce9689f5e705eba471be60f1d7218eae3c4566451ad9b24abb7c4bb4",
+            "com.docker.compose.service": "ticketing-service",
+            "com.docker.compose.version": "2.33.1",
+            "dev.tikitaka.base-revision": "1c22905a263a915ecb99827b437f2067838d8cc9",
+            "dev.tikitaka.source-sha256": "3f1e48193d8bbc592181ec109fa4296e5e969cbc7a74cf740e0ddb21a2f4fcd9",
+            "dev.tikitaka.working-tree": "true"
+          },
+          "restartCount": 0,
+          "startedAt": "2026-09-13T07:39:55.850182317Z"
+        },
+        {
+          "name": "/tikitaka-platform-service",
+          "image": "sha256:ade044f3b058006041236aad826420289219de52f2a330f59c7cb224842d5367",
+          "labels": {
+            "com.docker.compose.config-hash": "6202398677bf65669737c31cec231b003e93e67ad239574ae2f74df591c750d1",
+            "com.docker.compose.container-number": "1",
+            "com.docker.compose.depends_on": "",
+            "com.docker.compose.image": "sha256:ade044f3b058006041236aad826420289219de52f2a330f59c7cb224842d5367",
+            "com.docker.compose.oneoff": "False",
+            "com.docker.compose.project": "tikitaka-local",
+            "com.docker.compose.replace": "1bdeb3d4ca57cb54f8b57c1ac897af7a13ac4a05e0afa14158a3f5b9de3d5b4a",
+            "com.docker.compose.service": "platform-service",
+            "com.docker.compose.version": "2.33.1",
+            "org.opencontainers.image.revision": "1c22905a263a915ecb99827b437f2067838d8cc9"
+          },
+          "restartCount": 0,
+          "startedAt": "2026-09-13T05:35:42.858691612Z"
+        }
+      ],
+      "restart": "none",
+      "healthReadyAt": 1789308332.0869813,
+      "mode": "vu",
+      "vus": [
+        300
+      ],
+      "seconds": 120,
+      "pollSeconds": 2,
+      "heartbeatSeconds": 15,
+      "thinkSeconds": 0.2,
+      "k6": "grafana/k6@sha256:5221b620a4f874faff6e32ba597aa667c058391fe4898b1c6f6377f062c6cdec"
+    }
+  },
+  {
+    "sourceFile": "20260913-230854-s09-vu-300.json",
+    "data": {
+      "vus": 300,
+      "started": 5950,
+      "completed": 5950,
+      "requests": 30750,
+      "failed": 0,
+      "wait": {
+        "avg": 5894.372773109244,
+        "med": 5048,
+        "p(95)": 10064.55,
+        "p(99)": 10111,
+        "max": 10191
+      },
+      "http": {
+        "p(95)": 54.162192,
+        "p(99)": 83.67234381,
+        "max": 224.041226,
+        "avg": 14.304117103609839,
+        "med": 8.121223
+      },
+      "waitingSampleMax": 300,
+      "postProcessRecoverySeconds": 21.056437015533447
+    }
+  },
+  {
+    "sourceFile": "20260913-230854-s09-vu-environment.json",
+    "data": {
+      "commit": "1c22905a263a915ecb99827b437f2067838d8cc9",
+      "authentication": "Local fixture JWT, HS256 same claims, 15 minute TTL; real Gateway validation; Auth endpoints excluded",
+      "images": [
+        {
+          "name": "/tikitaka-gateway",
+          "image": "sha256:b0951d2a34caf17fcd0aa7780fd5e93b1c063f76dd3d970b1d6990e65448a68a",
+          "labels": {
+            "com.docker.compose.config-hash": "f5e707293082e7081ac9620f5cfec5adee5de8f698cdf1fdc4bc34dc2427ffc5",
+            "com.docker.compose.container-number": "1",
+            "com.docker.compose.depends_on": "",
+            "com.docker.compose.image": "sha256:7d026cd33e4a89b3beedd29d3dc4211e5999de976ce5392079379014961181dc",
+            "com.docker.compose.oneoff": "False",
+            "com.docker.compose.project": "tikitaka-local",
+            "com.docker.compose.service": "gateway",
+            "com.docker.compose.version": "2.33.1"
+          },
+          "restartCount": 0,
+          "startedAt": "2026-09-13T05:35:45.596188045Z"
+        },
+        {
+          "name": "/tikitaka-ticketing-service",
+          "image": "sha256:48ca2b357fd1e0df5a7fe6fc2eb8c637f74d927b06071b27ff8a83cc5df6d6c2",
+          "labels": {
+            "com.docker.compose.config-hash": "273942647a8e479321bcc47ff93ab5fa12c8efcf38ebb83fc4f0ace6029d0ad9",
+            "com.docker.compose.container-number": "1",
+            "com.docker.compose.depends_on": "",
+            "com.docker.compose.image": "sha256:48ca2b357fd1e0df5a7fe6fc2eb8c637f74d927b06071b27ff8a83cc5df6d6c2",
+            "com.docker.compose.oneoff": "False",
+            "com.docker.compose.project": "tikitaka-local",
+            "com.docker.compose.replace": "e38ef2dbce9689f5e705eba471be60f1d7218eae3c4566451ad9b24abb7c4bb4",
+            "com.docker.compose.service": "ticketing-service",
+            "com.docker.compose.version": "2.33.1",
+            "dev.tikitaka.base-revision": "1c22905a263a915ecb99827b437f2067838d8cc9",
+            "dev.tikitaka.source-sha256": "3f1e48193d8bbc592181ec109fa4296e5e969cbc7a74cf740e0ddb21a2f4fcd9",
+            "dev.tikitaka.working-tree": "true"
+          },
+          "restartCount": 0,
+          "startedAt": "2026-09-13T07:39:55.850182317Z"
+        },
+        {
+          "name": "/tikitaka-platform-service",
+          "image": "sha256:ade044f3b058006041236aad826420289219de52f2a330f59c7cb224842d5367",
+          "labels": {
+            "com.docker.compose.config-hash": "6202398677bf65669737c31cec231b003e93e67ad239574ae2f74df591c750d1",
+            "com.docker.compose.container-number": "1",
+            "com.docker.compose.depends_on": "",
+            "com.docker.compose.image": "sha256:ade044f3b058006041236aad826420289219de52f2a330f59c7cb224842d5367",
+            "com.docker.compose.oneoff": "False",
+            "com.docker.compose.project": "tikitaka-local",
+            "com.docker.compose.replace": "1bdeb3d4ca57cb54f8b57c1ac897af7a13ac4a05e0afa14158a3f5b9de3d5b4a",
+            "com.docker.compose.service": "platform-service",
+            "com.docker.compose.version": "2.33.1",
+            "org.opencontainers.image.revision": "1c22905a263a915ecb99827b437f2067838d8cc9"
+          },
+          "restartCount": 0,
+          "startedAt": "2026-09-13T05:35:42.858691612Z"
+        }
+      ],
+      "restart": "none",
+      "healthReadyAt": 1789308534.512447,
+      "mode": "vu",
+      "vus": [
+        300
+      ],
+      "seconds": 120,
+      "pollSeconds": 5,
+      "heartbeatSeconds": 15,
+      "thinkSeconds": 0.2,
+      "k6": "grafana/k6@sha256:5221b620a4f874faff6e32ba597aa667c058391fe4898b1c6f6377f062c6cdec"
+    }
+  }
+]

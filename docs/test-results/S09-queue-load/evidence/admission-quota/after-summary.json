@@ -1,0 +1,20 @@
+{
+  "quotaVerdict" : "PASS",
+  "successfulAdmissions" : 500,
+  "integrityPassed" : true,
+  "attempts" : 749,
+  "usersWithCompetingAttempts" : 249,
+  "admissionsByResponseEpochSecond" : {
+    "1789350678" : 50,
+    "1789350679" : 50,
+    "1789350680" : 50,
+    "1789350681" : 50,
+    "1789350682" : 50,
+    "1789350683" : 50,
+    "1789350684" : 50,
+    "1789350685" : 50,
+    "1789350686" : 50,
+    "1789350687" : 50
+  },
+  "users" : 500
+}

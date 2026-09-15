@@ -1,0 +1,220 @@
+[
+  {
+    "source": "artifacts/queue-scheduler/20260913-154002-385cf76c/summary.json",
+    "sha256": "0b4bad061ef127f14d62e036654ced11530659a8865802b19b4efefd9e8713be",
+    "bundle": "evidence/scheduler/runs.json",
+    "sourceFileInBundle": "20260913-154002-385cf76c.json"
+  },
+  {
+    "source": "artifacts/queue-scheduler/20260913-154816-9f291b97/summary.json",
+    "sha256": "1585dd8d4633c9218d091a79e843485c5b4d2a16eb3fd50cda11a9d37935e37b",
+    "bundle": "evidence/scheduler/runs.json",
+    "sourceFileInBundle": "20260913-154816-9f291b97.json"
+  },
+  {
+    "source": "artifacts/queue-scheduler/20260913-154847-fcdbcd68/summary.json",
+    "sha256": "17762e9cd57fd819789357e089f19b421e650a675e14388d5ad9ac904b64154b",
+    "bundle": "evidence/scheduler/runs.json",
+    "sourceFileInBundle": "20260913-154847-fcdbcd68.json"
+  },
+  {
+    "source": "artifacts/queue-scheduler/20260913-154922-6fa39be2/summary.json",
+    "sha256": "cfc348ad141ff25fe7ef7a7a50d71d562ebd50ccda3c7e922535f9cc7656321c",
+    "bundle": "evidence/scheduler/runs.json",
+    "sourceFileInBundle": "20260913-154922-6fa39be2.json"
+  },
+  {
+    "source": "artifacts/queue-scheduler/20260913-160829-71694b44/summary.json",
+    "sha256": "7c5bada59ce41878051a0e6a00bc4cf5f32780b1be79d5eab525300365c09d41",
+    "bundle": "evidence/scheduler/runs.json",
+    "sourceFileInBundle": "20260913-160829-71694b44.json"
+  },
+  {
+    "source": "artifacts/queue-scheduler/20260913-161021-52abb4e5/summary.json",
+    "sha256": "f0da39bf08426cdf8e1ad0b02c0b1b7f9b7675bb72cbce2427c7c5c05fcdc7c8",
+    "bundle": "evidence/scheduler/runs.json",
+    "sourceFileInBundle": "20260913-161021-52abb4e5.json"
+  },
+  {
+    "source": "artifacts/queue-scheduler/20260913-161048-4b6985a9/summary.json",
+    "sha256": "8f63606d42818bbc5d1438fc346497b6ef7a6050e9a76218dcb80f5b480ff5b0",
+    "bundle": "evidence/scheduler/runs.json",
+    "sourceFileInBundle": "20260913-161048-4b6985a9.json"
+  },
+  {
+    "source": "artifacts/queue-scheduler/20260913-161119-ecb70f42/summary.json",
+    "sha256": "bb6f76a984e7e54588ff3cd67f109f8feb7158489e3e851b4b2286565e834c82",
+    "bundle": "evidence/scheduler/runs.json",
+    "sourceFileInBundle": "20260913-161119-ecb70f42.json"
+  },
+  {
+    "source": "artifacts/queue-load/20260912-133210-s09-vu/50/result.json",
+    "sha256": "8c24f496847e955d6153f682b9c01157146121bfecd13fc0c8ff3a0bc50b5dd5",
+    "bundle": "evidence/s09/runs.json",
+    "sourceFileInBundle": "20260912-133210-s09-vu-50.json"
+  },
+  {
+    "source": "artifacts/queue-load/20260912-133210-s09-vu/environment.json",
+    "sha256": "e30b0f8d6a6a70b35a7b367d744d2c1c5536a74de87ba391ca56a47763a1a875",
+    "bundle": "evidence/s09/runs.json",
+    "sourceFileInBundle": "20260912-133210-s09-vu-environment.json"
+  },
+  {
+    "source": "artifacts/queue-load/20260912-134348-s09-vu/100/result.json",
+    "sha256": "24e11842b748cf0cf6f62f7a06216efeb8864b19ae6b93b7bec4ab120ca2cf1b",
+    "bundle": "evidence/s09/runs.json",
+    "sourceFileInBundle": "20260912-134348-s09-vu-100.json"
+  },
+  {
+    "source": "artifacts/queue-load/20260912-134348-s09-vu/environment.json",
+    "sha256": "26dee7f6017f66927ffb0ee130db4ce079162bc32de5c27ef895012dc3b4e9da",
+    "bundle": "evidence/s09/runs.json",
+    "sourceFileInBundle": "20260912-134348-s09-vu-environment.json"
+  },
+  {
+    "source": "artifacts/queue-load/20260912-134348-s09-vu/300/result.json",
+    "sha256": "0dc6f0c8686ead55089ce61517284134df3cab4cad99d044cc46f9acc1f685b0",
+    "bundle": "evidence/s09/runs.json",
+    "sourceFileInBundle": "20260912-134348-s09-vu-300.json"
+  },
+  {
+    "source": "artifacts/queue-load/20260912-134348-s09-vu/environment.json",
+    "sha256": "26dee7f6017f66927ffb0ee130db4ce079162bc32de5c27ef895012dc3b4e9da",
+    "bundle": "evidence/s09/runs.json",
+    "sourceFileInBundle": "20260912-134348-s09-vu-environment.json"
+  },
+  {
+    "source": "artifacts/queue-load/20260912-134348-s09-vu/500/result.json",
+    "sha256": "8a838912b45632a04df85c152760da537550206e9ee6b6dfbda3e0767cdc5ddb",
+    "bundle": "evidence/s09/runs.json",
+    "sourceFileInBundle": "20260912-134348-s09-vu-500.json"
+  },
+  {
+    "source": "artifacts/queue-load/20260912-134348-s09-vu/environment.json",
+    "sha256": "26dee7f6017f66927ffb0ee130db4ce079162bc32de5c27ef895012dc3b4e9da",
+    "bundle": "evidence/s09/runs.json",
+    "sourceFileInBundle": "20260912-134348-s09-vu-environment.json"
+  },
+  {
+    "source": "artifacts/queue-load/20260912-134348-s09-vu/1000/result.json",
+    "sha256": "502131822835c108c705a1c17a3937506fc0eca4a793007d7cae4947598ecf85",
+    "bundle": "evidence/s09/runs.json",
+    "sourceFileInBundle": "20260912-134348-s09-vu-1000.json"
+  },
+  {
+    "source": "artifacts/queue-load/20260912-134348-s09-vu/environment.json",
+    "sha256": "26dee7f6017f66927ffb0ee130db4ce079162bc32de5c27ef895012dc3b4e9da",
+    "bundle": "evidence/s09/runs.json",
+    "sourceFileInBundle": "20260912-134348-s09-vu-environment.json"
+  },
+  {
+    "source": "artifacts/queue-load/20260912-193139-s09-spike/1000/result.json",
+    "sha256": "2aea215d725743a6e6dca4017a558d30dee0d711020e4dd24580daec4fa9fd0c",
+    "bundle": "evidence/s09/runs.json",
+    "sourceFileInBundle": "20260912-193139-s09-spike-1000.json"
+  },
+  {
+    "source": "artifacts/queue-load/20260912-193139-s09-spike/environment.json",
+    "sha256": "d49ebe02cb00c7ff7d7ace6ee44a07c5c34248391f654c05344e428f05efa068",
+    "bundle": "evidence/s09/runs.json",
+    "sourceFileInBundle": "20260912-193139-s09-spike-environment.json"
+  },
+  {
+    "source": "artifacts/queue-load/20260912-193303-s09-soak/300/result.json",
+    "sha256": "74d9b7de9bfb43d742e1f2d945ebfa6215b9ca2533bc85b1914ea52cbb5122c6",
+    "bundle": "evidence/s09/runs.json",
+    "sourceFileInBundle": "20260912-193303-s09-soak-300.json"
+  },
+  {
+    "source": "artifacts/queue-load/20260912-193303-s09-soak/environment.json",
+    "sha256": "5ce7b65007d3aa0e2b82ab35f295b9573d94664693babd9310eba421b82c769f",
+    "bundle": "evidence/s09/runs.json",
+    "sourceFileInBundle": "20260912-193303-s09-soak-environment.json"
+  },
+  {
+    "source": "artifacts/queue-load/20260913-230122-s09-vu/300/result.json",
+    "sha256": "93b987441cceb6305963b96c776403ccb1dc99d0de3272d085aaa29680f10a1b",
+    "bundle": "evidence/s09/runs.json",
+    "sourceFileInBundle": "20260913-230122-s09-vu-300.json"
+  },
+  {
+    "source": "artifacts/queue-load/20260913-230122-s09-vu/environment.json",
+    "sha256": "4b9df259ba638c2cf2de88e9dd09b1a020fe9b059b7e48f19562fbc3814648cf",
+    "bundle": "evidence/s09/runs.json",
+    "sourceFileInBundle": "20260913-230122-s09-vu-environment.json"
+  },
+  {
+    "source": "artifacts/queue-load/20260913-230531-s09-vu/300/result.json",
+    "sha256": "74ec8c4b151372f6da25f4373d9cde63be2e136146930aade9af1c81da3ee8e9",
+    "bundle": "evidence/s09/runs.json",
+    "sourceFileInBundle": "20260913-230531-s09-vu-300.json"
+  },
+  {
+    "source": "artifacts/queue-load/20260913-230531-s09-vu/environment.json",
+    "sha256": "d2540db7a905cf9b1a92a682d147e2fb37a3f086bfeeb537b3fe25dcc6de5281",
+    "bundle": "evidence/s09/runs.json",
+    "sourceFileInBundle": "20260913-230531-s09-vu-environment.json"
+  },
+  {
+    "source": "artifacts/queue-load/20260913-230854-s09-vu/300/result.json",
+    "sha256": "66a6f2c052e5302bdfaaac7d287eb17e61960928f304548f52b905c26b982339",
+    "bundle": "evidence/s09/runs.json",
+    "sourceFileInBundle": "20260913-230854-s09-vu-300.json"
+  },
+  {
+    "source": "artifacts/queue-load/20260913-230854-s09-vu/environment.json",
+    "sha256": "9298db331b7fde9a1f312669f6cf359d03a14b73eeda4750ced4c99637a8280e",
+    "bundle": "evidence/s09/runs.json",
+    "sourceFileInBundle": "20260913-230854-s09-vu-environment.json"
+  },
+  {
+    "source": "artifacts/queue-build/20260914-110102/source-manifest.json",
+    "file": "evidence/final-regression/source-manifest.json",
+    "sha256": "7fd6f93478d2c0c3cea52d1959ca29925a4fda1f49d7508142c765a82c43f9ba"
+  },
+  {
+    "file": "evidence/admission-quota/after-quota.json",
+    "sha256": "6f99fbff3cafbbc44feaa76d3c0984dcda3a6d859965aff5f1a49c2bc368108e",
+    "source": "derived/previously selected; run IDs described in local-result.md"
+  },
+  {
+    "file": "evidence/admission-quota/after-summary.json",
+    "sha256": "3d244de67b9e78a7d74e281ef48964878cddc1fef5efa48ca66831d88fd1775d",
+    "source": "derived/previously selected; run IDs described in local-result.md"
+  },
+  {
+    "file": "evidence/admission-quota/before-quota.json",
+    "sha256": "9b69cbdac99122eaa9c85b2bae350e5b912b7b1578b6bc45aab343992103e4cc",
+    "source": "derived/previously selected; run IDs described in local-result.md"
+  },
+  {
+    "file": "evidence/final-regression/results.json",
+    "sha256": "ac49a90553eee45f9baf63c2e29d9f54364222fcfebaf9d654daa067be3a3581",
+    "source": "derived/previously selected; run IDs described in local-result.md"
+  },
+  {
+    "file": "evidence/multi-jvm/summary.json",
+    "sha256": "91c63324d38a9c674f2064bf2d4a98b99fbc9c0c8667a2688e14aa7b2d31eb49",
+    "source": "derived/previously selected; run IDs described in local-result.md"
+  },
+  {
+    "file": "evidence/multi-jvm/workers.json",
+    "sha256": "45e46fbdad55435cad2d6efec028abf12591fa966b1fc1d9a6338d495ac6c548",
+    "source": "derived/previously selected; run IDs described in local-result.md"
+  },
+  {
+    "file": "evidence/scheduler/comparison.csv",
+    "sha256": "65f033b672657dfe7430d9862d68a7e1721c2583e21145ee3914c2352a4be6f1",
+    "source": "derived/previously selected; run IDs described in local-result.md"
+  },
+  {
+    "file": "evidence/s09/runs.json",
+    "sha256": "6cdaf39eecab1d557f1293e7c1056e40c14fe21b06cc74260d27094d007fbfeb",
+    "source": "Selected execution JSON bundle; source records listed above."
+  },
+  {
+    "file": "evidence/scheduler/runs.json",
+    "sha256": "4266ed942a9564b27dfb4e4204e042ddcfa63c0542fe5903a0bfbc1e56f073c5",
+    "source": "bundle of preserved JSON objects; per-source checksums above"
+  }
+]

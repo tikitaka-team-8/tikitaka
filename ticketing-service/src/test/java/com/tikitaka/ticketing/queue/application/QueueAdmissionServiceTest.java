@@ -34,14 +34,39 @@ class QueueAdmissionServiceTest {
     private QueueRepository queueRepository;
 
     private QueueAdmissionService queueAdmissionService;
+    private final io.micrometer.core.instrument.simple.SimpleMeterRegistry registry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
 
     @BeforeEach
     void setUp() {
         queueAdmissionService = new QueueAdmissionService(
                 queueRepository,
                 new QueueProperties(Duration.ofMinutes(3), Duration.ofHours(1), 50, 50, Duration.ofMinutes(2)),
-                Clock.fixed(NOW, ZoneOffset.UTC)
+                Clock.fixed(NOW, ZoneOffset.UTC), new QueueMetrics(registry)
         );
+    }
+
+    @Test
+    void metricsCountOnlySuccessfulTransitionsAndKeepPartialSuccess() {
+        when(queueRepository.findWaitingSessionIds()).thenReturn(Set.of(SESSION_ID));
+        when(queueRepository.findWaitingEntries(SESSION_ID, 50))
+                .thenReturn(List.of(waitingEntry(1L, 1L), waitingEntry(2L, 2L), waitingEntry(3L, 3L)));
+        when(queueRepository.admitIfWaiting(any(), any(), any(), any()))
+                .thenReturn(true).thenReturn(false)
+                .thenThrow(new org.springframework.data.redis.RedisConnectionFailureException("offline"));
+        queueAdmissionService.admitWaitingUsers();
+        assertThat(registry.get("queue.admission").counter().count()).isEqualTo(1);
+    }
+
+    @Test
+    void heartbeatMetricsCountActualRemovalsBeforeFailure() {
+        when(queueRepository.findWaitingSessionIds()).thenReturn(Set.of(SESSION_ID));
+        when(queueRepository.findInactiveWaitingUserIds(eq(SESSION_ID), any(), eq(50)))
+                .thenReturn(List.of(1L, 2L, 3L));
+        when(queueRepository.removeWaitingEntryIfHeartbeatExpired(eq(SESSION_ID), org.mockito.ArgumentMatchers.anyLong(), any()))
+                .thenReturn(true).thenReturn(false)
+                .thenThrow(new org.springframework.data.redis.RedisConnectionFailureException("offline"));
+        queueAdmissionService.expireInactiveWaitingUsers();
+        assertThat(registry.get("queue.heartbeat.expired").counter().count()).isEqualTo(1);
     }
 
     @Test
