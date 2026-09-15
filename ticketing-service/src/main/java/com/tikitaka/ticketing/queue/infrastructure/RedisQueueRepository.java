@@ -361,6 +361,12 @@ public class RedisQueueRepository implements QueueRepository {
     }
 
     @Override
+    public long countWaitingUsers(UUID sessionId) {
+        return java.util.Objects.requireNonNull(redisTemplate.opsForZSet().zCard(waitingKey(sessionId)),
+                "Redis returned no waiting count");
+    }
+
+    @Override
     public Set<UUID> findWaitingSessionIds() {
         Set<String> sessionIds = redisTemplate.opsForSet().members(waitingSessionRegistryKey());
         if (sessionIds == null || sessionIds.isEmpty()) {

@@ -26,6 +26,8 @@ public interface QueueRepository {
 
     Set<UUID> findWaitingSessionIds();
 
+    long countWaitingUsers(UUID sessionId);
+
     Set<UUID> findActiveSessionIds();
 
     void registerWaitingSession(UUID sessionId);

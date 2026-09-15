@@ -30,6 +30,59 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Import(RedisQueueRepository.class)
 @Testcontainers(disabledWithoutDocker = true)
 class RedisQueueRepositoryTest {
+    @Test
+    void pipelinedWaitingLookupPreservesFullBatchOrderAndEntryFields() {
+        UUID sessionId = UUID.randomUUID();
+        var expected = new java.util.ArrayList<QueueEntry>();
+        for (long userId = 100; userId > 50; userId--) {
+            expected.add(createWaitingEntry(sessionId, userId));
+        }
+        createWaitingEntry(sessionId, 999L);
+
+        assertThat(queueRepository.findWaitingEntries(sessionId, 50)).containsExactlyElementsOf(expected);
+        assertThat(queueRepository.countWaitingUsers(sessionId)).isEqualTo(51);
+        for (QueueEntry entry : expected) {
+            assertThat(queueRepository.findEntry(sessionId, entry.userId())).contains(entry);
+        }
+    }
+
+    @Test
+    void pipelinedWaitingLookupSkipsMissingAndNonWaitingWithoutRefillingLimit() {
+        UUID sessionId = UUID.randomUUID();
+        QueueEntry missing = createWaitingEntry(sessionId, 10L);
+        QueueEntry admitted = createWaitingEntry(sessionId, 20L);
+        QueueEntry waiting = createWaitingEntry(sessionId, 30L);
+        QueueEntry outsideLimit = createWaitingEntry(sessionId, 40L);
+        // Stale ZSET members can outlive an Entry or its WAITING state.
+        redisTemplate.delete("queue:entry:{" + sessionId + "}:" + missing.userId());
+        redisTemplate.opsForHash().put("queue:entry:{" + sessionId + "}:" + admitted.userId(), "status", "ADMITTED");
+
+        assertThat(queueRepository.findWaitingEntries(sessionId, 3)).containsExactly(waiting);
+        assertThat(queueRepository.findWaitingEntries(sessionId, 4)).containsExactly(waiting, outsideLimit);
+        assertThat(queueRepository.countWaitingUsers(sessionId)).isEqualTo(4);
+    }
+
+    @Test
+    void waitingLookupHandlesEmptyQueueAndNonPositiveLimit() {
+        UUID sessionId = UUID.randomUUID();
+        assertThat(queueRepository.findWaitingEntries(sessionId, 50)).isEmpty();
+        createWaitingEntry(sessionId, 100L);
+        assertThat(queueRepository.findWaitingEntries(sessionId, 0)).isEmpty();
+        assertThat(queueRepository.findWaitingEntries(sessionId, -1)).isEmpty();
+    }
+
+    @Test
+    void waitingCountTracksRedisMembershipAndMissingSessionIsZero() {
+        UUID sessionId = UUID.randomUUID();
+        assertThat(queueRepository.countWaitingUsers(sessionId)).isZero();
+        Instant now = Instant.now();
+        queueRepository.createWaitingEntryIfAbsent(sessionId, 1L, now, now.plusSeconds(120), Duration.ofMinutes(2));
+        queueRepository.createWaitingEntryIfAbsent(sessionId, 1L, now, now.plusSeconds(120), Duration.ofMinutes(2));
+        assertThat(queueRepository.countWaitingUsers(sessionId)).isEqualTo(1);
+        queueRepository.removeWaitingUser(sessionId, 1L);
+        assertThat(queueRepository.countWaitingUsers(sessionId)).isZero();
+    }
+
     private static final Duration SESSION_TTL = Duration.ofHours(2);
 
     @Container

@@ -15,7 +15,7 @@ class QueueAdmissionSchedulerTest {
 
     @Test
     void heartbeat_만료_정리_후_대기_입장과_입장_권한_만료를_처리한다() {
-        QueueAdmissionScheduler scheduler = new QueueAdmissionScheduler(queueAdmissionService);
+        QueueAdmissionScheduler scheduler = new QueueAdmissionScheduler(queueAdmissionService, new QueueMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
 
         scheduler.processQueueAdmissions();
 
