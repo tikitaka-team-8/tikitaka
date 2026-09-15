@@ -51,5 +51,9 @@ public class PaymentRepositoryImpl implements PaymentRepository {
         return paymentJpaRepository.findStaleProcessingPayments(threshold, limit);
     }
 
+    @Override
+    public Optional<Payment> findUnknownByIdForUpdateNowait(UUID paymentId) {
+        return paymentJpaRepository.findUnknownByIdForUpdateNowait(paymentId);
+    }
 
 }

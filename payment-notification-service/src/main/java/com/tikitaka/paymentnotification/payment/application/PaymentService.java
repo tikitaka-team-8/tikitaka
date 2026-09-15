@@ -214,7 +214,7 @@ public class PaymentService {
                     PaymentApproveResult.from(payment);
 
             case UNKNOWN ->
-                    paymentUnknownReconciler.reconcile(payment);
+                    paymentUnknownReconciler.reconcile(paymentId);
 
             case READY, PROCESSING, FAILED, CANCELED ->
                     throw new PaymentException(

@@ -14,6 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.CannotAcquireLockException;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -31,10 +32,10 @@ class PaymentUnknownReconcilerTest {
     @Mock
     private PaymentApprovalResultProcessor paymentApprovalResultProcessor;
 
-    private PaymentUnknownReconciler paymentUnknownReconciler;
-
     @Mock
     private PaymentRepository paymentRepository;
+
+    private PaymentUnknownReconciler paymentUnknownReconciler;
 
     @BeforeEach
     void setUp() {
@@ -45,13 +46,13 @@ class PaymentUnknownReconcilerTest {
         );
     }
 
-
     @Test
     void UNKNOWN_결제가_Toss_DONE이면_APPROVED로_복구한다() {
         // given
         UUID paymentId = UUID.randomUUID();
 
         Payment payment = mock(Payment.class);
+
         PaymentQueryResult queryResult = new PaymentQueryResult(
                 "payment-key",
                 "order-id",
@@ -63,7 +64,9 @@ class PaymentUnknownReconcilerTest {
         PaymentApproveResult expectedResult =
                 mock(PaymentApproveResult.class);
 
-        when(payment.getPaymentId()).thenReturn(paymentId);
+        when(paymentRepository.findUnknownByIdForUpdateNowait(paymentId))
+                .thenReturn(Optional.of(payment));
+
         when(payment.getPgPaymentKey()).thenReturn("payment-key");
         when(payment.getOrderId()).thenReturn("order-id");
         when(payment.getAmount()).thenReturn(150000L);
@@ -78,7 +81,7 @@ class PaymentUnknownReconcilerTest {
 
         // when
         PaymentApproveResult result =
-                paymentUnknownReconciler.reconcile(payment);
+                paymentUnknownReconciler.reconcile(paymentId);
 
         // then
         verify(paymentQueryGateway)
@@ -87,38 +90,47 @@ class PaymentUnknownReconcilerTest {
         verify(paymentApprovalResultProcessor)
                 .recoverApproved(paymentId, queryResult);
 
+        verify(paymentApprovalResultProcessor, never())
+                .recoverFailed(any(), any());
+
         assertThat(result).isSameAs(expectedResult);
     }
+
     @Test
-    void UNKNOWN_결제에_paymentKey가_없으면_조회하지_않는다() {
+    void UNKNOWN_결제에_paymentKey가_없으면_상태확인필요_예외가_발생한다() {
         // given
+        UUID paymentId = UUID.randomUUID();
+
         Payment payment = mock(Payment.class);
-        PaymentApproveResult expectedResult = mock(PaymentApproveResult.class);
+
+        when(paymentRepository.findUnknownByIdForUpdateNowait(paymentId))
+                .thenReturn(Optional.of(payment));
 
         when(payment.getPgPaymentKey()).thenReturn(null);
 
-        try (MockedStatic<PaymentApproveResult> mocked =
-                     mockStatic(PaymentApproveResult.class)) {
+        // when & then
+        assertThatThrownBy(() ->
+                paymentUnknownReconciler.reconcile(paymentId)
+        )
+                .isInstanceOf(PaymentException.class)
+                .extracting("errorCode")
+                .isEqualTo(
+                        PaymentErrorCode.PAYMENT_STATUS_CONFIRMATION_REQUIRED
+                );
 
-            mocked.when(() -> PaymentApproveResult.from(payment))
-                    .thenReturn(expectedResult);
-
-            // when
-            PaymentApproveResult result =
-                    paymentUnknownReconciler.reconcile(payment);
-
-            // then
-            verifyNoInteractions(paymentQueryGateway);
-            verifyNoInteractions(paymentApprovalResultProcessor);
-
-            assertThat(result).isSameAs(expectedResult);
-        }
+        verifyNoInteractions(paymentQueryGateway);
+        verifyNoInteractions(paymentApprovalResultProcessor);
     }
 
     @Test
     void PG_조회_결과가_결제정보와_다르면_예외가_발생한다() {
         // given
+        UUID paymentId = UUID.randomUUID();
+
         Payment payment = mock(Payment.class);
+
+        when(paymentRepository.findUnknownByIdForUpdateNowait(paymentId))
+                .thenReturn(Optional.of(payment));
 
         when(payment.getPgPaymentKey()).thenReturn("payment-key");
 
@@ -136,7 +148,7 @@ class PaymentUnknownReconcilerTest {
 
         // when & then
         assertThatThrownBy(() ->
-                paymentUnknownReconciler.reconcile(payment)
+                paymentUnknownReconciler.reconcile(paymentId)
         )
                 .isInstanceOf(PaymentException.class)
                 .extracting("errorCode")
@@ -164,17 +176,12 @@ class PaymentUnknownReconcilerTest {
         PaymentApproveResult expectedResult =
                 mock(PaymentApproveResult.class);
 
-        when(payment.getPaymentId())
-                .thenReturn(paymentId);
+        when(paymentRepository.findUnknownByIdForUpdateNowait(paymentId))
+                .thenReturn(Optional.of(payment));
 
-        when(payment.getPgPaymentKey())
-                .thenReturn("payment-key");
-
-        when(payment.getOrderId())
-                .thenReturn("order-id");
-
-        when(payment.getAmount())
-                .thenReturn(150000L);
+        when(payment.getPgPaymentKey()).thenReturn("payment-key");
+        when(payment.getOrderId()).thenReturn("order-id");
+        when(payment.getAmount()).thenReturn(150000L);
 
         when(paymentQueryGateway.getPayment("payment-key"))
                 .thenReturn(queryResult);
@@ -186,24 +193,76 @@ class PaymentUnknownReconcilerTest {
 
         // when
         PaymentApproveResult result =
-                paymentUnknownReconciler.reconcile(payment);
+                paymentUnknownReconciler.reconcile(paymentId);
 
         // then
         verify(paymentQueryGateway)
                 .getPayment("payment-key");
 
         verify(paymentApprovalResultProcessor)
-                .recoverFailed(
-                        paymentId,
-                        queryResult
-                );
+                .recoverFailed(paymentId, queryResult);
 
         verify(paymentApprovalResultProcessor, never())
                 .recoverApproved(any(), any());
 
-        assertThat(result)
-                .isSameAs(expectedResult);
+        assertThat(result).isSameAs(expectedResult);
     }
 
+    @Test
+    void UNKNOWN_복구가_이미_완료됐으면_Toss를_조회하지_않는다() {
+        // given
+        UUID paymentId = UUID.randomUUID();
 
+        Payment currentPayment = mock(Payment.class);
+        PaymentApproveResult expectedResult =
+                mock(PaymentApproveResult.class);
+
+        when(paymentRepository.findUnknownByIdForUpdateNowait(paymentId))
+                .thenReturn(Optional.empty());
+
+        when(paymentRepository.findById(paymentId))
+                .thenReturn(Optional.of(currentPayment));
+
+        try (MockedStatic<PaymentApproveResult> mocked =
+                     mockStatic(PaymentApproveResult.class)) {
+
+            mocked.when(() -> PaymentApproveResult.from(currentPayment))
+                    .thenReturn(expectedResult);
+
+            // when
+            PaymentApproveResult result =
+                    paymentUnknownReconciler.reconcile(paymentId);
+
+            // then
+            verifyNoInteractions(paymentQueryGateway);
+            verifyNoInteractions(paymentApprovalResultProcessor);
+
+            assertThat(result).isSameAs(expectedResult);
+        }
+    }
+
+    @Test
+    void UNKNOWN_복구_락을_획득하지_못하면_Toss를_조회하지_않는다() {
+        // given
+        UUID paymentId = UUID.randomUUID();
+
+        when(paymentRepository.findUnknownByIdForUpdateNowait(paymentId))
+                .thenThrow(new CannotAcquireLockException("lock"));
+
+        // when & then
+        assertThatThrownBy(() ->
+                paymentUnknownReconciler.reconcile(paymentId)
+        )
+                .isInstanceOf(PaymentException.class)
+                .extracting("errorCode")
+                .isEqualTo(
+                        PaymentErrorCode.PAYMENT_STATUS_CONFIRMATION_REQUIRED
+                );
+
+        verifyNoInteractions(paymentQueryGateway);
+        verifyNoInteractions(paymentApprovalResultProcessor);
+
+        verify(paymentRepository, never())
+                .findById(paymentId);
+    }
 }

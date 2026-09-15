@@ -60,4 +60,18 @@ public interface PaymentJpaRepository extends JpaRepository<Payment, UUID> {
     )
     List<Payment> findStaleProcessingPayments(@Param("threshold") OffsetDateTime threshold, @Param("limit") int limit);
 
+    @Query(
+            value = """
+            SELECT *
+            FROM p_payment
+            WHERE payment_id = :paymentId
+              AND status = 'UNKNOWN'
+            FOR UPDATE NOWAIT
+            """,
+            nativeQuery = true
+    )
+    Optional<Payment> findUnknownByIdForUpdateNowait(
+            @Param("paymentId") UUID paymentId
+    );
+
 }

@@ -4,6 +4,13 @@ server:
 spring:
   application:
     name: payment-notification-service
+  cloud:
+    openfeign:
+      client:
+        config:
+          tossPaymentsClient:
+            connectTimeout: 3000
+            readTimeout: 5000
   kafka:
     consumer:
       group-id: notification-reservation-group

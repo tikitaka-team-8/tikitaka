@@ -8,7 +8,9 @@ import com.tikitaka.paymentnotification.payment.domain.payment.PaymentRepository
 import com.tikitaka.paymentnotification.payment.exception.PaymentErrorCode;
 import com.tikitaka.paymentnotification.payment.exception.PaymentException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -21,20 +23,36 @@ public class PaymentUnknownReconciler {
     private final Optional<PaymentQueryGateway> paymentQueryGateway;
     private final PaymentApprovalResultProcessor paymentApprovalResultProcessor;
 
+    @Transactional
     public PaymentApproveResult reconcile(UUID paymentId) {
+        final Payment payment;
 
-        Payment payment = paymentRepository.findById(paymentId).orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
+        try {
+            payment = paymentRepository
+                    .findUnknownByIdForUpdateNowait(paymentId)
+                    .orElse(null);
+        } catch (CannotAcquireLockException e) {
+            throw new PaymentException(
+                    PaymentErrorCode.PAYMENT_STATUS_CONFIRMATION_REQUIRED
+            );
+        }
 
-        return reconcile(payment);
-    }
+        // UNKNOWN 조건에 맞는 row가 없다면
+        // 다른 복구가 이미 완료됐을 수도 있으므로 현재 상태 재조회
+        if (payment == null) {
+            Payment currentPayment = paymentRepository.findById(paymentId)
+                    .orElseThrow(() ->
+                            new PaymentException(
+                                    PaymentErrorCode.PAYMENT_NOT_FOUND
+                            ));
 
-
-    public PaymentApproveResult reconcile(Payment payment) {
+            return PaymentApproveResult.from(currentPayment);
+        }
 
         String paymentKey = payment.getPgPaymentKey();
 
         if (paymentKey == null || paymentKey.isBlank()) {
-            return PaymentApproveResult.from(payment);
+            throw new PaymentException(PaymentErrorCode.PAYMENT_STATUS_CONFIRMATION_REQUIRED);
         }
 
         PaymentQueryGateway queryGateway = paymentQueryGateway
@@ -45,21 +63,12 @@ public class PaymentUnknownReconciler {
         validateQueriedPayment(payment, queryResult);
 
         return switch (queryResult.status()) {
-
             case "DONE" ->
-                    paymentApprovalResultProcessor.recoverApproved(
-                            payment.getPaymentId(),
-                            queryResult
-                    );
+                    paymentApprovalResultProcessor.recoverApproved(paymentId, queryResult);
 
-            case "ABORTED", "EXPIRED" ->
-                    paymentApprovalResultProcessor.recoverFailed(
-                            payment.getPaymentId(),
-                            queryResult
-                    );
+            case "ABORTED", "EXPIRED" -> paymentApprovalResultProcessor.recoverFailed(paymentId, queryResult);
 
-            default ->
-                    PaymentApproveResult.from(payment);
+            default -> PaymentApproveResult.from(payment);
         };
     }
 

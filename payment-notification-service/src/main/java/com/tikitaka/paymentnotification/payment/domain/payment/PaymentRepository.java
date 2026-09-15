@@ -20,4 +20,6 @@ public interface PaymentRepository {
     boolean tryRestoreReady(UUID paymentId);
 
     List<Payment> findStaleProcessingPayments(OffsetDateTime threshold, int limit);
+
+    Optional<Payment> findUnknownByIdForUpdateNowait(UUID paymentId);
 }
