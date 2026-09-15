@@ -129,6 +129,22 @@ resolve_event_type() {
   fi
 }
 
+# SQL Fixture의 "사용자 1명당 결제 1~2건" 규칙과 동일하게 이벤트 사용자를 계산합니다.
+resolve_user_id() {
+  local failure_index="$1"
+  local vu_id=$((((failure_index - 1) / 10) + 1))
+  local approval_position=$((((failure_index - 1) % 10) + 1))
+  local user_iteration
+
+  if (( approval_position <= 8 )); then
+    user_iteration=$((((approval_position - 1) / 2) + 1))
+  else
+    user_iteration=$((approval_position - 4))
+  fi
+
+  printf '%d' $((9100000 + ((vu_id - 1) * 6) + user_iteration))
+}
+
 build_payload() {
   local failure_index="$1"
   local occurred_at="$2"
@@ -143,7 +159,7 @@ build_payload() {
   event_id="${EVENT_ID_PREFIX}-0000-0000-0000-${suffix}"
   reservation_id="81000000-0000-0000-0000-${suffix}"
   payment_id="82000000-0000-0000-0000-${suffix}"
-  user_id=$((9100000 + failure_index))
+  user_id="$(resolve_user_id "$failure_index")"
   event_type="$(resolve_event_type "$failure_index")"
 
   if [[ "$TARGET" == "payment" ]]; then
@@ -168,6 +184,7 @@ emit_failure_events() {
   local payload
   local event_type
   local failure_class
+  local user_id
 
   for scheduled_delay in "${sorted_delays[@]}"; do
     wait_ms=$((scheduled_delay - previous_delay))
@@ -179,13 +196,14 @@ emit_failure_events() {
     reservation_id="81000000-0000-0000-0000-${reservation_suffix}"
     payload="$(build_payload "$failure_index" "$occurred_at")"
     event_type="$(resolve_event_type "$failure_index")"
+    user_id="$(resolve_user_id "$failure_index")"
     if [[ "$event_type" == "$UNSUPPORTED_EVENT_TYPE" ]]; then
       failure_class="non-retryable"
     else
       failure_class="retryable"
     fi
 
-    log_info "target=${TARGET} index=${failure_index}/${FAILURE_COUNT} scheduledMs=${scheduled_delay} failureClass=${failure_class} eventType=${event_type} eventId=${EVENT_ID_PREFIX}-0000-0000-0000-${reservation_suffix} emittedAt=${occurred_at}"
+    log_info "target=${TARGET} index=${failure_index}/${FAILURE_COUNT} scheduledMs=${scheduled_delay} failureClass=${failure_class} eventType=${event_type} eventId=${EVENT_ID_PREFIX}-0000-0000-0000-${reservation_suffix} userId=${user_id} emittedAt=${occurred_at}"
     printf '%s|%s\n' "$reservation_id" "$payload"
 
     previous_delay=$scheduled_delay
