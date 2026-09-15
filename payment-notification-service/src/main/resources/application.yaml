@@ -38,6 +38,10 @@ payment:
   outbox:
     publish-delay-ms: 1000
 
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [traceId:%X{traceId:--}] %logger{36} - %msg%n"
+
 notification:
   kafka:
     consumer:

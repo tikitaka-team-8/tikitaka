@@ -1,9 +1,9 @@
-package com.tikitaka.platform.event.presentation;
+package com.tikitaka.platform.event.presentation.controller;
 
 import com.tikitaka.platform.auth.infrastructure.security.AuthenticatedUser;
 import com.tikitaka.platform.event.application.SessionSectionPriceService;
 import com.tikitaka.platform.event.presentation.dto.SessionSectionPricesResponse;
-import com.tikitaka.platform.event.presentation.dto.organizer.SessionSectionPricesCreateRequest;
+import com.tikitaka.platform.event.presentation.dto.organizer.request.SessionSectionPricesCreateRequest;
 import com.tikitaka.platform.global.response.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
