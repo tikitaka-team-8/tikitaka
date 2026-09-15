@@ -3,8 +3,11 @@ apiVersion: 1
 datasources:
   # Grafana 시작 시 Prometheus 데이터소스 자동 등록
   - name: Prometheus
+    # 새 Grafana 환경에서 팀 공통 대시보드가 같은 데이터소스를 찾도록 고정한다.
+    uid: tikitaka-prometheus
     type: prometheus
     access: proxy
+    # Grafana와 Prometheus는 같은 Compose 네트워크에 있으므로 서비스 이름을 사용
     url: http://prometheus:9090
     isDefault: true
-    editable: true # 로컬에서는 UI 수정 허용
+    editable: true # 데이터소스 설정은 로컬 Grafana UI에서 수정 가능
