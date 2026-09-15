@@ -8,6 +8,7 @@ import com.tikitaka.ticketing.queue.domain.AdmissionTokenStatus;
 import com.tikitaka.ticketing.queue.domain.QueueEntry;
 import com.tikitaka.ticketing.queue.domain.QueueStatus;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Repository;
 
@@ -264,6 +265,10 @@ public class RedisQueueRepository implements QueueRepository {
     @Override
     public Optional<QueueEntry> findEntry(UUID sessionId, long userId) {
         Map<Object, Object> values = redisTemplate.opsForHash().entries(entryKey(sessionId, userId));
+        return mapEntry(sessionId, userId, values);
+    }
+
+    private Optional<QueueEntry> mapEntry(UUID sessionId, long userId, Map<Object, Object> values) {
         if (values.isEmpty()) {
             return Optional.empty();
         }
@@ -289,12 +294,23 @@ public class RedisQueueRepository implements QueueRepository {
         if (userIds == null || userIds.isEmpty()) {
             return List.of();
         }
-        return userIds.stream()
-                .map(Long::parseLong)
-                .map(userId -> findEntry(sessionId, userId))
-                .flatMap(Optional::stream)
-                .filter(entry -> entry.status() == QueueStatus.WAITING)
-                .toList();
+        var orderedUserIds = userIds.stream().map(Long::parseLong).toList();
+        // Keep the same HGETALL commands and ZSET order, but do not await each hash separately.
+        List<Object> hashes = redisTemplate.executePipelined((RedisCallback<Object>) connection -> {
+            for (long userId : orderedUserIds) {
+                connection.hashCommands().hGetAll(redisTemplate.getStringSerializer().serialize(entryKey(sessionId, userId)));
+            }
+            return null;
+        });
+        var entries = new java.util.ArrayList<QueueEntry>(orderedUserIds.size());
+        for (int i = 0; i < orderedUserIds.size(); i++) {
+            @SuppressWarnings("unchecked")
+            Map<Object, Object> values = (Map<Object, Object>) hashes.get(i);
+            mapEntry(sessionId, orderedUserIds.get(i), values)
+                    .filter(entry -> entry.status() == QueueStatus.WAITING)
+                    .ifPresent(entries::add);
+        }
+        return List.copyOf(entries);
     }
 
     @Override
