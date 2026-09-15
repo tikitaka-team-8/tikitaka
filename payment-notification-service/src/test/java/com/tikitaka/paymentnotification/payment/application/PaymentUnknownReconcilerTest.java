@@ -8,13 +8,14 @@ import com.tikitaka.paymentnotification.payment.domain.payment.PaymentMethod;
 import com.tikitaka.paymentnotification.payment.domain.payment.PaymentRepository;
 import com.tikitaka.paymentnotification.payment.exception.PaymentErrorCode;
 import com.tikitaka.paymentnotification.payment.exception.PaymentException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -25,16 +26,25 @@ import static org.mockito.Mockito.*;
 class PaymentUnknownReconcilerTest {
 
     @Mock
-    private PaymentRepository paymentRepository;
-
-    @Mock
     private PaymentQueryGateway paymentQueryGateway;
 
     @Mock
     private PaymentApprovalResultProcessor paymentApprovalResultProcessor;
 
-    @InjectMocks
     private PaymentUnknownReconciler paymentUnknownReconciler;
+
+    @Mock
+    private PaymentRepository paymentRepository;
+
+    @BeforeEach
+    void setUp() {
+        paymentUnknownReconciler = new PaymentUnknownReconciler(
+                paymentRepository,
+                Optional.of(paymentQueryGateway),
+                paymentApprovalResultProcessor
+        );
+    }
+
 
     @Test
     void UNKNOWN_결제가_Toss_DONE이면_APPROVED로_복구한다() {

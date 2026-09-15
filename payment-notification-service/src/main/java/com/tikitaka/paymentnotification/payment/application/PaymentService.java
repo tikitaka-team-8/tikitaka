@@ -6,7 +6,6 @@ import com.tikitaka.paymentnotification.payment.application.result.PaymentApprov
 import com.tikitaka.paymentnotification.payment.application.result.PaymentCreateResult;
 import com.tikitaka.paymentnotification.payment.application.result.PaymentDetailResult;
 import com.tikitaka.paymentnotification.payment.application.result.ReservationPaymentValidationResult;
-import com.tikitaka.paymentnotification.payment.domain.outbox.PaymentOutbox;
 import com.tikitaka.paymentnotification.payment.domain.payment.Payment;
 import com.tikitaka.paymentnotification.payment.domain.payment.PaymentProvider;
 import com.tikitaka.paymentnotification.payment.domain.payment.PaymentRepository;
@@ -16,7 +15,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import org.springframework.beans.factory.annotation.Value;
 import java.time.OffsetDateTime;
 import java.util.Objects;
 import java.util.Optional;
@@ -40,6 +39,10 @@ public class PaymentService {
     private final PaymentApprovalResultProcessor paymentApprovalResultProcessor;
 
     private final PaymentUnknownReconciler paymentUnknownReconciler;
+
+    @Value("${payment.provider:mock}")
+    private String paymentProvider;
+
 
     // 결제 정보 단건 조회
     @Transactional(readOnly = true)
@@ -98,7 +101,7 @@ public class PaymentService {
                 orderId,
                 command.idempotencyKey(),
                 command.totalAmount(),
-                PaymentProvider.TOSS //MVP MOCK 처리
+                PaymentProvider.valueOf(paymentProvider.toUpperCase()) //MVP MOCK 처리
         );
 
         Payment savedPayment = paymentRepository.save(payment);
@@ -128,13 +131,15 @@ public class PaymentService {
         }
 
         // PG 호출 전 단계
-        try{
+        try {
             validateReservation(payment);
 
-            // Toss confirm 전에 paymentKey 저장
-            paymentKeyBinder.bind(paymentId, paymentKey);
+            // Toss confirm 전에 paymentKey 저장 || mock일땐 검증 X
+            if (payment.getPaymentProvider() == PaymentProvider.TOSS) {
+                paymentKeyBinder.bind(paymentId, paymentKey);
+            }
 
-        }catch (RuntimeException e){
+        } catch (RuntimeException e) {
             // PG 호출 전 실패이므로 PROCESSING -> READY 복구
             paymentProcessingCompensator.restoreReady(paymentId);
             throw e;

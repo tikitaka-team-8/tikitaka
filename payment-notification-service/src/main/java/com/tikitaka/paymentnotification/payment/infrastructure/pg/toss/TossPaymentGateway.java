@@ -29,6 +29,12 @@ public class TossPaymentGateway implements PaymentGateway , PaymentQueryGateway 
     @Override
     public PaymentGatewayResult approve(PaymentGatewayRequest request) {
 
+        // TossPaymentGateway에서만 paymentKey 검증
+        if (request.paymentKey() == null || request.paymentKey().isBlank()) {
+            throw new PaymentException(PaymentErrorCode.INVALID_PAYMENT_REQUEST);
+        }
+
+
         try {
             TossPaymentResponse response =
                     tossPaymentsFeignClient.confirm(

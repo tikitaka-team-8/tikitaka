@@ -162,13 +162,15 @@ public class Payment {
 
 
     public void approve(
-            PaymentMethod paymentMethod
+            PaymentMethod paymentMethod,
+            String pgPaymentKey
     ) {
         validateApprovable();
 
         OffsetDateTime now = OffsetDateTime.now();
 
         this.paymentMethod = paymentMethod;
+        this.pgPaymentKey = pgPaymentKey;
         this.status = PaymentStatus.APPROVED;
         this.approvedAt = now;
         this.updatedAt = now;

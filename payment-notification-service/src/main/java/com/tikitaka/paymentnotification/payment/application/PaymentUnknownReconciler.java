@@ -11,13 +11,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class PaymentUnknownReconciler {
     private final PaymentRepository paymentRepository;
-    private final PaymentQueryGateway paymentQueryGateway;
+    private final Optional<PaymentQueryGateway> paymentQueryGateway;
     private final PaymentApprovalResultProcessor paymentApprovalResultProcessor;
 
     public PaymentApproveResult reconcile(UUID paymentId) {
@@ -36,7 +37,10 @@ public class PaymentUnknownReconciler {
             return PaymentApproveResult.from(payment);
         }
 
-        PaymentQueryResult queryResult = paymentQueryGateway.getPayment(paymentKey);
+        PaymentQueryGateway queryGateway = paymentQueryGateway
+                .orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_STATUS_CONFIRMATION_REQUIRED));
+
+        PaymentQueryResult queryResult = queryGateway.getPayment(paymentKey);
 
         validateQueriedPayment(payment, queryResult);
 

@@ -57,22 +57,4 @@ class MockPaymentGatewayTest {
         assertThat(result.failureReason())
                 .isEqualTo("Mock PG 결제 승인 실패");
     }
-
-    @Test
-    void 결제_승인_결과를_확인할_수_없다() {
-        PaymentGatewayRequest request =
-                new PaymentGatewayRequest(
-                        "test-payment-key",
-                        "PAY-UNKNOWN",
-                        150000L,
-                        "PAYMENT-APPROVE-test"
-                );
-
-        PaymentGatewayResult result =
-                mockPaymentGateway.approve(request);
-
-        assertThat(result.status())
-                .isEqualTo(PaymentGatewayResult.Status.UNKNOWN);
-    }
-
 }

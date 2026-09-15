@@ -174,7 +174,11 @@ public class PaymentApprovalResultProcessor {
             PaymentGatewayResult result,
             OffsetDateTime requestedAt
     ) {
-        payment.approve(result.paymentMethod());
+        payment.approve(
+                result.paymentMethod(),
+                result.pgPaymentKey()
+        );
+
 
         paymentTransactionRepository.save(
                 PaymentTransaction.createApproveSuccess(

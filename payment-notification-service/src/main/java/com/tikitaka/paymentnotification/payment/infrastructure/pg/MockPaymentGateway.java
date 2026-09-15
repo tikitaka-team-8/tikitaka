@@ -15,7 +15,7 @@ import java.util.UUID;
         havingValue = "mock",
         matchIfMissing = true
 )
-public class MockPaymentGateway implements PaymentGateway, PaymentQueryGateway {
+public class MockPaymentGateway implements PaymentGateway{
 
 
     @Override
@@ -28,16 +28,6 @@ public class MockPaymentGateway implements PaymentGateway, PaymentQueryGateway {
             );
         }
 
-        if (request.orderId().contains("UNKNOWN")) {
-            return PaymentGatewayResult.unknown();}
-
         return PaymentGatewayResult.success("MOCK-" + UUID.randomUUID(), PaymentMethod.CARD);
-    }
-
-    @Override
-    public PaymentQueryResult getPayment(String paymentKey) {
-        throw new PaymentException(
-                PaymentErrorCode.PAYMENT_STATUS_CONFIRMATION_REQUIRED
-        );
     }
 }
