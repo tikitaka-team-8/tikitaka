@@ -16,9 +16,3 @@ spring:
 clients:
   ticketing-service:
     url: http://localhost:8082
-
-payment:
-  provider: ${PAYMENT_PROVIDER:mock}
-  toss:
-    secret-key: ${TOSS_SECRET_KEY}
-

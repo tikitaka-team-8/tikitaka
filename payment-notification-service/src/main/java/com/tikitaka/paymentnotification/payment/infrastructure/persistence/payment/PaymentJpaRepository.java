@@ -51,6 +51,7 @@ public interface PaymentJpaRepository extends JpaRepository<Payment, UUID> {
                 SELECT *
                 FROM p_payment
                 WHERE status = 'PROCESSING'
+                  AND payment_provider = 'TOSS'
                   AND updated_at < :threshold
                 ORDER BY updated_at ASC
                 LIMIT :limit
