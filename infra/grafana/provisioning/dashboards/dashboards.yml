@@ -1,0 +1,16 @@
+apiVersion: 1
+
+# 저장소의 대시보드 JSON을 Grafana 시작 시 공통 대시보드로 등록
+providers:
+  - name: Tikitaka
+    orgId: 1
+    # Grafana의 Tikitaka 폴더에 표시
+    folder: Tikitaka
+    type: file
+    disableDeletion: false
+    # 로컬에서는 대시보드를 자유롭게 수정·저장할 수 있으며,
+    # 공통 반영이 필요한 변경은 JSON으로 export 하여 PR로 공유한다.
+    allowUiUpdates: true
+    options:
+      # Compose로 마운트된 컨테이너 내부의 대시보드 JSON 경로
+      path: /etc/grafana/provisioning/dashboards/json
