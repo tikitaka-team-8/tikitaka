@@ -4,10 +4,12 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import org.springframework.http.HttpStatus;
 
 import java.time.Instant;
+import org.slf4j.MDC;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ApiResponse<T>(
         Instant timestamp,
+        String traceId,
         String code,
         int status,
         String message,
@@ -28,6 +30,7 @@ public record ApiResponse<T>(
     ) {
         return new ApiResponse<>(
                 Instant.now(),
+                MDC.get("traceId"),
                 SUCCESS_CODE,
                 status.value(),
                 message,
