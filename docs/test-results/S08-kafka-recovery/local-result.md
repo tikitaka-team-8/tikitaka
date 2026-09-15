@@ -14,7 +14,7 @@
 - Docker Image Tag: 로컬 Compose 빌드 이미지(`latest`)
 - 적용 Profile: `docker`
 - 관련 Issue: #101
-- 진행 상태: Retry·DLT 적용 후 혼합 실패 격리 비교 완료, 재시도 후 성공 보충 검증 예정
+- 진행 상태: Retry·DLT 적용 후 혼합 실패 격리 비교 및 재시도 후 성공 보충 검증 완료
 
 ### 측정 환경
 
@@ -449,4 +449,58 @@ Notification의 실제 처리 구간은 약 25.89초, 약 52.1% 감소했다. Ba
 - 실패 이벤트가 정상 이벤트 사이에 분산되고 마지막 실패 뒤 정상 Offset 진행 확인
 - 비재시도 5건의 즉시 DLT와 재시도 가능 5건의 2초 간격 총 3회 처리 확인
 - Consumer별 DLT 10건, 최종 Lag 0, Inbox·Outbox 중복 없음 확인
-- 남은 검증: 재시도 가능 오류가 두 번 발생한 뒤 세 번째 처리에서 성공하는 단일 이벤트 보충 테스트
+- 재시도 가능 오류가 두 번 발생한 뒤 세 번째 처리에서 성공하는 단일 이벤트는 아래 보충 테스트에서 추가 검증
+
+## 재시도 후 최종 성공 보충 검증 결과
+
+혼합 실패 테스트는 재시도 가능 오류가 총 3회 모두 실패하여 DLT로 이동하는 경로를 검증했다. 보충 테스트에서는 동일한 Retry 정책에서 일시적 DB 오류가 1·2차 처리 후 해소됐을 때 세 번째 처리로 정상 복구되는지 단일 이벤트로 확인했다. 전체 Fixture를 다시 적재하지 않고 1번 Reservation과 관련 Inbox·Outbox·Notification만 초기 상태로 되돌렸으며, 기존 DLT 결과는 유지했다.
+
+### 실행 조건
+
+- 기록 시작 시각: `2026-09-15T22:44:25.5173677+09:00`
+- 단일 Payment 이벤트 발행 시각: `2026-09-15 22:45:50 KST`
+- 기록 종료 시각: `2026-09-15T22:48:29.5586314+09:00`
+- Payment Event ID: `f3000000-0000-0000-0000-000000000001`
+- Reservation ID: `81000000-0000-0000-0000-000000000001`
+- 실패 주입: Consumer별 최초 2회에 PostgreSQL `SQLSTATE 40001` 발생, 세 번째 처리 허용
+- 시작 전 DLT: `payment-events.DLT` 10건, `reservation-events.DLT` 10건
+
+Setup 결과는 Ticketing의 기존 Inbox·Outbox 각 1건 삭제, Reservation·SeatHold·ScheduleSeat 각 1건 초기화와 두 Consumer의 일시적 실패 트리거 생성을 모두 정상 완료했다. Notification도 기존 Inbox·Notification 각 1건을 삭제하고 일시적 실패 트리거를 생성했다.
+
+### Retry 시간과 최종 성공
+
+| Consumer | 1차 실패 | 2차 실패 | 3차 성공 | 실패 간격 | 최초 실패부터 성공 |
+|---|---|---|---|---:|---:|
+| Ticketing | 22:45:51.308 | 22:45:53.317 | 22:45:55.328 | 약 2.009초 / 2.011초 | 약 4.020초 |
+| Notification | 22:45:56.125 | 22:45:58.133 | 22:46:00.141 | 약 2.008초 / 2.008초 | 약 4.016초 |
+
+Ticketing은 세 번째 시도에서 `PaymentSucceededEvent`를 `statusChanged=true`로 처리했다. 이어 발행된 Reservation Event ID `1ee3cd5a-e766-4663-aecc-eb8723dd9a54`를 Notification이 세 번째 시도에서 `notificationCreated=true`로 처리했다. Payment 이벤트 발행부터 최종 Notification 성공까지는 초 단위 발행 로그 기준 약 10.14초였다.
+
+### 최종 정합성 및 DLT 확인
+
+| 검증 항목 | 결과 |
+|---|---:|
+| Ticketing 처리 시도 | 3회 |
+| Notification 처리 시도 | 3회 |
+| Reservation 상태 | `CONFIRMED` |
+| Reservation version | 1 |
+| Payment 완료 시각 | 저장됨 |
+| SeatHold 상태 | `CONFIRMED` |
+| ScheduleSeat 상태 | `SOLD` |
+| Reservation Inbox / 고유 이벤트 | 1건 / 1건 |
+| Reservation Outbox / Published / 고유 이벤트 | 1건 / 1건 / 1건 |
+| Notification / 고유 Source Event | 1건 / 1건 |
+| Notification Inbox / 고유 이벤트 | 1건 / 1건 |
+| `payment-events.DLT` | 10건 → 10건 |
+| `reservation-events.DLT` | 10건 → 10건 |
+| 최종 Ticketing Consumer Lag | 0 |
+| 최종 Notification Consumer Lag | 0 |
+
+### 보충 검증 판정
+
+- 테스트 결과: **PASS**
+- 두 Consumer 모두 합의한 2초 간격과 최초 포함 총 3회 처리 준수
+- 일시적 오류가 해소된 세 번째 처리에서 상태 변경과 후속 이벤트 흐름 정상 완료
+- 성공한 이벤트를 DLT로 보내지 않아 기존 DLT 10건 유지
+- Inbox·Outbox·Notification 각 1건으로 멱등성과 최종 데이터 정합성 확인
+- 최종 Consumer Lag 0으로 정상화 확인
