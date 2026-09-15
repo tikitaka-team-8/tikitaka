@@ -42,10 +42,10 @@ Reservation 및 Notification Consumer가 중단된 동안에도 Payment와 Reser
 - k6: [`scripts/k6/kafka-recovery.js`](../../../scripts/k6/kafka-recovery.js)
 - 사용자 CSV: [`scripts/k6/data/s08-users.csv`](../../../scripts/k6/data/s08-users.csv)
 - 결제 승인 CSV: [`scripts/k6/data/s08-payment-approvals.csv`](../../../scripts/k6/data/s08-payment-approvals.csv)
-- 상태 준비·정리 SQL: `scripts/sql/seed-s08-*.sql`, `scripts/sql/cleanup-s08-*.sql`
+- 상태 준비·정리 SQL: [`scripts/sql/s08-kafka-recovery/`](../../../scripts/sql/s08-kafka-recovery/README.md)
 - 상태 검증 SQL:
-  - [`scripts/sql/verify-s08-ticketing.sql`](../../../scripts/sql/verify-s08-ticketing.sql)
-  - [`scripts/sql/verify-s08-payment-notification.sql`](../../../scripts/sql/verify-s08-payment-notification.sql)
+  - [`scripts/sql/s08-kafka-recovery/_shared/verify-ticketing.sql`](../../../scripts/sql/s08-kafka-recovery/_shared/verify-ticketing.sql)
+  - [`scripts/sql/s08-kafka-recovery/_shared/verify-payment-notification.sql`](../../../scripts/sql/s08-kafka-recovery/_shared/verify-payment-notification.sql)
 - 실패 격리 k6: [`scripts/k6/kafka-failure-recovery.js`](../../../scripts/k6/kafka-failure-recovery.js)
 - 실패 격리 사용자 CSV: [`scripts/k6/data/s08-failure-users.csv`](../../../scripts/k6/data/s08-failure-users.csv)
 - 실패 격리 결제 CSV: [`scripts/k6/data/s08-failure-payment-approvals.csv`](../../../scripts/k6/data/s08-failure-payment-approvals.csv)
