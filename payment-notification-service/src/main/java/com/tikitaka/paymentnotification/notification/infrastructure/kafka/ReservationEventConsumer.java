@@ -28,7 +28,7 @@ public class ReservationEventConsumer {
         this.reservationNotificationEventService = reservationNotificationEventService;
     }
 
-    @KafkaListener(topics = KafkaTopics.RESERVATION_EVENTS)
+    @KafkaListener(topics = KafkaTopics.RESERVATION_EVENTS, autoStartup = "${notification.kafka.consumer.auto-startup}")
     public void consume(String payload) throws JsonProcessingException {
 
         // 같은 토픽의 예매 이벤트를 eventType으로 구분

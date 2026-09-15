@@ -37,3 +37,8 @@ internal:
 payment:
   outbox:
     publish-delay-ms: 1000
+
+notification:
+  kafka:
+    consumer:
+      auto-startup: ${NOTIFICATION_KAFKA_CONSUMER_AUTO_STARTUP:true}

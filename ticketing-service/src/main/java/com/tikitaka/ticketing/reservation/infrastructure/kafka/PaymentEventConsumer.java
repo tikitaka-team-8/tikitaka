@@ -28,7 +28,7 @@ public class PaymentEventConsumer {
         this.reservationPaymentEventService = reservationPaymentEventService;
     }
 
-    @KafkaListener(topics = KafkaTopics.PAYMENT_EVENTS)
+    @KafkaListener(topics = KafkaTopics.PAYMENT_EVENTS, autoStartup = "${reservation.kafka.consumer.auto-startup}")
     public void consume(String payload) throws JsonProcessingException {
 
         // 같은 토픽의 결제 이벤트를 eventType으로 구분

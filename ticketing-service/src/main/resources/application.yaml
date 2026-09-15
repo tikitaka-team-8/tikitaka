@@ -60,3 +60,8 @@ clients:
 internal:
   service:
     key: ${INTERNAL_SERVICE_KEY}
+
+reservation:
+  kafka:
+    consumer:
+      auto-startup: ${RESERVATION_KAFKA_CONSUMER_AUTO_STARTUP:true}
