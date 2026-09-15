@@ -115,7 +115,7 @@ public class ReservationService {
         }
 
         List<SeatHoldValidationInfo> seatHolds = seatHoldQueryPort.findAllByIds(seatHoldIds);
-        validateSeatHolds(command.getUserId(), seatHoldIds, seatHolds);
+        validateReservedSeatHolds(command.getUserId(), seatHoldIds, seatHolds);
 
         return new PaymentValidationResult(reservation);
     }
@@ -163,7 +163,7 @@ public class ReservationService {
         );
         Reservation savedReservation = reservationRepositoryPort.save(reservation);
 
-        // 예매에 포함된 SeatHold 만료 시각 연장
+        // 결제 처리를 위해 예매에 포함된 SeatHold를 RESERVED 상태로 전환
         savedReservation.getReservationSeats().forEach(
                 reservationSeat -> seatHoldReservationValidator.validateAndExtend(reservationSeat.getSeatHoldId())
         );
@@ -199,7 +199,7 @@ public class ReservationService {
         }
     }
 
-    private void validateSeatHolds(Long userId, List<UUID> seatHoldIds, List<SeatHoldValidationInfo> seatHolds) {
+    private void validateReservedSeatHolds(Long userId, List<UUID> seatHoldIds, List<SeatHoldValidationInfo> seatHolds) {
         Set<UUID> foundSeatHoldIds = seatHolds.stream()
                 .map(SeatHoldValidationInfo::seatHoldId).collect(Collectors.toSet());
 
@@ -209,13 +209,8 @@ public class ReservationService {
         if (seatHolds.stream().anyMatch(seatHold -> !Objects.equals(seatHold.userId(), userId))) {
             throw new BusinessException(ReservationErrorCode.SEAT_HOLD_OWNERSHIP_REQUIRED);
         }
-        if (seatHolds.stream().anyMatch(seatHold -> seatHold.holdStatus() != HoldStatus.HOLDING)) {
+        if (seatHolds.stream().anyMatch(seatHold -> seatHold.holdStatus() != HoldStatus.RESERVED)) {
             throw new BusinessException(ReservationErrorCode.INVALID_SEAT_HOLD_STATUS);
-        }
-
-        Instant now = Instant.now(); // 모든 좌석에 동일 현재 시각 기준 검증
-        if (seatHolds.stream().anyMatch(seatHold -> !seatHold.expiresAt().isAfter(now))) {
-            throw new BusinessException(ReservationErrorCode.SEAT_HOLD_EXPIRED);
         }
     }
 
