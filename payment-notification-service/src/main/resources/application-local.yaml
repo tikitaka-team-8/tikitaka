@@ -8,6 +8,10 @@ spring:
     password: ${PAYMENT_DB_PASSWORD}
   kafka:
     bootstrap-servers: localhost:9092
+    producer:
+      properties:
+        delivery.timeout.ms: 5000
+        request.timeout.ms: 3000
 
 clients:
   ticketing-service:

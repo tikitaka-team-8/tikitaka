@@ -1,5 +1,7 @@
 package com.tikitaka.paymentnotification.payment.domain.payment;
 
+import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -16,4 +18,8 @@ public interface PaymentRepository {
     boolean tryStartProcessing(UUID paymentId);
 
     boolean tryRestoreReady(UUID paymentId);
+
+    List<Payment> findStaleProcessingPayments(OffsetDateTime threshold, int limit);
+
+    Optional<Payment> findUnknownByIdForUpdateNowait(UUID paymentId);
 }

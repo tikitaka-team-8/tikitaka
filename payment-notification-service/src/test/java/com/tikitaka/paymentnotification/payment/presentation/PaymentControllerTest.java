@@ -66,18 +66,18 @@ class PaymentControllerTest {
 
     @Test
     void 결제승인은_Gateway_사용자_ID를_Service에_전달한다() throws Exception {
-        when(paymentService.approvePayment(PAYMENT_ID, USER_ID, PaymentMethod.CARD))
+        when(paymentService.approvePayment(PAYMENT_ID, USER_ID,  "test-payment-key"))
                 .thenReturn(new PaymentApproveResult(PAYMENT_ID, PaymentStatus.APPROVED, null, null));
 
         mockMvc.perform(post("/api/v1/payments/{paymentId}/approve", PAYMENT_ID)
                         .header("X-User-Id", USER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"paymentMethod\":\"CARD\"}"))
+                        .content("{\"paymentKey\":\"test-payment-key\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.paymentId").value(PAYMENT_ID.toString()))
                 .andExpect(jsonPath("$.data.status").value("APPROVED"));
 
-        verify(paymentService).approvePayment(PAYMENT_ID, USER_ID, PaymentMethod.CARD);
+        verify(paymentService).approvePayment(PAYMENT_ID, USER_ID,  "test-payment-key");
     }
 
     @Test

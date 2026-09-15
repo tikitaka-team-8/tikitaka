@@ -1,16 +1,12 @@
 package com.tikitaka.paymentnotification.payment.application;
 
 import com.tikitaka.paymentnotification.payment.application.command.PaymentCreateCommand;
-import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGateway;
-import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGatewayRequest;
-import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGatewayResult;
-import com.tikitaka.paymentnotification.payment.application.gateway.ReservationPaymentValidator;
+import com.tikitaka.paymentnotification.payment.application.gateway.*;
 import com.tikitaka.paymentnotification.payment.application.result.PaymentApproveResult;
 import com.tikitaka.paymentnotification.payment.application.result.PaymentCreateResult;
 import com.tikitaka.paymentnotification.payment.application.result.PaymentDetailResult;
 import com.tikitaka.paymentnotification.payment.application.result.ReservationPaymentValidationResult;
 import com.tikitaka.paymentnotification.payment.domain.payment.Payment;
-import com.tikitaka.paymentnotification.payment.domain.payment.PaymentMethod;
 import com.tikitaka.paymentnotification.payment.domain.payment.PaymentProvider;
 import com.tikitaka.paymentnotification.payment.domain.payment.PaymentRepository;
 import com.tikitaka.paymentnotification.payment.exception.PaymentErrorCode;
@@ -19,7 +15,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import org.springframework.beans.factory.annotation.Value;
 import java.time.OffsetDateTime;
 import java.util.Objects;
 import java.util.Optional;
@@ -33,12 +29,19 @@ public class PaymentService {
 
     private final ReservationPaymentValidator reservationPaymentValidator;
 
+    private final PaymentKeyBinder paymentKeyBinder;
+
     private final PaymentRepository paymentRepository;
     private final PaymentGateway paymentGateway;
 
     private final PaymentProcessingCompensator paymentProcessingCompensator;
     private final PaymentProcessingAcquirer paymentProcessingAcquirer;
     private final PaymentApprovalResultProcessor paymentApprovalResultProcessor;
+
+    private final PaymentUnknownReconciler paymentUnknownReconciler;
+
+    @Value("${payment.provider:mock}")
+    private String paymentProvider;
 
 
     // 결제 정보 단건 조회
@@ -98,7 +101,7 @@ public class PaymentService {
                 orderId,
                 command.idempotencyKey(),
                 command.totalAmount(),
-                PaymentProvider.MOCK //MVP MOCK 처리
+                PaymentProvider.valueOf(paymentProvider.toUpperCase()) //MVP MOCK 처리
         );
 
         Payment savedPayment = paymentRepository.save(payment);
@@ -112,7 +115,7 @@ public class PaymentService {
     public PaymentApproveResult approvePayment(
             UUID paymentId,
             Long loginUserId,
-            PaymentMethod paymentMethod
+            String paymentKey
     ) {
         // 승인에 사용할 Payment 정보 조회
         Payment payment = paymentRepository.findById(paymentId).orElseThrow(()->
@@ -128,20 +131,28 @@ public class PaymentService {
         }
 
         // PG 호출 전 단계
-        try{
+        try {
             validateReservation(payment);
-        }catch (RuntimeException e){
+
+            // Toss confirm 전에 paymentKey 저장 || mock일땐 검증 X
+            if (payment.getPaymentProvider() == PaymentProvider.TOSS) {
+                paymentKeyBinder.bind(paymentId, paymentKey);
+            }
+
+        } catch (RuntimeException e) {
             // PG 호출 전 실패이므로 PROCESSING -> READY 복구
             paymentProcessingCompensator.restoreReady(paymentId);
             throw e;
         }
 
+
         OffsetDateTime requestedAt = OffsetDateTime.now();
 
         PaymentGatewayRequest request = new PaymentGatewayRequest(
+                paymentKey,
                 payment.getOrderId(),
                 payment.getAmount(),
-                payment.getCurrency()
+                "PAYMENT-APPROVE-" + paymentId
         );
 
         PaymentGatewayResult result;
@@ -159,7 +170,6 @@ public class PaymentService {
         try {
             return paymentApprovalResultProcessor.process(
                     paymentId,
-                    paymentMethod,
                     result,
                     requestedAt
             );
@@ -200,12 +210,16 @@ public class PaymentService {
                         new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
 
         return switch (payment.getStatus()){
-            case APPROVED, UNKNOWN -> PaymentApproveResult.from(payment);
+            case APPROVED ->
+                    PaymentApproveResult.from(payment);
+
+            case UNKNOWN ->
+                    paymentUnknownReconciler.reconcile(paymentId);
 
             case READY, PROCESSING, FAILED, CANCELED ->
-                throw new PaymentException(
-                        PaymentErrorCode.PAYMENT_NOT_ALLOWED
-                );
+                    throw new PaymentException(
+                            PaymentErrorCode.PAYMENT_NOT_ALLOWED
+                    );
         };
     }
 
@@ -226,6 +240,9 @@ public class PaymentService {
             );
         }
     }
+
+
+
 
 
 }

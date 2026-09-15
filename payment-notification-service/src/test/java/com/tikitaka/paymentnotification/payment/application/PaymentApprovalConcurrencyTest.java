@@ -103,7 +103,8 @@ class PaymentApprovalConcurrencyTest {
             Thread.sleep(300);
 
             return PaymentGatewayResult.success(
-                    "pg-payment-key"
+                    "pg-payment-key",
+                    PaymentMethod.CARD
             );
         });
 
@@ -140,7 +141,7 @@ class PaymentApprovalConcurrencyTest {
                                 paymentService.approvePayment(
                                         paymentId,
                                         USER_ID,
-                                        PaymentMethod.CARD
+                                        "test-payment-key"
                                 );
 
                             } catch (PaymentException ignored) {

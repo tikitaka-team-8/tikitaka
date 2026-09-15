@@ -20,8 +20,6 @@ import java.util.UUID;
 @RequestMapping("/api/v1/internal/payments")
 public class InternalPaymentController {
 
-    // TODO : 아직 보안도입 X라 논리적으로 내부 API 구분만 한 상태입니다.
-
 
     private final PaymentService paymentService;
 
