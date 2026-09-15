@@ -42,9 +42,11 @@ internal:
   service:
     key: ${INTERNAL_SERVICE_KEY}
 payment:
-  provider: ${PAYMENT_PROVIDER:mock}
   outbox:
     publish-delay-ms: 1000
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [traceId:%X{traceId:--}] %logger{36} - %msg%n"
   reconciliation:
     processing-delay-ms: 60000
     processing-timeout-minutes: 5

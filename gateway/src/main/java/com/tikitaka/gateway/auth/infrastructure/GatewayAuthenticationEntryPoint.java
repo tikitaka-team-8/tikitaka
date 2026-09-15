@@ -1,9 +1,9 @@
 package com.tikitaka.gateway.auth.infrastructure;
 
 import java.io.IOException;
-import java.time.Instant;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.tikitaka.gateway.global.response.GatewayApiErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.MediaType;
@@ -37,14 +37,12 @@ public class GatewayAuthenticationEntryPoint implements AuthenticationEntryPoint
     ) throws IOException {
         boolean expired = isExpired(exception);
         GatewayApiErrorResponse errorResponse = expired
-                ? new GatewayApiErrorResponse(
-                        Instant.now(),
+                ? GatewayApiErrorResponse.of(
                         EXPIRED_ACCESS_TOKEN_CODE,
                         HttpServletResponse.SC_UNAUTHORIZED,
                         EXPIRED_ACCESS_TOKEN_MESSAGE
                 )
-                : new GatewayApiErrorResponse(
-                        Instant.now(),
+                : GatewayApiErrorResponse.of(
                         INVALID_ACCESS_TOKEN_CODE,
                         HttpServletResponse.SC_UNAUTHORIZED,
                         INVALID_ACCESS_TOKEN_MESSAGE
@@ -75,13 +73,5 @@ public class GatewayAuthenticationEntryPoint implements AuthenticationEntryPoint
         }
 
         return false;
-    }
-
-    private record GatewayApiErrorResponse(
-            Instant timestamp,
-            String code,
-            int status,
-            String message
-    ) {
     }
 }
