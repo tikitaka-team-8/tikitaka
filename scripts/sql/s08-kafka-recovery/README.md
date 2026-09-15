@@ -39,7 +39,6 @@ scripts/sql/s08-kafka-recovery/
 - 저장소 루트에서 PowerShell 명령 실행
 - Kafka 주입과 조합 실행 Shell은 Git Bash에서 실행
 - Docker Compose의 Kafka, PostgreSQL, Gateway와 각 서비스 기동
-- k6 설치
 - 실제 비밀번호·JWT·Service Key를 저장소 파일에 기록하지 않음
 
 ```powershell
