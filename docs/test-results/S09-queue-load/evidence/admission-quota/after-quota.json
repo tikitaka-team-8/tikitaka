@@ -1,0 +1,31 @@
+{
+  "scope" : "observed run only; two extra TIME commands per admission attempt; assumes stable Redis clock",
+  "verdict" : "PASS",
+  "policy" : "per session, all workers combined, max 50 successes per Redis epoch second",
+  "definiteAdmissionsBySecond" : {
+    "1789350678" : 50,
+    "1789350679" : 50,
+    "1789350680" : 50,
+    "1789350681" : 50,
+    "1789350682" : 50,
+    "1789350683" : 50,
+    "1789350684" : 50,
+    "1789350685" : 50,
+    "1789350686" : 50,
+    "1789350687" : 50
+  },
+  "possibleAdmissionsBySecond" : {
+    "1789350678" : 50,
+    "1789350679" : 50,
+    "1789350680" : 50,
+    "1789350681" : 50,
+    "1789350682" : 50,
+    "1789350683" : 50,
+    "1789350684" : 50,
+    "1789350685" : 50,
+    "1789350686" : 50,
+    "1789350687" : 50
+  },
+  "invalidTimeBounds" : false,
+  "boundaryCrossingSuccesses" : 0
+}

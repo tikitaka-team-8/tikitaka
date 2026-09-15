@@ -1,0 +1,278 @@
+# S09 Queue 로컬 테스트 결과
+
+## 기본 정보
+
+- 시나리오: S09 공연 오픈 동시 Queue 진입. S10 중 Queue Scheduler 처리량 하위 항목 포함.
+- 담당: Queue
+- 유형: API 기능·보안, 정합성·동시성, 부하 및 개선 전후 비교.
+- 환경/기간: Local Docker Desktop, 2026-09-09~14. 스테이징 미실행.
+- Branch: `test/queue-performance` (측정 당시 브랜치는 로컬 원본 환경 자료에 보존).
+- 측정 당시 기준 HEAD: `1c22905a263a915ecb99827b437f2067838d8cc9` + 미커밋 변경. HEAD만으로 실제 실행 코드를 식별하면 안 된다.
+- 최종 회귀 이미지: `tikitaka-ticketing-observed:20260914-110102`, ID `sha256:b79a4c694bcf7ac51a0c8c3fc51f700baad33a595a4334b370cfa29e68001e4f`.
+- 최종 source manifest SHA-256: `7fd6f93478d2c0c3cea52d1959ca29925a4fda1f49d7508142c765a82c43f9ba`.
+- Profile: Compose `docker`. batch 50, fixedDelay 1초, token TTL 3분, WAITING heartbeat timeout 2분.
+- 도구: k6 v2.2.0(스크립트에 digest 고정), JDK 21, Gradle wrapper, Python 3 표준 라이브러리, PowerShell, Redis 7.2.14, Prometheus/Grafana. 개별 실행의 버전·이미지는 해당 environment 자료가 기준.
+
+## 테스트 방법
+
+[실행 안내](reproduction.md)에 선행 조건, 스크립트 역할, 명령, 초기화 범위를 정리했다.
+일반 사용자 흐름은 Gateway → Queue 등록 → 상태 조회/heartbeat → ADMITTED → 토큰으로 좌석 조회 → ENTERED다.
+부하 구간은 로그인 부하를 제외하고 로컬 fixture JWT를 사용하며 Gateway의 JWT 검증은 유지한다.
+
+PASS는 실행한 기능·정합성·회복 및 결정한 승인 상한에 대한 판정이다.
+팀의 처리량/응답시간 목표가 없으므로 특정 p95/TPS를 합격 기준으로 만들지 않았다.
+
+## 작업 구분
+
+### 팀 필수
+
+- **P0:** S09 Gateway 흐름·토큰·순번·정합성, VU/Spike/Soak·Polling/자원 관측, 다중 인스턴스 중복 승인·합산 상한 검증.
+- **S10 Queue 요구:** Scheduler 순수 처리량과 Redis 순차 조회 비용 측정. pipeline 개선은 해당 측정에 따른 **R1 범위의 개선**으로 정리했다.
+- **담당자 결정:**  입장 허용량은 회차별로 초당 최대 50명이다. 회차별 한도는 독립적이며, 같은 회차를 여러 서버가 처리해도 합산 50명을 초과하지 않는다. 시간 기준은 Redis의 고정 1초 구간이다.
+
+### 담당자 개인 추가 진단
+
+- 등록 API 단독 25~100 req/s 초기 탐색.
+- 기존 heartbeat·이탈·재진입 동작을 반영한 기능 사례 추가. 이탈 비율/heartbeat 중단군 혼합 부하는 수행하지 않았다.
+- 앱 재기동 직후 Spike 반복과 서비스별 비교. 간헐 timeout은 재현했지만 원인은 미확정이다.
+- 수만 명 한계치, 다중 회차 대규모 부하, 동적 admission, 분산 락, 대규모 리팩토링은 후속 후보이며 이번에 수행하지 않았다.
+
+P0는 팀 Queue 필수 검증 범위, R1은 측정 과정에서 범위를 제한한 개선을 뜻한다.
+S10 측정 자체와 개인 진단에 임의의 P0/R1 등급을 붙이지 않았다.
+S02 Seat 선점과 S10 전체 E2E는 Queue의 독립 과제에 포함하지 않는다.
+
+## 실행 결과와 근거
+
+| 구분 | 범위 | 결과 | 근거 |
+|---|---|---|---|
+| 팀 필수 · P0 | Gateway 기능·토큰 위조/소유권/만료·중복 요청 | 검사 사례 PASS | API 기능·보안 상세 |
+| 팀 필수 · P0 | 50→100→300→500→1,000 VU | 정상 상태 실행 완료 | VU 상세 |
+| 팀 필수 · P0 | 정상 상태 1,000명 Spike, 300 VU 10분 Soak  | 실행 사례 PASS | Spike/Soak 상세 |
+| 팀 필수 · P0 | Polling 1/2/5초 비교 | 정합성·회복 PASS, 요청량 비교 완료 | Polling 상세 |
+| 팀 필수 · P0 | 두 Scheduler JVM 중복 승인·토큰 | 500명 사용자별 1회 승인 PASS | 두 JVM 상세 |
+| 팀 필수 · P0 | 회차별 합산 상한(담당자 결정) | FAIL → 수정 후 PASS | quota 전후 근거 |
+| 팀 필수 · S10 / 개선 R1 | Scheduler 순수 처리량·pipeline | 5,000명, 전후 각 4회 비교 | Scheduler 상세 |
+| 팀 필수 · P0 회귀 | 최종 quota 적용 이미지 API | 50/300 VU PASS | [수치](evidence/final-regression/results.json) |
+| 개인 추가 진단 | heartbeat·이탈·재진입 기능 사례 | 검사 사례 PASS | API 기능·보안 상세 |
+| 개인 추가 진단 | 앱 재기동 직후 1,000명 Spike | 5회 중 2회 실패, 원인 미확정 | 기존 실패 기록 |
+
+### 최종 대표 회귀: 2026-09-14
+
+최신 이미지 적용 뒤 각 120초, polling 2초, heartbeat 15초.
+VU는 동시 실행 사용자 수이며 completed는 반복해서 완료한 고유 사용자 흐름의 총수다.
+
+| VU | 완료/시작 | HTTP 요청 | HTTP 실패 | HTTP 평균/p95/p99 (ms) | 대기 p95 (ms) | 정합성/회복 |
+|---|---|---|---|---|---|---|
+| 50 | 2,621/2,621 | 13,105 | 0 | 21.16 / 89.73 / 298.99 | 2,437 | PASS |
+| 300 | 5,964/5,964 | 41,371 | 0 | 11.23 / 40.34 / 118.36 | 6,123 | PASS |
+
+WAITING 관측 최대 29/280, 회복 확인 20.14/22.18초. 회복은 부하 프로세스 종료 뒤 검증·관측 시간까지 포함하며 정확한 최초 정상화 시각이 아니다.
+RedisRepository 회귀 22개 통과(skip 0). quota 두 JVM 검증은 749회 시도 중 500회 성공,
+10개 고정 초 구간 각각 50명으로 정합성과 상한 모두 PASS.
+
+## 문제와 개선 전후
+
+1. 대기자별 순차 HGETALL 왕복: pipeline 적용 후 조회 누적 평균 5.09→1.46초(-71.3%),
+   5,000명 처리 11.43→8.50초(-25.6%). 명령 수 감소가 아니라 응답 대기 방식의 변경이다.
+   당시 runner는 1초 대기를 생략했다. 593.5명/s를 운영 admission 허용량으로 해석하지 않는다.
+2. 다중 JVM 합산 한도 누락: 중복 상태 전이는 방지했지만 서로 다른 사용자는 같은 초에 100명 승인됨.
+   승인 Lua 안에서 Redis TIME 기반 회차별 한도 확인과 성공 수 갱신을 결합해 재검증에서 50명/초 준수를 확인했다.
+   이후 정책이 달라졌으므로 과거 pipeline 실험과 새 코드의 무대기 baseline을 직접 비교하지 않는다.
+
+## 최종 판정과 남은 사항
+
+- 정상 상태의 실행한 로컬 사례 및 최종 대표 회귀: PASS. 발견한 합산 상한 오류: 수정·재검증 완료.
+- 기동 직후 간헐 timeout: FAIL 이력 유지/원인 분석 후속. CPU 상승은 동반 관측이며 직접 원인 확정 아님.
+- 작업 상태: 로컬 검증 완료. 최대 수만 명 처리나 모든 장애 조건까지 보장하지 않는다.
+- 팀 문서 순서: 코드·회귀 테스트·스크립트·설정·결과 MD를 develop PR에 포함 → 반영 및 팀 전체 로컬 안정화 → 스테이징 대표 Case/축소 부하 확인.
+- 전체 S10 E2E와 S02 Seat 동시 선점은 Queue의 독립 제출 범위로 확대하지 않는다.
+
+
+
+## 상세 결과: API 기능·보안
+
+### 합의된 오류 응답 기준
+
+필수 Queue 토큰 헤더 누락은 공통 입력 오류 **HTTP 400 / C-002**로 처리한다.
+헤더를 제공했지만 토큰이 유효하지 않거나 권한이 없는 경우는 **HTTP 403 / Q-001**이다.
+이는 기존 합의와 공통 예외 처리에 따른 구분이며 이번 테스트에서 변경한 정책이 아니다.
+
+검증일: 2026-09-11.
+
+| 사례 | 확인 내용 | 결과 |
+|---|---|---|
+| JWT 누락/위조 | Gateway 401 A-002 | PASS |
+| 내부 API 외부 접근 | 위조 Service Key를 넣어도 Gateway 403 | PASS |
+| 미참여/WAITING 사용자 좌석 접근 | 토큰을 보내도 403 Q-001 | PASS |
+| Queue 토큰 누락 | 400 C-002 | PASS |
+| 없는 토큰/다른 사용자/다른 회차 토큰 | 403 Q-001 | PASS |
+| 동일 사용자 20건 동시 등록 | 20건 200, 위조 X-User-Id/Role 대신 JWT 사용자 유지, 해당 회차 실제 2명에 sequence=2 | PASS |
+| 동일 토큰 10건 최초 접근 경합 | 10건 200, 단일 ENTERED 상태, 두 사용자에 토큰 키 2개 | PASS |
+| 유효한 USED 토큰 동일 사용자 재시도 | 현재 멱등 정책에 따라 200 | PASS |
+| ENTERED heartbeat/이탈 | 각각 409 Q-007 / 409 Q-003 | PASS |
+| WAITING heartbeat | 204 | PASS |
+| WAITING 명시적 이탈/중복 이탈 | 200, 이후 상태 조회 404 Q-002, 재차 이탈 200 | PASS |
+| 순번과 재진입 | 순차 등록 sequence 2001/2002, 이탈 후 재진입 2003으로 기존 사용자 뒤에 배치 | PASS |
+| Gateway 5명 정상 흐름 | 등록→heartbeat→polling→ADMITTED→토큰으로 좌석 조회→ENTERED | PASS |
+| 5명 Redis 정합성 | ENTERED 5, 참조 5, USED 토큰 5, 고유 token/sequence 각각 5, 토큰 키 총 5 | PASS |
+| 실제 TTL 경과 토큰 | 시계/TTL 조작 없이 기본 3분 경과 후 403 Q-001, ENTERED 전환 없음 | PASS |
+
+WAITING 사례는 동작 확인을 위해 전용 회차에 합성 대기 Entry 2,000개를 먼저 넣었다. 이는 HTTP 유입이나 2,000 VU 실험이 아니다. 해당 사례 후 삭제했으며 다른 테스트 회차와 분리했다. 순번 검증은 위 명시한 사례에 한정하며 모든 경쟁 상황의 승인 순서를 증명한 것은 아니다.
+
+최종 실행 결과: **검증기 체크 52개 모두 PASS**(회원가입·로그인 준비 체크 포함). 새 회차 4개 Redis 정리 성공, 임시 인증 파일 잔여 0개. 이는 위 기능 사례의 결과이며 S09 전체 PASS가 아니다.
+
+### k6 결과 (성능 기준선으로 사용하지 않음)
+
+- 고유 사용자 5명 완료, HTTP 25건, HTTP 실패 0, 체크 60/60.
+- heartbeat 204 5건, heartbeat/admission 409 경합 0건.
+- polling으로 관측한 입장 대기시간 p50 2,152ms, p95 2,164.6ms, p99 2,166.52ms. polling 2초 간격이 포함된 5개 표본으로 서버 순수 admission 지연이나 대규모 성능을 판단하지 않는다.
+
+## 상세 결과: VU와 자원 관측
+
+### 결과
+
+RPS는 k6 summary의 완료 대기 구간을 포함한 평균이다. HTTP는 전체 호출 집계이며 입장 대기는 polling 관측값(서버 승인 자체의 지연과 다름)이다. WAITING 최대는 주기 샘플의 최댓값이다.
+
+| VU | 완료 사용자 | HTTP 건수 | 등록 RPS | 상태 조회 RPS | HTTP p95 / p99(ms) | 입장 대기 p50 / p95 / p99(s) | WAITING 최대 |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 50 | 2,651 | 13,255 | 21.70 | 43.40 | 69.6 / 211.7 | 2.03 / 2.22 / 2.90 | 42 |
+| 100 | 5,389 | 26,964 | 44.45 | 89.05 | 20.1 / 68.2 | 2.02 / 2.06 / 2.31 | 95 |
+| 300 | 5,932 | 41,224 | 47.00 | 185.61 | 51.0 / 103.6 | 6.04 / 6.16 / 6.48 | 250 |
+| 500 | 6,184 | 54,956 | 47.50 | 279.65 | 35.2 / 128.8 | 10.04 / 12.04 / 12.06 | 474 |
+| 1000 | 6,660 | 95,777 | 47.46 | 498.78 | 73.2 / 269.6 | 20.16 / 22.29 / 22.44 | 975 |
+
+모든 단계에서 HTTP 실패율 0%, flow_errors 0, k6 checks 실패 0.
+
+### 서버와 Redis 관측
+
+아래는 샘플 최대이며 순간 피크를 보장하지 않는다. CPU는 Actuator process_cpu_usage × 100이며 docker stats CPU%와 분모가 다르다. Redis PING은 호스트→Redis 왕복으로 애플리케이션 Redis 명령 지연의 대체값이 아니다. Admission과 Scheduler 값은 Prometheus 1분 rate 기반이다. 샘플에는 부하 종료 후 export 구간도 포함된다.
+
+| VU | Gateway / Ticketing CPU 최대(%) | Ticketing heap 최대(MiB) | Redis 메모리 최대(MiB) | Redis ops/s 최대 | PING 최대(ms) | Admission 최대(/s) | Scheduler 평균시간의 최대(ms) |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 50 | 15.41 / 26.99 | 143.0 | 3.81 | 1491 | 179.64 | 22.78 | 35.42 |
+| 100 | 4.70 / 5.41 | 190.4 | 6.25 | 2990 | 22.22 | 44.45 | 44.34 |
+| 300 | 13.39 / 3.79 | 191.1 | 6.97 | 3236 | 13.54 | 47.96 | 54.70 |
+| 500 | 8.38 / 6.97 | 202.6 | 7.18 | 4071 | 8.25 | 47.78 | 44.15 |
+| 1000 | 9.39 / 5.67 | 220.8 | 7.57 | 5098 | 22.72 | 48.89 | 51.24 |
+
+VU 사후 검사에서는 500/1000 VU 토큰 일부/전부가 이미 TTL 만료되어 발급 전수 검증이 불가능했다. 이후 Spike/Soak에서 실행 중 fingerprint 기록으로 보완했다. 고정 VU 모델은 대기로 신규 등록을 스스로 줄이므로 최대 용량을 증명하지 않는다. 샘플 간 순간 피크는 포함되지 않을 수 있다.
+
+## 상세 결과: 정상 상태 Spike·Soak
+
+### 재기동 없는 Spike와 Soak 최종 결과
+
+| 항목 | Spike | Soak |
+|---|---:|---:|
+| 실행 모델 | 1,000명 × 1회 | 300 VU × 600초 |
+| 완료 사용자 | 1,000 | 29,083 |
+| HTTP 요청 | 9,250 | 203,202 |
+| HTTP 실패율 | 0% | 0% |
+| HTTP p95 / p99 | 1427.4 / 2187.0 ms | 14.7 / 51.8 ms |
+| 입장 대기 p50 / p95 / p99 | 12.96 / 21.61 / 23.53 s | 6.02 / 6.06 / 6.35 s |
+| 관측 WAITING 최대 | 700 | 294 |
+| Entry / 토큰 fingerprint | 1,000 / 1,000건 검사 통과 | 29,083 / 29,083건 검사 통과 |
+| Redis eviction / 연결 거절 증가 | 0 / 0 | 0 / 0 |
+| WAITING·active 모두 0 첫 관측 | 실행기 launch 이후 27.4초 | 실행기 launch 이후 606.7초 |
+
+입장 대기는 2초 polling 관측값이다. WAITING/active는 순차로 조회하므로 순간 합계나 정확한 최댓값이 아니다. Spike 종료 시각과 Soak 600초 신규 iteration 종료는 실행기 launch 시각과 약간 다르다. 실제 부하 지속시간·등록 분포는 k6 원본으로 확인한다.
+
+두 실행 모두 Entry=ENTERED, 순번 중복·누락 검사 및 관측 토큰 fingerprint 중복 검사를 통과했다. 토큰 fingerprint는 관측 시점에 남겼으므로 사후 Redis TTL 만료에도 증거가 남는다. 이는 관측되지 않은 추가 발급이나 다중 인스턴스 정합성까지 증명하지 않는다.
+
+삭제 전에 WAITING/active=0, 낮은 Gateway/Ticketing CPU를 3회 연속 확인했다. 실행기의 OOM/재시작/실행 상태 검사도 통과했다. postProcessRecoverySeconds(Spike 약 23초, Soak 약 47초)는 export 종료 후 전수 검사와 관측 대기를 포함하므로 실제 회복 소요시간으로 사용하지 않는다.
+
+### 자원·요청량 요약
+
+표본에는 export 구간이 포함된다. CPU는 Actuator process_cpu_usage ×100, heap은 사용 중 heap이며 컨테이너 전체 메모리와 다르다. Redis PING은 호스트 경유 측정으로 애플리케이션 Redis 명령 latency가 아니다.
+
+| 항목 | Spike | Soak |
+|---|---:|---:|
+| 등록 평균 RPS | 41.94 | 47.98 |
+| 상태 조회 평균 RPS | 255.85 | 191.29 |
+| Gateway / Ticketing CPU 표본 최대(%) | 33.79 / 19.01 | 6.81 / 7.43 |
+| Ticketing heap 표본 최대(MiB) | 219.7 | 238.3 |
+| Redis PING 표본 최대(ms) | 11.86 | 354.95 |
+| heartbeat 만료 증가 | 0.0 | 0.0 |
+
+RPS는 k6가 집계한 완료 대기 포함 평균이다. Soak 동안 대기열이 무한히 늘거나 heap이 계속 단조 증가하는 패턴은 관측하지 않았으나 10분 결과로 메모리 누수 부재나 장기 운영 안정성을 확정하지 않는다.
+
+## 상세 결과: Polling
+
+50 VU·2분 워밍업 후 같은 앱 이미지/기동 상태에서 300 VU·2분씩 1→2→5초 순서로 실행했다.
+
+| Polling | 완료 사용자 | 상태 조회 RPS | 관측 입장 대기 p95 | HTTP 실패율 |
+|---|---:|---:|---:|---:|
+| 1초 | 6,046 | 328.65 | 6.097초 | 0% |
+| 2초 | 6,097 | 189.54 | 6.081초 | 0% |
+| 5초 | 5,950 | 102.60 | 10.065초 | 0% |
+
+모든 조건에서 integrity.valid=true, recovery.stable=3, redisCleaned=true를 확인했다. 워밍업도 2,700명 완료·HTTP 실패 0·동일 검사 통과다.
+
+1초 대비 2초에서 상태 조회 RPS가 약 42.3% 감소했고, 관측 입장 대기 p95는 비슷했다. 5초는 조회 부하가 더 적지만 입장 허용을 발견하는 p95가 길어졌다. 이 시간은 서버 순수 admission 지연이 아니며 polling 발견 지연을 포함한다. 고정 VU 모델에서 완료 사용자 수도 달라지므로 동일 도착률 비교는 아니다. 조건별 1회·고정 순서 측정으로 운영 최적 주기를 확정하지 않는다. 운영 polling 정책은 변경하지 않았다.
+
+## 상세 결과: Scheduler pipeline
+
+2026-09-13 저장된 summary와 Redis INFO 원본 8회를 대조했다. 각 그룹 4회, 5,000 WAITING / batch 50 / 100 cycle이며 모두 COMPLETE, Entry=ADMITTED·원래 sequence 검사가 통과했고 rejected_connections 증가분은 0이다.
+
+| 지표 | Before 4회 평균 | After 4회 평균 | 변화 |
+|---|---:|---:|---:|
+| 5,000명 wall 시간(ms) | 11431.12 | 8504.50 | -25.6% |
+| wall 기준 처리량(명/s) | 438.70 | 593.55 | +35.3% |
+| cycle 평균(ms) | 112.44 | 82.78 | -26.4% |
+| 실행별 cycle p95 평균(ms) | 177.43 | 145.83 | -17.8% |
+| 실행별 cycle p99 평균(ms) | 329.32 | 187.86 | -43.0% |
+| findWaitingEntries 누적(ms) | 5088.87 | 1459.15 | -71.3% |
+
+### 해석 범위
+
+- 각 실행의 지표를 산술평균했다. p95/p99는 실행별 percentile의 평균이며 400 cycle을 합산한 percentile이 아니다. 처리량 평균 역시 20,000명을 합산 소요시간으로 나눈 값과 다르다.
+- 1초 fixedDelay를 제외하고 논리 시각을 고정한 단독 runner 측정이다. 운영 admission이 초당 593명으로 늘었다는 뜻이 아니다. batch·주기는 변경하지 않았다.
+- 측정한 정합성은 각 Entry의 ADMITTED 상태와 원래 순번 유지다. 여러 인스턴스의 전체 승인 순서 공정성까지 입증하지 않는다.
+- 4회씩 모두 개선 방향을 보였으나 실행 순서/호스트 영향이 완전히 통제된 통계 실험은 아니다. 이번 로컬 조건에서의 관측 개선율로 제시한다.
+
+### Redis 명령 +300의 근거
+
+| 1회 측정의 명령 증가량 | Before | After | 차이 |
+|---|---:|---:|---:|
+| total_commands_processed | 66,105 | 66,405 | +300 |
+| HELLO | 0 | 100 | +100 |
+| CLIENT SETINFO | 0 | 200 | +200 |
+| HGETALL | 5,000 | 5,000 | 0 |
+| ZRANGE | 100 | 100 | 0 |
+
+각 그룹 4회 모두 동일한 명령별 차이다. 나머지 commandstats calls 증가량도 같다. 추가분은 연결 handshake/클라이언트 정보 설정 명령이다. 100 cycle과 일치하므로 pipeline의 연결 초기화 경로가 cycle마다 사용된 것으로 해석할 수 있지만, 물리 연결 생성·반납 세부 과정은 별도 연결 추적 없이 단정하지 않는다. 이 비용을 포함한 After 시간이므로 비용을 빼고 개선율을 과장하지 않는다. 연결 풀/flush 정책 추가 튜닝은 이번 범위에 넣지 않는다.
+
+원본 실행 ID와 소스 경로는 [Scheduler 근거](evidence/scheduler/runs.json) 및 [출처 목록](evidence/manifest.json)에 보존했다.
+
+## 상세 결과: 합산 상한과 두 JVM 정합성
+
+실행 환경은 로컬이며, Testcontainers Redis 하나를 공유하는 독립 Java 프로세스(JVM) 두 개에서
+실제 QueueAdmissionScheduler/QueueAdmissionService/RedisQueueRepository를 실행했다.
+전체 Spring Boot Ticketing HTTP 서버 두 대를 기동하거나 Gateway로 요청을 분산한 검증은 아니다.
+이 검증은 Gradle Java runner로 수행했으며 k6를 사용하지 않았다. k6 S09 API 부하는 별도로 단일 Ticketing에서 수행했다.
+따라서 다중 프로세스의 Scheduler 승인·토큰·합산 상한 경합을 검증한 근거이며,
+실제 다중 서버 배포와 HTTP 부하 분산까지 검증했다고 해석하지 않는다.
+
+기본 경합 모드는 두 JVM이 첫 50명을 함께 읽게 한 뒤 실제 Lua 승인을 경쟁시켰다.
+500명에 대한 1,000회 시도 중 성공 500회, 사용자별 1회와 Entry/토큰 참조·고아 토큰 검사가 통과했다.
+quota 모드는 첫 worker cycle 완료 후 다른 worker가 다음 사용자를 조회하게 해 서로 다른 사용자들의 합산 초과를 검사했다.
+
+수정 전 확정 집계 최대 100명/초, 수정 후 749회 시도 중 500회 성공 및 10개 초 구간 모두 50명.
+거절 249회를 HTTP 실패로 해석하지 않으며 중복/한도 거절 비중은 별도로 구분되지 않는다.
+각 승인 전후 Redis TIME이 같은 초이면 확정 집계하고 경계를 넘으면 가능한 양쪽 구간에 포함한다.
+수정 후 경계 모호성 0. 한 회차 관측이며 회차 독립성은 Redis 회귀 테스트에서 확인했다.
+Lua 카운터는 회차별이고 중복·한도 거절은 성공 수를 증가시키지 않는다. rolling window가 아니므로 경계 앞뒤 50명씩은 허용된다.
+
+## 선별한 결과 근거
+
+JSON은 실제 실행 결과를 선별·묶은 자료이고 CSV는 Scheduler 원본 summary 8회의 수치를 추출한 표다.
+수정하지 않은 원본은 로컬 artifacts에 보존한다. manifest의 source/bundle 항목은 원본 파일 체크섬, file 항목은 제출 파일 체크섬이다.
+
+- [S09 결과 묶음](evidence/s09/runs.json): VU 5단계, Spike/Soak, Polling 3조건의 작은 result 및 환경 JSON.
+- [Scheduler 비교 CSV](evidence/scheduler/comparison.csv): 8회 지표와 실행 ID. [8회 원본 summary 묶음](evidence/scheduler/runs.json)으로 계산 확인 가능.
+- [quota Before](evidence/admission-quota/before-quota.json), [After](evidence/admission-quota/after-quota.json), [After 정합성](evidence/admission-quota/after-summary.json).
+- [두 JVM 경합](evidence/multi-jvm/summary.json), [최종 API 회귀](evidence/final-regression/results.json), [최종 소스 manifest](evidence/final-regression/source-manifest.json).
+- [출처·SHA-256](evidence/manifest.json): 이번 선별 원본의 경로와 체크섬. 집계표는 원본 summary에 근거한다.
+
+Grafana 설정 JSON은 재현 코드에 포함하지만 화면 캡처는 필수 근거로 넣지 않았다.
+Dashboard `ticketing-baseline`, Prometheus 쿼리는 run-vu.py의 QUERIES에 있으며 실행 timing에 맞춰 확인한다.
+대형 시계열/로그/HTML 원본은 artifacts에 보존하고 제출본에는 선별한 요약 근거를 포함했다.

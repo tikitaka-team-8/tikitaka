@@ -1,0 +1,18 @@
+{
+  "baseCommit": "1c22905a263a915ecb99827b437f2067838d8cc9",
+  "versions": {
+    "queue-perf-before-reconstructed": "e41647bde628c259d4fb2ee896af56b1573295c3",
+    "queue-perf-after-snapshot": "1b970db063e809aafbeec41cd975a3269d679d75",
+    "queue-perf-final-quota": "800f0eaa047c4e5b2ccb9248a3881ee423e2b484"
+  },
+  "historicalAfterSourceSha256": {
+    "src/main/java/com/tikitaka/ticketing/queue/application/QueueAdmissionScheduler.java": "a57d94ed0ae9b1d8d1b3952d5e2c4e9f9bfb075fa50c9185a028d1b8fca2de83",
+    "src/main/java/com/tikitaka/ticketing/queue/application/QueueAdmissionService.java": "1f68a50ccadc1cff31a8fbd627f32f6ae4dbe62c5b34dee49990b633f369f4ce",
+    "src/main/java/com/tikitaka/ticketing/queue/infrastructure/RedisQueueRepository.java": "f3d928c62ab841eddd11176e0937f35befac5840440f344781ec985bcbd16863",
+    "src/main/resources/application.yaml": "644ae28a9e4251b92e3b8939694d84dfea5d698faf85916121085e61c3c51ca0",
+    "src/test/java/com/tikitaka/ticketing/queue/performance/QueueSchedulerBaseline.java": "fd1416260a668a988e46b52647b0caf197c7aba17e18182d471b1607cc5c923d"
+  },
+  "beforeProvenance": "Reconstructed by removing only pipeline lookup from after snapshot; historical before source checksum not matched. Do not attach historical before results to this commit as a verified execution.",
+  "afterProvenance": "Five measured source checksums match. Other repository support files use base commit and retained build snapshot; not a complete historical environment image.",
+  "historicalBeforeRepositorySha256": "487a9523789c0e52eb7a5e4eecb2fcdf9ab167baec67967280ff017fc7f63983"
+}

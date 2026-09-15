@@ -1,0 +1,24 @@
+{
+  "attempts": 1000,
+  "integrityPassed": true,
+  "successfulAdmissions": 500,
+  "quotaVerdict": "UNDECIDED: response-time buckets are observational, not server commit time or rolling-window proof",
+  "users": 500,
+  "admissionsByResponseEpochSecond": {
+    "1789297237": 50,
+    "1789297239": 11,
+    "1789297240": 21,
+    "1789297241": 18,
+    "1789297242": 50,
+    "1789297243": 19,
+    "1789297244": 31,
+    "1789297245": 50,
+    "1789297246": 50,
+    "1789297247": 50,
+    "1789297248": 50,
+    "1789297249": 17,
+    "1789297250": 33,
+    "1789297251": 50
+  },
+  "usersWithCompetingAttempts": 500
+}
