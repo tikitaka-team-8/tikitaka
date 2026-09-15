@@ -20,6 +20,7 @@ validateFixtures();
 
 // 실행 방식
 export const options = {
+    summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
     scenarios: {
         payment_approval: { // 100명의 사용자가 각자 10개의 결제를 승인
             executor: 'per-vu-iterations',
