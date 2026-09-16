@@ -67,15 +67,15 @@ Reservation·Notification Listener 중단 중 이벤트 보존, Consumer 복구,
 
 ## 3. 재현 방법과 증거 자료
 
-상세한 환경 준비, SQL 실행 순서, Kafka 주입, 검증 명령과 PASS 기준은 [S08 재현 가이드](../../../scripts/sql/s08-kafka-recovery/README.md)에 분리했습니다.
+상세한 환경 준비, SQL 실행 순서, Kafka 주입, 검증 명령과 PASS 기준은 [S08 재현 가이드](../../../scripts/test-scenarios/s08-kafka-recovery/README.md)에 분리했습니다.
 
 | 구분 | 경로 |
 |---|---|
-| 정상 장애·복구 k6 | [`scripts/k6/kafka-recovery.js`](../../../scripts/k6/kafka-recovery.js) |
-| 실패 격리 k6 | [`scripts/k6/kafka-failure-recovery.js`](../../../scripts/k6/kafka-failure-recovery.js) |
-| k6 CSV | [`scripts/k6/data/`](../../../scripts/k6/data/) |
-| Kafka 실행·주입 | [`scripts/kafka/s08/`](../../../scripts/kafka/s08/) |
-| 단계별 SQL과 실행 가이드 | [`scripts/sql/s08-kafka-recovery/`](../../../scripts/sql/s08-kafka-recovery/README.md) |
+| 정상 장애·복구 k6 | [`load/kafka-recovery.js`](../../../scripts/test-scenarios/s08-kafka-recovery/load/kafka-recovery.js) |
+| 실패 격리 k6 | [`load/kafka-failure-recovery.js`](../../../scripts/test-scenarios/s08-kafka-recovery/load/kafka-failure-recovery.js) |
+| k6 CSV | [`seed/csv/`](../../../scripts/test-scenarios/s08-kafka-recovery/seed/csv/) |
+| Kafka 실행·주입 | [`inject/`](../../../scripts/test-scenarios/s08-kafka-recovery/inject/) |
+| 단계별 Seed·실행·검증 가이드 | [`s08-kafka-recovery/`](../../../scripts/test-scenarios/s08-kafka-recovery/README.md) |
 
 ### 테스트 구성과 도구 역할
 
@@ -285,7 +285,7 @@ Ticketing은 `statusChanged=true`, Notification은 `notificationCreated=true`로
 | 실패 흐름 추적 가능 | Kafka Offset, Consumer Lag, Retry·DLT 로그와 Grafana로 확인 |
 | 성능 지표와 병목 기록 | 처리량, 오류율, 평균, p95·p99와 실패 파티션 점유 기록 |
 | 장애 복구 시간과 정합성 확인 | Consumer별 실제 로그 구간, Lag 0과 최종 SQL 확인 |
-| 문서와 스크립트로 재현 가능 | 단계별 [S08 재현 가이드](../../../scripts/sql/s08-kafka-recovery/README.md) 작성 |
+| 문서와 스크립트로 재현 가능 | 단계별 [S08 재현 가이드](../../../scripts/test-scenarios/s08-kafka-recovery/README.md) 작성 |
 | 개선 전후와 Issue 연결 | Baseline·개선 Commit, Issue #116·#101 연결 |
 
 S08 Consumer Retry·DLT 테스트는 **PASS**, 진행 상태는 **완료**입니다. 다음 항목은 Issue #101에서 이어 진행할 후속 범위입니다.

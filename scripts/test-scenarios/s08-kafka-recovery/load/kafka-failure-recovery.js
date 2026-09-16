@@ -11,10 +11,10 @@ const EXPECTED_APPROVAL_COUNT = 1000;
 const PAYMENT_BASE_URL = __ENV.PAYMENT_BASE_URL || 'http://localhost:8083';
 
 const users = new SharedArray('s08 failure users', () =>
-    parseCsv(open('./data/s08-failure-users.csv')),
+    parseCsv(open('../seed/csv/s08-failure-users.csv')),
 );
 const approvals = new SharedArray('s08 failure payment approvals', () =>
-    parseCsv(open('./data/s08-failure-payment-approvals.csv')),
+    parseCsv(open('../seed/csv/s08-failure-payment-approvals.csv')),
 );
 
 const paymentApprovalSuccess = new Rate('payment_approval_success');

@@ -9,9 +9,9 @@ const ITERATIONS_PER_VU = 10; // 각 사용자당 10번의 각각 다른 결제 
 const PAYMENT_BASE_URL = __ENV.PAYMENT_BASE_URL || 'http://localhost:8083';
 
 // csv 데이터 로드
-const users = new SharedArray('s08 users', () => parseCsv(open('./data/s08-users.csv')));
+const users = new SharedArray('s08 users', () => parseCsv(open('../seed/csv/s08-users.csv')));
 const approvals = new SharedArray('s08 payment approvals', () =>
-    parseCsv(open('./data/s08-payment-approvals.csv')),
+    parseCsv(open('../seed/csv/s08-payment-approvals.csv')),
 );
 
 const paymentApprovalSuccess = new Rate('payment_approval_success');
