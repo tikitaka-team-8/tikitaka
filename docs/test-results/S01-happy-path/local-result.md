@@ -18,8 +18,8 @@
 - 테스트 대상: 공개 공연 1개, 회차 1개, 좌석 1개
 - 네트워크 및 요청 조건: 정상 네트워크, 의도적인 중복·동시 요청 없음
 - 사용 도구: Postman, PostgreSQL DB Console, Kafbat UI, Prometheus
-- Postman Collection: [`scripts/postman/tikitaka.postman_collection.json`](../../../scripts/postman/tikitaka.postman_collection.json)
-- Postman Environment: [`scripts/postman/tikitaka.local.example.postman_environment.json`](../../../scripts/postman/tikitaka.local.example.postman_environment.json)
+- Postman Collection: [`scripts/test-scenarios/s01-happy-path/postman/tikitaka.postman_collection.json`](../../../scripts/test-scenarios/s01-happy-path/postman/tikitaka.postman_collection.json)
+- Postman Environment: [`scripts/test-scenarios/s01-happy-path/postman/tikitaka.local.example.postman_environment.json`](../../../scripts/test-scenarios/s01-happy-path/postman/tikitaka.local.example.postman_environment.json)
 - 관련 Issue: #98
 
 
