@@ -11,7 +11,6 @@ import com.tikitaka.ticketing.seat.domain.enums.ReleaseReason;
 import com.tikitaka.ticketing.seat.domain.repository.ScheduleSeatRepository;
 import com.tikitaka.ticketing.seat.domain.repository.SeatHoldRepository;
 import com.tikitaka.ticketing.seat.exception.SeatErrorCode;
-import com.tikitaka.ticketing.seat.presentation.dto.response.ScheduleSeatListResponse;
 import com.tikitaka.ticketing.seat.presentation.dto.response.ScheduleSeatResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,6 +18,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Clock;
@@ -89,21 +91,25 @@ class SeatServiceTest {
                 );
 
         when(scheduleSeatRepository.findSeats(
-                eventSessionId,
-                null,
-                null
-        )).thenReturn(seats);
+                eq(eventSessionId),
+                eq(null),
+                eq(null),
+                any(Pageable.class)
+        )).thenReturn(new PageImpl<>(seats));
 
-        ScheduleSeatListResponse response =
+        Page<ScheduleSeatResponse> response =
                 seatService.getSeatList(
                         eventSessionId,
                         null,
                         null,
                         userId,
-                        admissionToken
+                        admissionToken,
+                        0,
+                        50
                 );
 
         assertThat(response).isNotNull();
+        assertThat(response.getContent()).hasSize(3);
 
         verify(queueAdmissionValidator)
                 .validateAndEnter(
@@ -114,9 +120,10 @@ class SeatServiceTest {
 
         verify(scheduleSeatRepository)
                 .findSeats(
-                        eventSessionId,
-                        null,
-                        null
+                        eq(eventSessionId),
+                        eq(null),
+                        eq(null),
+                        any(Pageable.class)
                 );
     }
 
@@ -127,21 +134,25 @@ class SeatServiceTest {
         ScheduleSeat seat2 = mock(ScheduleSeat.class);
 
         when(scheduleSeatRepository.findSeats(
-                eventSessionId,
-                "A",
-                "VIP"
-        )).thenReturn(List.of(seat1, seat2));
+                eq(eventSessionId),
+                eq("A"),
+                eq("VIP"),
+                any(Pageable.class)
+        )).thenReturn(new PageImpl<>(List.of(seat1, seat2)));
 
-        ScheduleSeatListResponse response =
+        Page<ScheduleSeatResponse> response =
                 seatService.getSeatList(
                         eventSessionId,
                         "A",
                         "VIP",
                         userId,
-                        admissionToken
+                        admissionToken,
+                        0,
+                        50
                 );
 
         assertThat(response).isNotNull();
+        assertThat(response.getContent()).hasSize(2);
 
         verify(queueAdmissionValidator)
                 .validateAndEnter(
@@ -152,9 +163,10 @@ class SeatServiceTest {
 
         verify(scheduleSeatRepository)
                 .findSeats(
-                        eventSessionId,
-                        "A",
-                        "VIP"
+                        eq(eventSessionId),
+                        eq("A"),
+                        eq("VIP"),
+                        any(Pageable.class)
                 );
     }
 
@@ -236,7 +248,9 @@ class SeatServiceTest {
                         null,
                         null,
                         userId,
-                        admissionToken
+                        admissionToken,
+                        0,
+                        50
                 )
         )
                 .isInstanceOf(BusinessException.class);
@@ -248,9 +262,10 @@ class SeatServiceTest {
                 );
         verify(scheduleSeatRepository, never())
                 .findSeats(
-                        eventSessionId,
-                        null,
-                        null
+                        eq(eventSessionId),
+                        eq(null),
+                        eq(null),
+                        any(Pageable.class)
                 );
     }
 
