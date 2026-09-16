@@ -76,7 +76,7 @@ jobs:
             psql -v ON_ERROR_STOP=1 \
               -U "$PLATFORM_DB_USERNAME" \
               -d "$PLATFORM_DB_NAME" \
-            < scripts/integration-test/seed/platform-seed.sql
+            < scripts/test-scenarios/s01-happy-path/seed/platform-seed.sql
 
       - name: Ticketing 테스트 데이터 준비
         shell: bash
@@ -85,7 +85,7 @@ jobs:
             psql -v ON_ERROR_STOP=1 \
               -U "$TICKETING_DB_USERNAME" \
               -d "$TICKETING_DB_NAME" \
-            < scripts/integration-test/seed/ticketing-seed.sql
+            < scripts/test-scenarios/s01-happy-path/seed/ticketing-seed.sql
 
       - name: Gateway 기동
         run: docker compose up -d --no-build --wait --wait-timeout 120 gateway
@@ -99,7 +99,7 @@ jobs:
         run: |
           mkdir -p integration-test-artifacts
           set -o pipefail
-          bash scripts/integration-test/run.sh 2>&1 | tee integration-test-artifacts/scenario.log
+          bash scripts/test-scenarios/s01-happy-path/run.sh 2>&1 | tee integration-test-artifacts/scenario.log
 
       - name: Ticketing 최종 상태 확인
         shell: bash
@@ -119,7 +119,7 @@ jobs:
               -d "$TICKETING_DB_NAME" \
               --tuples-only \
               --no-align \
-            < scripts/integration-test/verify-ticketing-state.sql \
+            < scripts/test-scenarios/s01-happy-path/verify-ticketing-state.sql \
             | tr -d '[:space:]')"
 
           expected_state="CONFIRMED|CONFIRMED|SOLD"
@@ -146,7 +146,7 @@ jobs:
               -d "$TICKETING_DB_NAME" \
               --tuples-only \
               --no-align \
-            < scripts/integration-test/verify-ticketing-event-state.sql \
+            < scripts/test-scenarios/s01-happy-path/verify-ticketing-event-state.sql \
             | tr -d '[:space:]')"
 
           expected_state="1|1"
@@ -178,7 +178,7 @@ jobs:
               -d "$PAYMENT_DB_NAME" \
               --tuples-only \
               --no-align \
-            < scripts/integration-test/verify-payment-notification-state.sql \
+            < scripts/test-scenarios/s01-happy-path/verify-payment-notification-state.sql \
             | tr -d '[:space:]')"
 
           expected_state="APPROVED|1|1|1|READ|VIEWED|1"

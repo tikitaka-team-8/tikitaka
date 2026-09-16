@@ -1,2 +1,0 @@
-# Preserve evidence bytes so manifest SHA-256 values survive clone/checkout.
-* -text whitespace=cr-at-eol

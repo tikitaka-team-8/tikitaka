@@ -1,6 +1,7 @@
 param([switch]$SkipWarmup)
 $ErrorActionPreference = 'Stop'
-$repo = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
+$repo = (Resolve-Path (Join-Path $PSScriptRoot '../../..')).Path
+$runner = Join-Path $PSScriptRoot 'run-vu.py'
 $series = Join-Path $repo ('artifacts/queue-load/' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-polling-series')
 New-Item -ItemType Directory -Path $series -ErrorAction Stop | Out-Null
 $results = @()
@@ -25,7 +26,7 @@ try {
         # traceback first, then stop explicitly on the Python exit code below.
         try {
             $ErrorActionPreference = 'Continue'
-            python -u scripts/k6/run-vu.py --vus $step.vus --poll-seconds $step.poll 2>&1 | Tee-Object -FilePath $log
+            python -u $runner --vus $step.vus --poll-seconds $step.poll 2>&1 | Tee-Object -FilePath $log
             $exitCode = $LASTEXITCODE
         } finally { $ErrorActionPreference = 'Stop' }
         $resultLine = Get-Content -LiteralPath $log | Where-Object { $_ -match '^Results: ' } | Select-Object -First 1

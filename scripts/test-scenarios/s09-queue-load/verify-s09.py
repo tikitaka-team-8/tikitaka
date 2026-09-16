@@ -15,7 +15,8 @@ import urllib.error
 import urllib.request
 import uuid
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
+SCENARIO = Path(__file__).resolve().parent
 BASE = 'http://127.0.0.1:8000/api/v1'
 K6 = 'grafana/k6@sha256:5221b620a4f874faff6e32ba597aa667c058391fe4898b1c6f6377f062c6cdec'
 RUN = dt.datetime.now().strftime('%Y%m%d-%H%M%S') + '-s09'

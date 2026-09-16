@@ -52,9 +52,9 @@ S02 Seat 선점과 S10 전체 E2E는 Queue의 독립 과제에 포함하지 않�
 | 팀 필수 · P0 | 두 Scheduler JVM 중복 승인·토큰 | 500명 사용자별 1회 승인 PASS | 두 JVM 상세 |
 | 팀 필수 · P0 | 회차별 합산 상한(담당자 결정) | FAIL → 수정 후 PASS | quota 전후 근거 |
 | 팀 필수 · S10 / 개선 R1 | Scheduler 순수 처리량·pipeline | 5,000명, 전후 각 4회 비교 | Scheduler 상세 |
-| 팀 필수 · P0 회귀 | 최종 quota 적용 이미지 API | 50/300 VU PASS | [수치](evidence/final-regression/results.json) |
+| 팀 필수 · P0 회귀 | 최종 quota 적용 이미지 API | 50/300 VU PASS | 최종 대표 회귀 상세 |
 | 개인 추가 진단 | heartbeat·이탈·재진입 기능 사례 | 검사 사례 PASS | API 기능·보안 상세 |
-| 개인 추가 진단 | 앱 재기동 직후 1,000명 Spike | 5회 중 2회 실패, 원인 미확정 | 기존 실패 기록 |
+| 개인 추가 진단 | 앱 재기동 후 1,000명 Spike | 직후 5회 중 2회, 180초 대기 4회 중 1회 실패 | Gateway 후속 진단 |
 
 ### 최종 대표 회귀: 2026-09-14
 
@@ -82,7 +82,7 @@ RedisRepository 회귀 22개 통과(skip 0). quota 두 JVM 검증은 749회 시�
 ## 최종 판정과 남은 사항
 
 - 정상 상태의 실행한 로컬 사례 및 최종 대표 회귀: PASS. 발견한 합산 상한 오류: 수정·재검증 완료.
-- 기동 직후 간헐 timeout: FAIL 이력 유지/원인 분석 후속. CPU 상승은 동반 관측이며 직접 원인 확정 아님.
+- 앱 전체 재기동 후 1,000 VU Spike의 간헐 timeout: FAIL 이력 유지. health UP 후 180초 대기 조건에서도 재현되어 startup 전용 가설은 기각했다. 실패 실행에서 Gateway 연결 대기열 초과와 k6 TCP 재전송이 함께 관측되어 Gateway 담당 후속 진단으로 분리했다.
 - 작업 상태: 로컬 검증 완료. 최대 수만 명 처리나 모든 장애 조건까지 보장하지 않는다.
 - 팀 문서 순서: 코드·회귀 테스트·스크립트·설정·결과 MD를 develop PR에 포함 → 반영 및 팀 전체 로컬 안정화 → 스테이징 대표 Case/축소 부하 확인.
 - 전체 S10 E2E와 S02 Seat 동시 선점은 Queue의 독립 제출 범위로 확대하지 않는다.
@@ -241,7 +241,7 @@ RPS는 k6가 집계한 완료 대기 포함 평균이다. Soak 동안 대기열�
 
 각 그룹 4회 모두 동일한 명령별 차이다. 나머지 commandstats calls 증가량도 같다. 추가분은 연결 handshake/클라이언트 정보 설정 명령이다. 100 cycle과 일치하므로 pipeline의 연결 초기화 경로가 cycle마다 사용된 것으로 해석할 수 있지만, 물리 연결 생성·반납 세부 과정은 별도 연결 추적 없이 단정하지 않는다. 이 비용을 포함한 After 시간이므로 비용을 빼고 개선율을 과장하지 않는다. 연결 풀/flush 정책 추가 튜닝은 이번 범위에 넣지 않는다.
 
-원본 실행 ID와 소스 경로는 [Scheduler 근거](evidence/scheduler/runs.json) 및 [출처 목록](evidence/manifest.json)에 보존했다.
+원본 실행 ID와 상세 자료는 Git에서 제외한 로컬 `artifacts/`에 보존했다.
 
 ## 상세 결과: 합산 상한과 두 JVM 정합성
 
@@ -262,17 +262,12 @@ quota 모드는 첫 worker cycle 완료 후 다른 worker가 다음 사용자를
 수정 후 경계 모호성 0. 한 회차 관측이며 회차 독립성은 Redis 회귀 테스트에서 확인했다.
 Lua 카운터는 회차별이고 중복·한도 거절은 성공 수를 증가시키지 않는다. rolling window가 아니므로 경계 앞뒤 50명씩은 허용된다.
 
-## 선별한 결과 근거
+## 결과 자료 관리
 
-JSON은 실제 실행 결과를 선별·묶은 자료이고 CSV는 Scheduler 원본 summary 8회의 수치를 추출한 표다.
-수정하지 않은 원본은 로컬 artifacts에 보존한다. manifest의 source/bundle 항목은 원본 파일 체크섬, file 항목은 제출 파일 체크섬이다.
+이 문서에는 실행 조건과 판정에 필요한 핵심 수치만 기록한다. k6 원본 JSON·HTML, 전체 로그,
+Prometheus 시계열, JFR과 실행별 상세 JSON·CSV는 저장소에 커밋하지 않고 로컬 `artifacts/`에 보존한다.
+개선 전후 코드는 `queue-perf-before-reconstructed`, `queue-perf-after-snapshot`,
+`queue-perf-final-quota` 태그로 구분한다. 재구성 Before는 과거 원본 소스와 완전히 같다고 주장하지 않는다.
 
-- [S09 결과 묶음](evidence/s09/runs.json): VU 5단계, Spike/Soak, Polling 3조건의 작은 result 및 환경 JSON.
-- [Scheduler 비교 CSV](evidence/scheduler/comparison.csv): 8회 지표와 실행 ID. [8회 원본 summary 묶음](evidence/scheduler/runs.json)으로 계산 확인 가능.
-- [quota Before](evidence/admission-quota/before-quota.json), [After](evidence/admission-quota/after-quota.json), [After 정합성](evidence/admission-quota/after-summary.json).
-- [두 JVM 경합](evidence/multi-jvm/summary.json), [최종 API 회귀](evidence/final-regression/results.json), [최종 소스 manifest](evidence/final-regression/source-manifest.json).
-- [출처·SHA-256](evidence/manifest.json): 이번 선별 원본의 경로와 체크섬. 집계표는 원본 summary에 근거한다.
-
-Grafana 설정 JSON은 재현 코드에 포함하지만 화면 캡처는 필수 근거로 넣지 않았다.
-Dashboard `ticketing-baseline`, Prometheus 쿼리는 run-vu.py의 QUERIES에 있으며 실행 timing에 맞춰 확인한다.
-대형 시계열/로그/HTML 원본은 artifacts에 보존하고 제출본에는 선별한 요약 근거를 포함했다.
+Grafana 화면 캡처는 필수 근거로 커밋하지 않는다. Dashboard `queue-performance`,
+Prometheus 쿼리와 run-vu.py의 수집 시각을 함께 확인한다.

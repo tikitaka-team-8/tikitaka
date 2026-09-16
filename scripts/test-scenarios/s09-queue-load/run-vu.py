@@ -28,7 +28,8 @@ if sys.platform == 'win32':
         raise RuntimeError('Cannot request temporary idle-sleep prevention')
     atexit.register(lambda: execution_state(0x80000000))
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
+SCENARIO = Path(__file__).resolve().parent
 K6 = 'grafana/k6@sha256:5221b620a4f874faff6e32ba597aa667c058391fe4898b1c6f6377f062c6cdec'
 parser = argparse.ArgumentParser()
 parser.add_argument('--vus', nargs='+', type=int, default=[50, 100, 300, 500, 1000])
@@ -217,7 +218,7 @@ save(OUT/'environment.json', {'branch':cmd(['git','branch','--show-current']), '
  'images':[{'name':c['Name'],'image':c['Image'],'labels':c['Config'].get('Labels'),'restartCount':c['RestartCount'], 'startedAt':c['State']['StartedAt']} for c in containers],
  'restart':args.restart,'healthReadyAt':startup['readyAt'],
  'mode':args.mode,'vus':args.vus,'seconds':args.seconds,'pollSeconds':args.poll_seconds,'heartbeatSeconds':15,'thinkSeconds':0.2,'k6':K6})
-for source in [Path(__file__), ROOT/'scripts/k6/queue-vu.js']:
+for source in [Path(__file__), SCENARIO/'queue-vu.js']:
     (OUT/('executed-'+source.name)).write_bytes(source.read_bytes())
 prefix = 's09vu-' + uuid.uuid4().hex[:12]
 user_base = int(time.time()*1000)*100
@@ -249,7 +250,7 @@ for vus in args.vus:
             save(Path(private)/'users.json',[{'userId':i,'accessToken':token(i,secret_key)} for i in user_ids])
             name = 's09-vu-'+str(vus)+'-'+sid[:8]
             command = ['docker','run','--rm','--name',name,'--network','tikitaka-network',
-                '--mount',f'type=bind,source={ROOT / "scripts/k6"},target=/scripts,readonly',
+                '--mount',f'type=bind,source={SCENARIO},target=/scripts,readonly',
                 '--mount',f'type=bind,source={private},target=/private,readonly',
                 '--mount',f'type=bind,source={folder},target=/results',
                 '-e','SESSION_ID='+sid,'-e','SEAT_ID='+seat,'-e','VUS='+str(vus),'-e','SECONDS='+str(args.seconds),'-e','MODE='+args.mode,'-e','POLL_SECONDS='+str(args.poll_seconds),

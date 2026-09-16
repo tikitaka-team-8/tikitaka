@@ -18,7 +18,5 @@ out/
 .env.*
 !.env.example
 
-# Local performance measurement artifacts
-/artifacts/queue-load/
-/artifacts/queue-build/
+# Local test outputs
 /artifacts/

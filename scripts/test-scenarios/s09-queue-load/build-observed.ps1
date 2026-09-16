@@ -1,5 +1,5 @@
 $ErrorActionPreference = 'Stop'
-$repo = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
+$repo = (Resolve-Path (Join-Path $PSScriptRoot '../../..')).Path
 $revision = git -C $repo rev-parse HEAD
 if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve HEAD' }
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
@@ -35,10 +35,11 @@ $override = Join-Path $snapshot 'compose.observed.yml'
 services:
   ticketing-service:
     image: $image
-    environment:
-      SPRING_APPLICATION_JSON: '{"management":{"metrics":{"distribution":{"percentiles-histogram":{"http.server.requests":true}}}}}'
 "@ | Set-Content -LiteralPath $override -Encoding utf8
-docker compose --project-directory $repo -f (Join-Path $repo 'docker-compose.yml') -f $override up -d --no-deps --no-build --wait --wait-timeout 120 ticketing-service
+docker compose --project-directory $repo `
+    -f (Join-Path $repo 'docker-compose.yml') `
+    -f (Join-Path $repo 'docker-compose.test.yml') `
+    -f $override up -d --no-deps --no-build --wait --wait-timeout 120 ticketing-service
 if ($LASTEXITCODE -ne 0) { throw 'Observed Ticketing did not become healthy' }
 [ordered]@{ baseRevision = $revision; workingTree = $true; sourceSha256 = $hash; image = $image; snapshot = $snapshot } |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $snapshot 'build.json') -Encoding utf8

@@ -26,7 +26,7 @@ git diff --ignore-space-at-eol queue-perf-before-reconstructed queue-perf-after-
 두 비교 폴더에서는 동일 JDK 21/Docker/Redis 조건으로
 `.\gradlew.bat :ticketing-service:queueSchedulerBaseline --console=plain`을 각각 실행할 수 있다.
 비교 태그는 quota 이전 코드이며, 현재 최종 작업 브랜치에서 무대기 baseline을 실행하는 것과 다르다.
-이번 버전 보존 작업에서는 성능 테스트를 실행하지 않았다. 상세 commit 및 출처는 [버전 근거](evidence/versions.json)를 따른다.
+이번 버전 보존 작업에서는 성능 테스트를 실행하지 않았다. 원본 결과는 Git에서 제외한 로컬 `artifacts/`에 보존한다.
 
 이 문서는 재현용 명령이다. 이미 완료한 모든 실험을 제출 전에 다시 실행하라는 뜻은 아니다.
 저장소 루트 Windows PowerShell에서 실행한다. 기존 runner는 로컬 전용이며 스테이징에 그대로 사용하지 않는다.
@@ -36,18 +36,18 @@ git diff --ignore-space-at-eol queue-perf-before-reconstructed queue-perf-after-
 - Docker Desktop Linux, Docker Compose, Python 3, JDK 21. Gradle은 저장소 wrapper 사용.
 - Compose Gateway(8000), Platform(8081), Ticketing(8082), 각 PostgreSQL/Redis, Kafka 및 Prometheus(9090)가 정상 실행 중이어야 한다. Grafana는 관측용이다.
 - DB 접속 정보는 각 볼륨 최초 생성 시 설정과 일치해야 한다. Platform/Ticketing Service Key와 Gateway/Platform JWT 설정도 일치시킨다. 비밀값은 개인 `.env`로 준비한다.
-- Platform DB에 원본 회차 `31000000-0000-0000-0000-000000000001` 필요. [Platform seed](../../../scripts/integration-test/seed/platform-seed.sql), [Ticketing seed](../../../scripts/integration-test/seed/ticketing-seed.sql)를 확인한다. 빈 환경에서 seed부터 재현하는 절차는 이번 최종 회귀에서 재검증하지 않았으며 공유 DB에 무조건 재적용하지 않는다.
+- Platform DB에 원본 회차 `31000000-0000-0000-0000-000000000001` 필요. [Platform seed](../../../scripts/test-scenarios/s01-happy-path/seed/platform-seed.sql), [Ticketing seed](../../../scripts/test-scenarios/s01-happy-path/seed/ticketing-seed.sql)를 확인한다. 빈 환경에서 seed부터 재현하는 절차는 이번 최종 회귀에서 재검증하지 않았으며 공유 DB에 무조건 재적용하지 않는다.
 - 컨테이너 이름은 기존 Compose의 `tikitaka-*`를 사용한다. 전체 Compose 기동은 kafka-ui 이미지 접근 문제 이력이 있어 테스트에 불필요한 UI까지 강제로 기동하지 않는다.
 
 ## 코드와 역할
 
 | 파일 | 역할 |
 |---|---|
-| [run-vu.py](../../../scripts/k6/run-vu.py) | 준비·health 확인·k6 실행·Redis 정합성·회복·정리·증거 저장 |
-| [queue-vu.js](../../../scripts/k6/queue-vu.js) | 실제 HTTP 부하와 사용자 흐름/checks. Python이 부하 도구를 대신하는 구조가 아님 |
-| [verify-s09.py](../../../scripts/k6/verify-s09.py) | 인증/부정 토큰/중복/heartbeat/이탈 기능 사례 |
-| [run-polling-comparison.ps1](../../../scripts/k6/run-polling-comparison.ps1) | 동일 300 VU에서 polling 1/2/5초 비교 |
-| [build-observed.ps1](../../../scripts/performance/build-observed.ps1) | 실제 소스 snapshot/hash 생성, Ticketing 이미지 빌드·적용 |
+| [run-vu.py](../../../scripts/test-scenarios/s09-queue-load/run-vu.py) | 준비·health 확인·k6 실행·Redis 정합성·회복·정리·증거 저장 |
+| [queue-vu.js](../../../scripts/test-scenarios/s09-queue-load/queue-vu.js) | 실제 HTTP 부하와 사용자 흐름/checks. Python이 부하 도구를 대신하는 구조가 아님 |
+| [verify-s09.py](../../../scripts/test-scenarios/s09-queue-load/verify-s09.py) | 인증/부정 토큰/중복/heartbeat/이탈 기능 사례 |
+| [run-polling-comparison.ps1](../../../scripts/test-scenarios/s09-queue-load/run-polling-comparison.ps1) | 동일 300 VU에서 polling 1/2/5초 비교 |
+| [build-observed.ps1](../../../scripts/test-scenarios/s09-queue-load/build-observed.ps1) | 실제 소스 snapshot/hash 생성, Ticketing 이미지 빌드·적용 |
 | [QueueMultiInstanceVerification.java](../../../ticketing-service/src/test/java/com/tikitaka/ticketing/queue/performance/QueueMultiInstanceVerification.java) | 임시 Redis + 독립 Scheduler JVM 2개. 기본 중복 경합/quota 모드 |
 
 세부 기대값과 과거 Scheduler 실험 조건은 [결과 보고서](local-result.md)에 포함했다. 기능 smoke는 verify-s09.py가 queue-load.js를 실행한다.
@@ -59,9 +59,9 @@ JAVA_HOME은 각 PC의 JDK 21 설치 경로를 사용한다.
 ```powershell
 & {
     $ErrorActionPreference = 'Stop'
-    .\scripts\performance\build-observed.ps1
+    .\scripts\test-scenarios\s09-queue-load\build-observed.ps1
     if ($LASTEXITCODE -ne 0) { throw '빌드·적용 실패' }
-    python -u scripts/k6/run-vu.py --mode vu --vus 50 300 --restart none
+    python -u scripts/test-scenarios/s09-queue-load/run-vu.py --mode vu --vus 50 300 --restart none
     if ($LASTEXITCODE -ne 0) { throw '회귀 실패: 결과부터 확인' }
 }
 ```
@@ -76,15 +76,15 @@ JAVA_HOME은 각 PC의 JDK 21 설치 경로를 사용한다.
 
 ```powershell
 # 기능/보안
-python -u scripts/k6/verify-s09.py
+python -u scripts/test-scenarios/s09-queue-load/verify-s09.py
 # 전체 VU 단계: 50/100/300/500/1000, 각 120초
-python -u scripts/k6/run-vu.py --mode vu
+python -u scripts/test-scenarios/s09-queue-load/run-vu.py --mode vu
 # 1000명의 단회 진입
-python -u scripts/k6/run-vu.py --mode spike
+python -u scripts/test-scenarios/s09-queue-load/run-vu.py --mode spike
 # 300 VU 10분
-python -u scripts/k6/run-vu.py --mode soak
+python -u scripts/test-scenarios/s09-queue-load/run-vu.py --mode soak
 # polling 비교
-.\scripts\k6\run-polling-comparison.ps1
+.\scripts\test-scenarios\s09-queue-load\run-polling-comparison.ps1
 # Redis 회귀 및 합산 상한 (각각 종료 코드 확인)
 .\gradlew.bat :ticketing-service:test --tests com.tikitaka.ticketing.queue.infrastructure.RedisQueueRepositoryTest --console=plain
 .\gradlew.bat :ticketing-service:queueMultiInstanceVerify --args=quota --console=plain
@@ -113,15 +113,14 @@ DB 정리가 필요하면 해당 실행 users.json/fixture.json ID만 식별하�
 quota.json의 FAIL은 확정 성공 수가 50 초과, INCONCLUSIVE는 경계/시각 자료 불확실이다.
 실패는 반복 실행 전에 failure/worker 로그를 확인한다.
 
-큰 원본 artifacts는 로컬에 보존된다. PR에는 작은 요약과 출처·체크섬을 선별한다.
+큰 원본 artifacts는 로컬에 보존하며 Git에 커밋하지 않는다. PR에는 결과 요약 문서만 포함한다.
 공유용 계정의 비밀값이나 JWT를 결과에 넣지 않는다. 새 팀원 PC에서의 처음부터 재현 확인은 아직 남아 있다.
 
 
 ## 관측 설정과 제출 범위
 
-추가 관측 설정은 `infra/compose.baseline.yml`, `infra/prometheus/prometheus.yml`,
-팀 공통 `infra/grafana/provisioning/dashboards/dashboards.yml`과 `json/ticketing-baseline.json`을 사용한다.
-기존 docker-compose.yml와 결합하는 override이며, 기존 환경을 덮어쓰기 전에 현재 설정을 확인한다.
+공통 테스트 환경은 `docker-compose.yml`과 `docker-compose.test.yml`을 함께 사용한다.
+관측은 `infra/prometheus/prometheus.yml`, 팀 공통 Grafana provisioning과 `json/queue-performance.json`을 사용한다.
 Dashboard 지표는 run-vu.py의 QUERIES와 함께 읽는다. process_cpu_usage와 Docker CPU%는 분모가 다르다.
 
 과거 Scheduler 5,000명 실험은 test-classpath standalone JVM, 전용 Redis, Clock.fixed,
