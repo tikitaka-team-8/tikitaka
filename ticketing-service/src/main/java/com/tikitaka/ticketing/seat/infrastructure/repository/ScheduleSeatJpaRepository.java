@@ -3,6 +3,8 @@ package com.tikitaka.ticketing.seat.infrastructure.repository;
 import com.tikitaka.ticketing.seat.domain.entity.ScheduleSeat;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -15,18 +17,28 @@ import java.util.UUID;
 
 public interface ScheduleSeatJpaRepository extends JpaRepository<ScheduleSeat, UUID> {
 
-    @Query("""
-        SELECT s
-        FROM ScheduleSeat s
-        WHERE s.eventSessionId = :eventSessionId
-          AND (:section IS NULL OR s.section = :section)
-          AND (:grade IS NULL OR s.seatGrade = :grade)
-        ORDER BY s.section, s.rowLabel, s.seatNumber
-        """)
-    List<ScheduleSeat> findSeats(
+    @Query(
+        value = """
+            SELECT s
+            FROM ScheduleSeat s
+            WHERE s.eventSessionId = :eventSessionId
+              AND (:section IS NULL OR s.section = :section)
+              AND (:grade IS NULL OR s.seatGrade = :grade)
+            ORDER BY s.section, s.rowLabel, s.seatNumber
+            """,
+        countQuery = """
+            SELECT COUNT(s)
+            FROM ScheduleSeat s
+            WHERE s.eventSessionId = :eventSessionId
+              AND (:section IS NULL OR s.section = :section)
+              AND (:grade IS NULL OR s.seatGrade = :grade)
+            """
+    )
+    Page<ScheduleSeat> findSeats(
             @Param("eventSessionId") UUID eventSessionId,
             @Param("section") String section,
-            @Param("grade") String grade
+            @Param("grade") String grade,
+            Pageable pageable
     );
 
 

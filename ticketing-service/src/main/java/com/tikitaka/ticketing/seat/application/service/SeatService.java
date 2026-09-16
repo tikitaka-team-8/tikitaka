@@ -11,11 +11,13 @@ import com.tikitaka.ticketing.seat.domain.repository.ScheduleSeatRepository;
 import com.tikitaka.ticketing.seat.domain.repository.SeatHoldRepository;
 import com.tikitaka.ticketing.seat.exception.SeatErrorCode;
 import com.tikitaka.ticketing.seat.presentation.dto.response.CreateScheduleSeatsResponse;
-import com.tikitaka.ticketing.seat.presentation.dto.response.ScheduleSeatListResponse;
 import com.tikitaka.ticketing.seat.presentation.dto.response.ScheduleSeatResponse;
 import com.tikitaka.ticketing.seat.presentation.dto.response.SeatHoldResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +38,8 @@ public class SeatService implements SeatHoldReservationValidator {
 
     private static final Duration HOLD_EXTENSION_DURATION = Duration.ofMinutes(10);
     private static final Long SYSTEM_USER_ID = 0L;
+    private static final int DEFAULT_SEAT_PAGE_SIZE = 50;
+    private static final int MAX_SEAT_PAGE_SIZE = 200;
 
     private final ScheduleSeatRepository scheduleSeatRepository;
     private final SeatHoldRepository seatHoldRepository;
@@ -43,17 +47,36 @@ public class SeatService implements SeatHoldReservationValidator {
     private final Clock clock;
 
 
-    public ScheduleSeatListResponse getSeatList(UUID eventSessionId, String section, String grade, Long userId, String admissionToken) {
+    public Page<ScheduleSeatResponse> getSeatList(
+            UUID eventSessionId,
+            String section,
+            String grade,
+            Long userId,
+            String admissionToken,
+            int page,
+            int size
+    ) {
 
         queueAdmissionValidator.validateAndEnter(eventSessionId,userId,admissionToken);
 
-        List<ScheduleSeat> seats =
+        Pageable pageable = normalizeSeatPageable(page, size);
+
+        Page<ScheduleSeat> seats =
                 scheduleSeatRepository.findSeats(
                         eventSessionId,
                         section,
-                        grade
+                        grade,
+                        pageable
                 );
-        return ScheduleSeatListResponse.from(seats);
+        return seats.map(ScheduleSeatResponse::from);
+    }
+
+    private Pageable normalizeSeatPageable(int page, int size) {
+        int resolvedPage = Math.max(page, 0);
+        int resolvedSize = size <= 0
+                ? DEFAULT_SEAT_PAGE_SIZE
+                : Math.min(size, MAX_SEAT_PAGE_SIZE);
+        return PageRequest.of(resolvedPage, resolvedSize);
     }
 
     public ScheduleSeatResponse getSeatDetail(

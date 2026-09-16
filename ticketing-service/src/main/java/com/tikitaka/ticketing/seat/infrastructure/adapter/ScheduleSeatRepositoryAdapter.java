@@ -4,6 +4,8 @@ import com.tikitaka.ticketing.seat.domain.entity.ScheduleSeat;
 import com.tikitaka.ticketing.seat.domain.repository.ScheduleSeatRepository;
 import com.tikitaka.ticketing.seat.infrastructure.repository.ScheduleSeatJpaRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -17,11 +19,12 @@ public class ScheduleSeatRepositoryAdapter implements ScheduleSeatRepository {
     private final ScheduleSeatJpaRepository jpaRepository;
 
     @Override
-    public List<ScheduleSeat> findSeats(UUID eventSessionId, String section, String grade) {
+    public Page<ScheduleSeat> findSeats(UUID eventSessionId, String section, String grade, Pageable pageable) {
         return jpaRepository.findSeats(
                 eventSessionId,
                 section,
-                grade
+                grade,
+                pageable
         );
     }
 
