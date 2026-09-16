@@ -7,20 +7,18 @@
 ```text
 scripts/sql/s08-kafka-recovery/
 ├── 01-consumer-recovery/
-│   ├── seed-*.sql
-│   └── cleanup-*.sql
+│   └── seed-*.sql
 ├── 02-retry-dlt-comparison/
 │   ├── fixture/
-│   │   ├── seed-*.sql
-│   │   └── cleanup-*.sql
+│   │   └── seed-*.sql
 │   └── fault-injection/
-│       ├── setup-*.sql
-│       └── cleanup-*.sql
+│       └── setup-*.sql
 ├── 03-retry-success/
 │   ├── setup-*.sql
-│   ├── verify-*.sql
-│   └── cleanup-*.sql
+│   └── verify-*.sql
 └── _shared/
+    ├── cleanup-fixture-*.sql
+    ├── cleanup-fault-*.sql
     └── verify-*.sql
 ```
 
@@ -28,9 +26,33 @@ scripts/sql/s08-kafka-recovery/
 - `02-retry-dlt-comparison/fixture`: Baseline과 개선 후 비교에서 함께 사용하는 1,000건 Fixture
 - `02-retry-dlt-comparison/fault-injection`: 재시도 가능한 DB 오류를 지속 발생시키는 트리거
 - `03-retry-success`: DB 오류가 두 번 발생한 뒤 세 번째 처리에서 해소되는 단일 이벤트 검증
-- `_shared`: 1,000건 처리 전후에 공통으로 사용하는 최종 상태 검증
+- `_shared`: 시나리오가 함께 사용하는 Fixture·실패 주입 정리와 최종 상태 검증
 
-`fault-injection/cleanup-*.sql`과 `03-retry-success/cleanup-*.sql`은 트리거·함수·시퀀스만 제거한다. 실제 Fixture 데이터는 각 테스트의 `cleanup-platform.sql`, `cleanup-ticketing.sql`, `cleanup-payment-notification.sql`로 제거한다.
+`cleanup-fault-*.sql`은 트리거·함수·시퀀스만 제거하고, `cleanup-fixture-*.sql`은 01과 02가 공유하는 S08 전용 데이터 범위를 제거한다. 실패 주입 객체를 먼저 제거한 뒤 Fixture를 Payment·Notification → Ticketing → Platform 순서로 정리한다.
+
+## 전체 테스트 구성
+
+```text
+SQL Fixture 준비
+    ↓
+Reservation·Notification Listener 중단
+    ↓
+실행 Shell
+ ├─ k6 정상 결제 승인 1,000건
+ └─ Kafka 실패 이벤트 10건 동시 주입
+    ↓
+Ticketing Listener 복구 → Retry·DLT·Reservation 상태 검증
+    ↓
+Notification Listener 복구 → Retry·DLT·Notification 상태 검증
+    ↓
+SQL·Kafka UI·서비스 로그·Grafana 최종 교차 검증
+```
+
+- k6는 정상 API 요청의 성공률·처리량과 응답시간을 측정한다.
+- Kafka Shell은 k6 부하 구간에 실패 이벤트를 분산 주입하고 두 작업의 완료를 조율한다.
+- SQL Seed는 도메인 초기 상태를 만들고, SQL Trigger는 `SQLSTATE 40001`로 재시도 가능한 DB 오류를 재현한다.
+- SQL Verify, Kafka UI·CLI, 서비스 로그와 Grafana는 Lag·Offset·DLT·최종 데이터·자원 사용량을 교차 확인한다.
+- JUnit 단위 테스트와 Embedded Kafka·PostgreSQL Testcontainers 통합 테스트는 Retry·DLT 정책, 멱등성과 DLT 원본 보존을 자동 검증한다.
 
 ## 공통 준비
 
@@ -151,9 +173,9 @@ docker compose up -d --no-deps --force-recreate payment-notification-service
 Payment·Notification → Ticketing → Platform 순서로 실행한다.
 
 ```powershell
-Get-Content -Raw .\scripts\sql\s08-kafka-recovery\01-consumer-recovery\cleanup-payment-notification.sql | docker exec -i tikitaka-payment-postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
-Get-Content -Raw .\scripts\sql\s08-kafka-recovery\01-consumer-recovery\cleanup-ticketing.sql | docker exec -i tikitaka-ticketing-postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
-Get-Content -Raw .\scripts\sql\s08-kafka-recovery\01-consumer-recovery\cleanup-platform.sql | docker exec -i tikitaka-platform-postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+Get-Content -Raw .\scripts\sql\s08-kafka-recovery\_shared\cleanup-fixture-payment-notification.sql | docker exec -i tikitaka-payment-postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+Get-Content -Raw .\scripts\sql\s08-kafka-recovery\_shared\cleanup-fixture-ticketing.sql | docker exec -i tikitaka-ticketing-postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+Get-Content -Raw .\scripts\sql\s08-kafka-recovery\_shared\cleanup-fixture-platform.sql | docker exec -i tikitaka-platform-postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 ```
 
 ## 02. Retry·DLT 적용 전후 비교
@@ -222,11 +244,11 @@ Ticketing 처리 완료 후 Notification Listener를 복구한다. Listener 복�
 먼저 실패 트리거를 제거한 뒤 Fixture를 제거한다.
 
 ```powershell
-Get-Content -Raw .\scripts\sql\s08-kafka-recovery\02-retry-dlt-comparison\fault-injection\cleanup-ticketing.sql | docker exec -i tikitaka-ticketing-postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
-Get-Content -Raw .\scripts\sql\s08-kafka-recovery\02-retry-dlt-comparison\fault-injection\cleanup-notification.sql | docker exec -i tikitaka-payment-postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
-Get-Content -Raw .\scripts\sql\s08-kafka-recovery\02-retry-dlt-comparison\fixture\cleanup-payment-notification.sql | docker exec -i tikitaka-payment-postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
-Get-Content -Raw .\scripts\sql\s08-kafka-recovery\02-retry-dlt-comparison\fixture\cleanup-ticketing.sql | docker exec -i tikitaka-ticketing-postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
-Get-Content -Raw .\scripts\sql\s08-kafka-recovery\02-retry-dlt-comparison\fixture\cleanup-platform.sql | docker exec -i tikitaka-platform-postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+Get-Content -Raw .\scripts\sql\s08-kafka-recovery\_shared\cleanup-fault-ticketing.sql | docker exec -i tikitaka-ticketing-postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+Get-Content -Raw .\scripts\sql\s08-kafka-recovery\_shared\cleanup-fault-notification.sql | docker exec -i tikitaka-payment-postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+Get-Content -Raw .\scripts\sql\s08-kafka-recovery\_shared\cleanup-fixture-payment-notification.sql | docker exec -i tikitaka-payment-postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+Get-Content -Raw .\scripts\sql\s08-kafka-recovery\_shared\cleanup-fixture-ticketing.sql | docker exec -i tikitaka-ticketing-postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+Get-Content -Raw .\scripts\sql\s08-kafka-recovery\_shared\cleanup-fixture-platform.sql | docker exec -i tikitaka-platform-postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 ```
 
 ## 03. 재시도 후 최종 성공
@@ -267,8 +289,8 @@ Get-Content -Raw .\scripts\sql\s08-kafka-recovery\03-retry-success\verify-notifi
 ### 실패 주입 정리
 
 ```powershell
-Get-Content -Raw .\scripts\sql\s08-kafka-recovery\03-retry-success\cleanup-ticketing.sql | docker exec -i tikitaka-ticketing-postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
-Get-Content -Raw .\scripts\sql\s08-kafka-recovery\03-retry-success\cleanup-notification.sql | docker exec -i tikitaka-payment-postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+Get-Content -Raw .\scripts\sql\s08-kafka-recovery\_shared\cleanup-fault-ticketing.sql | docker exec -i tikitaka-ticketing-postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+Get-Content -Raw .\scripts\sql\s08-kafka-recovery\_shared\cleanup-fault-notification.sql | docker exec -i tikitaka-payment-postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 ```
 
-03 cleanup은 일시적 실패 트리거·함수·시퀀스만 제거한다. 전체 Fixture까지 제거하려면 02의 `fixture/cleanup-*.sql`을 Payment·Notification → Ticketing → Platform 순서로 추가 실행한다.
+공통 실패 주입 cleanup은 영구 실패와 일시적 실패 트리거·함수·시퀀스를 함께 제거한다. 전체 Fixture까지 제거하려면 `_shared/cleanup-fixture-*.sql`을 Payment·Notification → Ticketing → Platform 순서로 추가 실행한다.

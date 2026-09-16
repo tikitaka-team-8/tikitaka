@@ -1,4 +1,5 @@
--- S08 Kafka 실패 격리 테스트 - Platform DB cleanup
+-- S08 Kafka 장애·복구 테스트 - 공통 Platform Fixture cleanup
+-- 01의 사용자 100명과 02의 사용자 600명을 모두 포함하는 S08 전용 범위만 정리합니다.
 \set ON_ERROR_STOP on
 BEGIN;
 

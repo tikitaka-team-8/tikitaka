@@ -15,7 +15,7 @@
 | 진행 상태 | **완료** |
 | 완료 대상 Issue | [#116 S08 Kafka Consumer 장애 복구 및 Retry·DLT 검증](https://github.com/tikitaka-team-8/tikitaka/issues/116) (`Closes #116`) |
 | 관련 기능 Issue | [#101 좌석 선점 및 Payment·Kafka 처리 안정성 보강](https://github.com/tikitaka-team-8/tikitaka/issues/101) (`Related to #101`) |
-| 관련 PR | PR 생성 후 링크 추가 |
+| 관련 PR | [#117 Reservation·Notification Kafka Consumer Retry·DLT 및 S08 장애 복구 검증](https://github.com/tikitaka-team-8/tikitaka/pull/117) |
 
 Reservation·Notification Listener 중단 중 이벤트 보존, Consumer 복구, Retry·DLT 적용 전후 비교와 재시도 후 최종 성공을 검증했습니다. 정상 이벤트 1,000건은 Payment부터 Notification까지 중복·유실·상태 모순 없이 처리됐고 두 Consumer Group의 Lag은 0으로 정상화됐습니다.
 
@@ -76,6 +76,21 @@ Reservation·Notification Listener 중단 중 이벤트 보존, Consumer 복구,
 | k6 CSV | [`scripts/k6/data/`](../../../scripts/k6/data/) |
 | Kafka 실행·주입 | [`scripts/kafka/s08/`](../../../scripts/kafka/s08/) |
 | 단계별 SQL과 실행 가이드 | [`scripts/sql/s08-kafka-recovery/`](../../../scripts/sql/s08-kafka-recovery/README.md) |
+
+### 테스트 구성과 도구 역할
+
+| 구성 요소 | 실제 테스트에서의 역할 |
+|---|---|
+| k6 | 정상 결제 승인 1,000건의 성공률·처리량과 평균·p95·p99 응답시간 측정 |
+| Kafka Shell | k6 정상 부하와 실패 이벤트 10건을 같은 실행 구간에 병렬로 수행하고 완료 시점 조율 |
+| SQL Seed | Payment·Reservation·SeatHold·ScheduleSeat의 테스트 전 초기 상태 구성 |
+| SQL 장애 주입 | Inbox INSERT Trigger의 `SQLSTATE 40001`로 재시도 가능한 DB 오류 재현 |
+| SQL Verify | Inbox·Outbox·Notification과 최종 도메인 상태, 중복·유실·고아 데이터 집계 |
+| Kafka UI·CLI | Consumer Member·Lag, DLT 증가량과 실패 이벤트 Offset 분포 확인 |
+| 서비스 로그·Grafana | 처리 시도 횟수·간격·최종 결과와 CPU·JVM Heap 변화 관찰 |
+| JUnit·Testcontainers | Retry·DLT 정책, 동일 이벤트 재전송 멱등성과 DLT Payload·Header 보존 자동 검증 |
+
+로컬 시나리오는 Listener를 중단한 상태에서 SQL Fixture를 준비하고, 실행 Shell이 k6 정상 승인 1,000건과 Kafka 실패 이벤트 10건을 동시에 발생시키는 방식으로 구성했습니다. 이후 Ticketing과 Notification Listener를 순서대로 복구하면서 각 구간의 Retry·DLT와 최종 상태를 검증했습니다. JUnit은 로컬 측정을 대체하지 않고 정책과 경계 조건을 반복 검증하는 자동 테스트로 사용했습니다.
 
 실행 결과는 k6 요약, SQL 검증 결과, Kafka UI의 Consumer Lag·Topic 메시지 수, Kafka Offset 조회, 서비스 로그와 Grafana를 교차 확인했습니다. Kafka UI·Grafana 화면과 원본 터미널 로그는 로컬 실행 중 확인했고 저장소에는 별도 원본 파일로 보존하지 않았으며, 판정에 사용한 시각과 수치는 아래에 전사했습니다.
 
