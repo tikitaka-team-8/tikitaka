@@ -1,0 +1,36 @@
+# 테스트 환경에서만 사용하는 추가 설정
+# 기본 docker-compose.yml에 이 파일을 함께 적용하여 실행
+#
+# 실행 예시:
+# docker compose -f docker-compose.yml -f docker-compose.test.yml up -d
+
+services:
+  gateway:
+    environment:
+      # HTTP 요청 처리 시간의 p95·p99를 Prometheus/Grafana에서 확인하기 위한 Histogram 활성화
+      SPRING_APPLICATION_JSON: '{"management":{"metrics":{"distribution":{"percentiles-histogram":{"http.server.requests":true}}}}}'
+
+  platform-service:
+    environment:
+      # HTTP 요청 처리 시간의 p95·p99를 Prometheus/Grafana에서 확인하기 위한 Histogram 활성화
+      SPRING_APPLICATION_JSON: '{"management":{"metrics":{"distribution":{"percentiles-histogram":{"http.server.requests":true}}}}}'
+
+  ticketing-service:
+    environment:
+      # HTTP 요청 처리 시간의 p95·p99를 Prometheus/Grafana에서 확인하기 위한 Histogram 활성화
+      SPRING_APPLICATION_JSON: '{"management":{"metrics":{"distribution":{"percentiles-histogram":{"http.server.requests":true}}}}}'
+
+      # Ticketing Service의 Kafka Consumer 실행 여부
+      # 기본값: true (Consumer 정상 실행)
+      # false로 설정하면 Consumer를 시작하지 않아 Kafka Consumer 장애 상황을 테스트할 수 있음
+      SPRING_KAFKA_LISTENER_AUTO_STARTUP: ${TICKETING_KAFKA_LISTENER_AUTO_STARTUP:-true}
+
+  payment-notification-service:
+    environment:
+      # HTTP 요청 처리 시간의 p95·p99를 Prometheus/Grafana에서 확인하기 위한 Histogram 활성화
+      SPRING_APPLICATION_JSON: '{"management":{"metrics":{"distribution":{"percentiles-histogram":{"http.server.requests":true}}}}}'
+
+      # Payment & Notification Service의 Kafka Consumer 실행 여부
+      # 기본값: true (Consumer 정상 실행)
+      # false로 설정하면 Consumer를 시작하지 않아 Kafka Consumer 장애 상황을 테스트할 수 있음
+      SPRING_KAFKA_LISTENER_AUTO_STARTUP: ${PAYMENT_KAFKA_LISTENER_AUTO_STARTUP:-true}
