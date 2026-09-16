@@ -17,3 +17,6 @@ out/
 .env
 .env.*
 !.env.example
+
+# Local test outputs
+/artifacts/
