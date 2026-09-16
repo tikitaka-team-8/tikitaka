@@ -342,6 +342,18 @@ services:
   # ─────────────────────────────────────────────
   # Monitoring
   # ─────────────────────────────────────────────
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./infra/loki/loki-config.yml:/mnt/config/loki-config.yml
+      - loki-data:/loki
+    command: -config.file=/mnt/config/loki-config.yml
+    restart: always
+    networks:
+      - tikitaka-network
 
   # Spring Actuator 메트릭 수집 및 저장
   prometheus:
@@ -409,6 +421,7 @@ volumes:
   kafka-data:
   prometheus-data:
   grafana-data:
+  loki-data:
 
 networks:
   tikitaka-network:
