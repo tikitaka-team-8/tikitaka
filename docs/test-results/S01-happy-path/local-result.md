@@ -42,8 +42,8 @@ Gateway를 단일 진입점으로 사용하여 회원가입부터 결제 승인,
 ### 데이터 준비
 
 1. Docker Compose로 애플리케이션과 PostgreSQL, Redis, Kafka 및 모니터링 구성을 실행한다.
-2. Platform DB에 [`platform-seed.sql`](../../../scripts/integration-test/seed/platform-seed.sql)을 적용한다.
-3. Ticketing DB에 [`ticketing-seed.sql`](../../../scripts/integration-test/seed/ticketing-seed.sql)을 적용한다.
+2. Platform DB에 [`platform-seed.sql`](../../../scripts/test-scenarios/s01-happy-path/seed/platform-seed.sql)을 적용한다.
+3. Ticketing DB에 [`ticketing-seed.sql`](../../../scripts/test-scenarios/s01-happy-path/seed/ticketing-seed.sql)을 적용한다.
 4. Postman에서 로컬 Environment를 선택하고 Collection 요청을 번호 순서대로 실행한다.
 
 - 기존 데이터 초기화: 볼륨 전체 초기화 수행
@@ -96,8 +96,8 @@ Gateway를 단일 진입점으로 사용하여 회원가입부터 결제 승인,
 
 검증 스크립트:
 
-- [`verify-ticketing-state.sql`](../../../scripts/integration-test/verify-ticketing-state.sql)
-- [`verify-ticketing-event-state.sql`](../../../scripts/integration-test/verify-ticketing-event-state.sql)
+- [`verify-ticketing-state.sql`](../../../scripts/test-scenarios/s01-happy-path/verify-ticketing-state.sql)
+- [`verify-ticketing-event-state.sql`](../../../scripts/test-scenarios/s01-happy-path/verify-ticketing-event-state.sql)
 
 ### Payment·Notification DB
 
@@ -111,7 +111,7 @@ Gateway를 단일 진입점으로 사용하여 회원가입부터 결제 승인,
 
 검증 스크립트:
 
-- [`verify-payment-notification-state.sql`](../../../scripts/integration-test/verify-payment-notification-state.sql)
+- [`verify-payment-notification-state.sql`](../../../scripts/test-scenarios/s01-happy-path/verify-payment-notification-state.sql)
 
 ### Redis
 

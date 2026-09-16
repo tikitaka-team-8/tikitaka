@@ -93,10 +93,11 @@ docs/test-results/
 
 ```text
 scripts/
-├─ integration-test/
-│  ├─ run.sh
-│  ├─ seed/
-│  └─ verify-*.sql
+├─ test-scenarios/
+│  └─ s01-happy-path/
+│     ├─ run.sh
+│     ├─ seed/
+│     └─ verify-*.sql
 ├─ postman/
 │  ├─ tikitaka.postman_collection.json
 │  └─ tikitaka.local.example.postman_environment.json
