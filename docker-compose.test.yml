@@ -27,8 +27,10 @@ services:
 
   ticketing-service:
     environment:
-      # HTTP 요청 처리 시간의 p95·p99를 Prometheus/Grafana에서 확인하기 위한 Histogram 활성화
-      SPRING_APPLICATION_JSON: '{"management":{"metrics":{"distribution":{"percentiles-histogram":{"http.server.requests":true}}}}}'
+      # HTTP Histogram은 항상 활성화하고, S05 환경변수가 있을 때만 Payment 주소·Feign Timeout이 테스트 값으로 바뀐
+      # JSON으로 paymentCreationClient Map key를 보존함
+      SPRING_APPLICATION_JSON: >-
+        {"management":{"metrics":{"distribution":{"percentiles-histogram":{"http.server.requests":true}}}},"clients":{"payment-notification-service":{"url":"${S05_PAYMENT_SERVICE_URL:-http://payment-notification-service:8083}"}},"spring":{"cloud":{"openfeign":{"client":{"config":{"paymentCreationClient":{"connectTimeout":${S05_PAYMENT_CONNECT_TIMEOUT:-1000},"readTimeout":${S05_PAYMENT_READ_TIMEOUT:-60000}}}}}}}}
 
       # Ticketing Service의 Kafka Consumer 실행 여부
       # 기본값: true (Consumer 정상 실행)

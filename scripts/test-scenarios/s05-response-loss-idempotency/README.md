@@ -126,7 +126,9 @@ Get-Content -Raw -Encoding UTF8 .\scripts\test-scenarios\s05-response-loss-idemp
 - `hold_status = HOLDING`
 
 
-## 7. Ticketing 프록시 구성
+## 7. 1차 Baseline: Client → Ticketing 응답 유실
+
+### 7.1 Ticketing 프록시 구성
 
 기존 S05 프록시가 있으면 제거한 뒤 Ticketing 프록시를 생성합니다.
 
@@ -185,7 +187,7 @@ Invoke-RestMethod -Method Get -Uri "$toxiproxyApi/proxies/$proxyName" -Headers $
 - `enabled = True`
 - `s05-response-latency`의 `stream = downstream`
 
-## 8. 최초 예매 생성 요청과 응답 유실
+### 7.2 최초 예매 생성 요청과 응답 유실
 
 요청 직전에 시각을 기록합니다.
 
@@ -208,7 +210,7 @@ curl.exe --verbose --max-time 8 `
 
 `upload completely sent off: 56 bytes`로 요청 본문 전송 완료를 확인합니다. 기대 관찰은 `8초 전후 Client Timeout`이며, HTTP 오류 응답을 기대하는 테스트가 아닙니다.
 
-## 9. 재요청 전 최초 서버 처리 확인
+### 7.3 재요청 전 최초 서버 처리 확인
 
 curl Timeout 후 바로 재요청하지 않습니다. 먼저 동일한 검증 SQL을 실행합니다.
 
@@ -235,7 +237,7 @@ docker compose logs --since $firstRequestStart --timestamps ticketing-service pa
 이 상태가 확인되지 않으면 동일 요청을 재전송하지 않고 로그와 SQL 결과를 먼저 보존합니다.
 
 
-## 10. 응답 지연 해제와 동일 요청 재전송
+### 7.4 응답 지연 해제와 동일 요청 재전송
 
 ```powershell
 Invoke-RestMethod -Method Delete `
@@ -243,7 +245,7 @@ Invoke-RestMethod -Method Delete `
     -Headers $toxiproxyHeaders
 ```
 
-8절과 완전히 같은 URL·헤더·본문으로 `--max-time`만 제거하여 한 번 재요청합니다.
+7.2와 완전히 같은 URL·헤더·본문으로 `--max-time`만 제거하여 한 번 재요청합니다.
 
 ```powershell
 curl.exe --silent --show-error --include `
@@ -266,9 +268,9 @@ curl.exe --silent --show-error --include `
 
 재요청 응답의 Reservation ID와 Payment ID를 기록합니다.
 
-## 11. 재요청 후 최종 검증
+### 7.5 재요청 후 최종 검증
 
-9절과 동일한 검증 SQL을 다시 실행합니다.
+7.3과 동일한 검증 SQL을 다시 실행합니다.
 
 ```powershell
 $testEnd = Get-Date -Format o
@@ -292,7 +294,7 @@ $testEnd
 | 재요청 반환 ID | 최초 서버 처리 결과와 동일 |
 
 
-## 12. 테스트 종료와 정리
+### 7.6 테스트 종료와 정리
 
 결과 기록 완료를 확인한 뒤 프록시와 Fixture를 정리합니다.
 
@@ -306,7 +308,7 @@ try {
 
 이후 4.3의 Cleanup을 Payment → Ticketing → Platform 순서로 실행합니다.
 
-## 13. 결과 기록 항목
+### 7.7 결과 기록 항목
 
 - 테스트 시작·종료 시각
 - Branch와 Commit SHA
@@ -317,3 +319,158 @@ try {
 - Ticketing·Payment 로그
 - Docker Compose와 Toxiproxy 버전
 - 발견한 중복·고아 데이터 또는 상태 모순
+
+---
+
+## 8. 2차 Baseline: Ticketing → Payment 생성 응답 유실
+
+### 8.1 테스트 목적
+
+Payment의 결제 생성 트랜잭션이 커밋된 뒤 Ticketing이 응답을 받지 못한 상황을 재현합니다. Ticketing·Payment의 분리된 트랜잭션 상태와 동일 예매 요청 재전송의 복구 가능 여부를 확인합니다.
+
+```text
+curl.exe → Ticketing:8082 → Toxiproxy:18083 → Payment:8083
+                                        ← 응답만 5초 지연
+```
+
+이 회차에서는 운영 코드를 수정하지 않습니다. 아래 상태는 확정 결과가 아닌 **사전 가설**이며, 실제 HTTP·DB·로그 결과로 판정합니다.
+
+- Payment은 `READY` 1건을 커밋함
+- Ticketing은 Payment 응답 Timeout으로 Reservation·ReservationSeat·SeatHold 변경을 롤백함
+- Ticketing에 없는 Reservation ID를 참조하는 Payment가 남을 수 있음
+- 동일 멱등 키 재요청 시 새 Reservation ID와 기존 Payment의 Reservation ID가 달라 복구에 실패할 수 있음
+
+### 8.2 실행 버전·초기 상태 준비
+
+4.1의 버전·시작 시각을 새로 기록하고, 4.3 Cleanup과 5절 Fixture를 순서대로 실행한 뒤 6절의 초기 상태를 확인합니다.
+
+Toxiproxy와 Ticketing은 테스트 Compose 설정으로 재생성합니다.
+
+```powershell
+$env:S05_PAYMENT_SERVICE_URL = "http://toxiproxy:18083"
+$env:S05_PAYMENT_CONNECT_TIMEOUT = "1000"
+$env:S05_PAYMENT_READ_TIMEOUT = "2000"
+
+docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --force-recreate toxiproxy
+docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --no-deps --force-recreate ticketing-service
+
+$ticketingSpringConfig = docker inspect tikitaka-ticketing-service --format '{{range .Config.Env}}{{println .}}{{end}}' |
+    Where-Object { $_ -like 'SPRING_APPLICATION_JSON=*' } |
+    ForEach-Object { $_.Substring('SPRING_APPLICATION_JSON='.Length) } |
+    ConvertFrom-Json
+
+$ticketingSpringConfig.clients.'payment-notification-service'.url
+$ticketingSpringConfig.spring.cloud.openfeign.client.config.paymentCreationClient
+```
+
+기대 설정은 Payment URL `http://toxiproxy:18083`, Connect Timeout `1000ms`, Read Timeout `2000ms`입니다.
+
+> **2차 중간 공유 1:** 실행 Commit SHA·시작 시각, 초기 Verify SQL, Ticketing 환경변수 확인 결과를 공유합니다.
+
+### 8.3 Payment 생성 응답 지연 프록시 구성
+
+```powershell
+$toxiproxyApi = "http://localhost:8474"
+$paymentProxyName = "s05-payment-create"
+$toxiproxyHeaders = @{ "User-Agent" = "s05-local-test" }
+
+try {
+    Invoke-RestMethod -Method Delete -Uri "$toxiproxyApi/proxies/$paymentProxyName" -Headers $toxiproxyHeaders -ErrorAction Stop
+} catch {
+    if ($_.Exception.Response.StatusCode.value__ -ne 404) { throw }
+}
+
+$paymentProxyBody = @{
+    name = $paymentProxyName
+    listen = "0.0.0.0:18083"
+    upstream = "payment-notification-service:8083"
+    enabled = $true
+} | ConvertTo-Json
+
+Invoke-RestMethod -Method Post `
+    -Uri "$toxiproxyApi/proxies" `
+    -Headers $toxiproxyHeaders `
+    -ContentType "application/json" `
+    -Body $paymentProxyBody
+
+$paymentToxicBody = @{
+    name = "s05-payment-response-latency"
+    type = "latency"
+    stream = "downstream"
+    toxicity = 1.0
+    attributes = @{
+        latency = 5000
+        jitter = 0
+    }
+} | ConvertTo-Json -Depth 3
+
+Invoke-RestMethod -Method Post `
+    -Uri "$toxiproxyApi/proxies/$paymentProxyName/toxics" `
+    -Headers $toxiproxyHeaders `
+    -ContentType "application/json" `
+    -Body $paymentToxicBody
+
+Invoke-RestMethod -Method Get -Uri "$toxiproxyApi/proxies/$paymentProxyName" -Headers $toxiproxyHeaders
+```
+
+### 8.4 최초 요청과 분리 트랜잭션 상태 확인
+
+Ticketing에 직접 요청하여 외부 응답 유실 변수를 제외합니다.
+
+```powershell
+$paymentLossStart = Get-Date -Format o
+$paymentLossStart
+
+curl.exe --silent --show-error --include `
+    -X POST "http://localhost:8082/api/v1/reservations" `
+    -H "Content-Type: application/json" `
+    -H "X-User-Id: 9500001" `
+    -H "X-User-Role: USER" `
+    -H "Idempotency-Key: s05-reservation-response-loss-01" `
+    --data-raw '{\"seatHoldIds\":[\"52050000-0000-0000-0000-000000000001\"]}'
+```
+
+응답을 임의로 PASS·FAIL 처리하지 않고 그대로 기록합니다. 이후 7.3의 두 Verify SQL과 다음 로그를 실행합니다.
+
+```powershell
+docker compose logs --since $paymentLossStart --timestamps ticketing-service payment-notification-service
+```
+
+> **2차 중간 공유 2:** 최초 HTTP 응답, 두 Verify SQL 전체 출력, Ticketing·Payment 로그를 공유합니다. 이 시점에서 toxic을 제거하거나 재요청하지 않습니다.
+
+### 8.5 응답 지연 해제와 동일 요청 재전송
+
+8.4의 결과를 보존한 뒤 toxic만 제거합니다.
+
+```powershell
+Invoke-RestMethod -Method Delete `
+    -Uri "$toxiproxyApi/proxies/$paymentProxyName/toxics/s05-payment-response-latency" `
+    -Headers $toxiproxyHeaders
+
+$paymentLossRetryStart = Get-Date -Format o
+$paymentLossRetryStart
+```
+
+8.4와 같은 curl 요청을 한 번만 재전송합니다. HTTP 응답을 그대로 기록한 뒤 두 Verify SQL과 `$paymentLossRetryStart` 이후 서비스 로그를 다시 확인합니다.
+
+> **2차 중간 공유 3:** 재요청 HTTP 응답, 두 최종 Verify SQL, Ticketing·Payment 로그, 종료 시각을 공유합니다. 결과 기록 전에는 Cleanup하지 않습니다.
+
+### 8.6 실행 환경 복원과 Cleanup
+
+결과 기록 완료 후 Payment 프록시를 제거하고 Ticketing의 Payment 주소·Timeout을 기본값으로 복원합니다.
+
+```powershell
+try {
+    Invoke-RestMethod -Method Delete -Uri "$toxiproxyApi/proxies/$paymentProxyName" -Headers $toxiproxyHeaders -ErrorAction Stop
+} catch {
+    if ($_.Exception.Response.StatusCode.value__ -ne 404) { throw }
+}
+
+Remove-Item Env:S05_PAYMENT_SERVICE_URL -ErrorAction SilentlyContinue
+Remove-Item Env:S05_PAYMENT_CONNECT_TIMEOUT -ErrorAction SilentlyContinue
+Remove-Item Env:S05_PAYMENT_READ_TIMEOUT -ErrorAction SilentlyContinue
+
+docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --no-deps --force-recreate ticketing-service
+```
+
+마지막으로 4.3 Cleanup을 Payment → Ticketing → Platform 순서로 실행합니다.
