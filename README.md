@@ -118,4 +118,4 @@ macOS 또는 Linux:
 
 ## 상세 안내
 
-IntelliJ 설정, 서비스별 연결 정보와 Docker Compose 연동 개발 방법은 [로컬 개발 환경 설정 가이드](docs/development-environment-setup.md)를 확인해 주세요.
+IntelliJ 설정, 서비스별 연결 정보와 Docker Compose 연동 개발 방법은 [로컬 개발 환경 설정 가이드](docs/development/development-environment-setup.md)를 확인해 주세요.
