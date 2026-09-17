@@ -44,6 +44,7 @@ public class SeatService implements SeatHoldReservationValidator {
     private final ScheduleSeatRepository scheduleSeatRepository;
     private final SeatHoldRepository seatHoldRepository;
     private final QueueAdmissionValidator queueAdmissionValidator;
+    private final SeatListReader seatListReader;
     private final Clock clock;
 
 
@@ -61,14 +62,9 @@ public class SeatService implements SeatHoldReservationValidator {
 
         Pageable pageable = normalizeSeatPageable(page, size);
 
-        Page<ScheduleSeat> seats =
-                scheduleSeatRepository.findSeats(
-                        eventSessionId,
-                        section,
-                        grade,
-                        pageable
-                );
-        return seats.map(ScheduleSeatResponse::from);
+        // 실제 좌석 조회는 SeatListReader에 위임한다 (필드 프로젝션 / 짧은 TTL 캐시 실험용 토글은
+        // seat.list.* 설정으로 제어되며, @Cacheable은 별도 빈을 통해서만 동작하기 때문).
+        return seatListReader.readSeatList(eventSessionId, section, grade, pageable);
     }
 
     private Pageable normalizeSeatPageable(int page, int size) {

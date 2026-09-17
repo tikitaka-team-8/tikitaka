@@ -2,6 +2,7 @@ package com.tikitaka.ticketing.seat.infrastructure.adapter;
 
 import com.tikitaka.ticketing.seat.domain.entity.ScheduleSeat;
 import com.tikitaka.ticketing.seat.domain.repository.ScheduleSeatRepository;
+import com.tikitaka.ticketing.seat.domain.projection.ScheduleSeatSummary;
 import com.tikitaka.ticketing.seat.infrastructure.repository.ScheduleSeatJpaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -21,6 +22,16 @@ public class ScheduleSeatRepositoryAdapter implements ScheduleSeatRepository {
     @Override
     public Page<ScheduleSeat> findSeats(UUID eventSessionId, String section, String grade, Pageable pageable) {
         return jpaRepository.findSeats(
+                eventSessionId,
+                section,
+                grade,
+                pageable
+        );
+    }
+
+    @Override
+    public Page<ScheduleSeatSummary> findSeatSummaries(UUID eventSessionId, String section, String grade, Pageable pageable) {
+        return jpaRepository.findSeatSummaries(
                 eventSessionId,
                 section,
                 grade,
