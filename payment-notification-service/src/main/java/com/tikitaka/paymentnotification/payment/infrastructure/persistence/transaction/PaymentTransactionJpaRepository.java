@@ -11,4 +11,6 @@ import java.util.UUID;
 public interface PaymentTransactionJpaRepository extends JpaRepository<PaymentTransaction, UUID> {
     Optional<PaymentTransaction>
     findTopByPayment_PaymentIdAndTransactionTypeOrderByAttemptNoDesc(UUID paymentId, PaymentTransactionType transactionType);
+
+    long countByPayment_PaymentIdAndTransactionType(UUID paymentId, PaymentTransactionType transactionType);
 }

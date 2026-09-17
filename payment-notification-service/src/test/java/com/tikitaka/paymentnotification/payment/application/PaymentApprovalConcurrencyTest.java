@@ -5,7 +5,10 @@ import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGatew
 import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGatewayResult;
 import com.tikitaka.paymentnotification.payment.application.gateway.ReservationPaymentValidator;
 import com.tikitaka.paymentnotification.payment.application.result.ReservationPaymentValidationResult;
+import com.tikitaka.paymentnotification.payment.domain.outbox.PaymentOutboxRepository;
 import com.tikitaka.paymentnotification.payment.domain.payment.*;
+import com.tikitaka.paymentnotification.payment.domain.transaction.PaymentTransactionRepository;
+import com.tikitaka.paymentnotification.payment.domain.transaction.PaymentTransactionType;
 import com.tikitaka.paymentnotification.payment.exception.PaymentException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
@@ -31,7 +34,7 @@ import static org.mockito.Mockito.*;
 import static org.mockito.BDDMockito.given;
 @SpringBootTest
 @ActiveProfiles("local")
-@Disabled("실제 PostgreSQL이 필요한 동시성 통합 테스트 - CI 테스트 DB 환경 구성 후 활성화")
+@Disabled("실제 PostgreSQL이 필요한 동시성 통합 테스트 - CI 테스트 DB 환경 구성 후 활성화 ")
 class PaymentApprovalConcurrencyTest {
 
     @Autowired
@@ -39,6 +42,12 @@ class PaymentApprovalConcurrencyTest {
 
     @Autowired
     private PaymentRepository paymentRepository;
+
+    @Autowired
+    private PaymentTransactionRepository paymentTransactionRepository;
+
+    @Autowired
+    private PaymentOutboxRepository paymentOutboxRepository;
 
     @MockitoBean
     private ReservationPaymentValidator reservationPaymentValidator;
@@ -202,6 +211,22 @@ class PaymentApprovalConcurrencyTest {
 
             assertThat(payment.getStatus())
                     .isEqualTo(PaymentStatus.APPROVED);
+
+            // APPROVE Transaction은 정확히 1건만 생성되어야 한다.
+            assertThat(
+                    paymentTransactionRepository.countByPaymentIdAndTransactionType(
+                            paymentId,
+                            PaymentTransactionType.APPROVE
+                    )
+            ).isEqualTo(1L);
+
+            // PAYMENT_SUCCEEDED Outbox도 정확히 1건만 생성되어야 한다.
+            assertThat(
+                    paymentOutboxRepository.countByPaymentIdAndEventType(
+                            paymentId,
+                            "PAYMENT_SUCCEEDED"
+                    )
+            ).isEqualTo(1L);
 
         } finally {
 

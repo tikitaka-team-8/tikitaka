@@ -8,5 +8,5 @@ public interface PaymentTransactionRepository {
 
     Optional<PaymentTransaction> findLatestApproveTransaction(UUID paymentId);
 
-
+    long countByPaymentIdAndTransactionType(UUID paymentId, PaymentTransactionType transactionType);
 }

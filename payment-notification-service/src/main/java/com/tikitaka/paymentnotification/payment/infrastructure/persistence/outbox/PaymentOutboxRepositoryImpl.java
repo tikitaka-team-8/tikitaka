@@ -30,4 +30,9 @@ public class PaymentOutboxRepositoryImpl implements PaymentOutboxRepository {
     public Optional<PaymentOutbox> findById(UUID outboxId) {
         return paymentOutboxJpaRepository.findById(outboxId);
     }
+
+    @Override
+    public long countByPaymentIdAndEventType(UUID paymentId, String eventType) {
+        return paymentOutboxJpaRepository.countByPayment_PaymentIdAndEventType(paymentId, eventType);
+    }
 }

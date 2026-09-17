@@ -10,4 +10,6 @@ public interface PaymentOutboxRepository {
     List<PaymentOutbox> findPendingOutboxes(int limit);
 
     Optional<PaymentOutbox> findById(UUID outboxId);
+
+    long countByPaymentIdAndEventType(UUID paymentId, String eventType);
 }
