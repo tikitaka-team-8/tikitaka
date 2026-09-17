@@ -6,13 +6,13 @@ Ticketing Service가 예매와 Payment 생성을 완료했지만 클라이언트
 
 현재 가이드의 범위는 S05 1단계인 **예매 생성 응답 유실 후 동일 요청 재전송**입니다. 예매 생성 이전의 인증·대기열·좌석 선점 흐름은 검증 범위에서 제외합니다.
 
-Gateway의 인증·라우팅·Timeout이 결과에 영향을 주지 않도록 Postman에서 Toxiproxy를 거쳐 Ticketing Service로 직접 요청합니다. Ticketing에서 Payment로 이어지는 실제 내부 호출은 그대로 수행합니다.
+Gateway의 인증·라우팅·Timeout이 결과에 영향을 주지 않도록 `curl.exe`에서 Toxiproxy를 거쳐 Ticketing Service로 직접 요청합니다. Ticketing에서 Payment로 이어지는 실제 내부 호출은 그대로 수행합니다.
 
 ## 2. 테스트 구성
 
 | 구성 요소 | 역할 |
 |---|---|
-| Postman | Ticketing 직접 진입, 최초 예매 요청과 동일 요청 재전송 |
+| `curl.exe` | Ticketing 직접 진입, 최초 요청의 전송 완료와 Client Timeout 경과 시간 확인, 동일 요청 재전송 |
 | Toxiproxy | 요청은 Ticketing에 전달하고 Ticketing의 응답만 10초 지연 |
 | SQL Seed | 공연·회차·ScheduleSeat·SeatHold를 예매 생성 직전 상태로 준비 |
 | SQL Verify | Reservation·ReservationSeat·Payment·Outbox 중복과 연결 상태 확인 |
@@ -21,10 +21,10 @@ Gateway의 인증·라우팅·Timeout이 결과에 영향을 주지 않도록 Po
 요청 경로는 다음과 같습니다.
 
 ```text
-Postman → Toxiproxy:18082 → Ticketing:8082 → Payment
+curl.exe → Toxiproxy:18082 → Ticketing:8082 → Payment
 ```
 
-Toxiproxy의 `downstream latency`는 Ticketing에서 Postman으로 돌아오는 응답에만 적용합니다. Postman Timeout보다 긴 지연을 적용하여 클라이언트는 실패로 인식하지만 서버 처리는 완료되는 조건을 만듭니다.
+Toxiproxy의 `downstream latency`는 Ticketing에서 `curl.exe`로 돌아오는 응답에만 적용합니다. curl Timeout보다 긴 지연을 적용하여 클라이언트는 실패로 인식하지만 서버 처리는 완료되는 조건을 만듭니다.
 
 ## 3. 고정 테스트 식별자
 
@@ -125,7 +125,6 @@ Get-Content -Raw -Encoding UTF8 .\scripts\test-scenarios\s05-response-loss-idemp
 - `owner_user_id = 9500001`
 - `hold_status = HOLDING`
 
-> **중간 공유 1:** 두 검증 SQL의 전체 출력과 `$testStart`를 공유합니다.
 
 ## 7. Ticketing 프록시 구성
 
@@ -134,9 +133,10 @@ Get-Content -Raw -Encoding UTF8 .\scripts\test-scenarios\s05-response-loss-idemp
 ```powershell
 $toxiproxyApi = "http://localhost:8474"
 $proxyName = "s05-ticketing"
+$toxiproxyHeaders = @{ "User-Agent" = "s05-local-test" }
 
 try {
-    Invoke-RestMethod -Method Delete -Uri "$toxiproxyApi/proxies/$proxyName" -ErrorAction Stop
+    Invoke-RestMethod -Method Delete -Uri "$toxiproxyApi/proxies/$proxyName" -Headers $toxiproxyHeaders -ErrorAction Stop
 } catch {
     if ($_.Exception.Response.StatusCode.value__ -ne 404) { throw }
 }
@@ -150,6 +150,7 @@ $proxyBody = @{
 
 Invoke-RestMethod -Method Post `
     -Uri "$toxiproxyApi/proxies" `
+    -Headers $toxiproxyHeaders `
     -ContentType "application/json" `
     -Body $proxyBody
 ```
@@ -170,10 +171,11 @@ $toxicBody = @{
 
 Invoke-RestMethod -Method Post `
     -Uri "$toxiproxyApi/proxies/$proxyName/toxics" `
+    -Headers $toxiproxyHeaders `
     -ContentType "application/json" `
     -Body $toxicBody
 
-Invoke-RestMethod -Method Get -Uri "$toxiproxyApi/proxies/$proxyName"
+Invoke-RestMethod -Method Get -Uri "$toxiproxyApi/proxies/$proxyName" -Headers $toxiproxyHeaders
 ```
 
 조회 결과에서 다음 값을 확인합니다.
@@ -185,27 +187,6 @@ Invoke-RestMethod -Method Get -Uri "$toxiproxyApi/proxies/$proxyName"
 
 ## 8. 최초 예매 생성 요청과 응답 유실
 
-Postman에 다음 요청을 생성합니다.
-
-- Method: `POST`
-- URL: `http://localhost:18082/api/v1/reservations`
-- `Content-Type: application/json`
-- `X-User-Id: 9500001`
-- `X-User-Role: USER`
-- `Idempotency-Key: s05-reservation-response-loss-01`
-- Authorization: 사용하지 않음
-- Postman Request Timeout: `3000 ms`
-
-요청 본문:
-
-```json
-{
-  "seatHoldIds": [
-    "52050000-0000-0000-0000-000000000001"
-  ]
-}
-```
-
 요청 직전에 시각을 기록합니다.
 
 ```powershell
@@ -213,11 +194,23 @@ $firstRequestStart = Get-Date -Format o
 $firstRequestStart
 ```
 
-Postman에서 요청을 한 번만 실행합니다. 기대 관찰은 `3초 전후 Client Timeout`이며, HTTP 오류 응답을 기대하는 테스트가 아닙니다.
+`curl.exe`로 요청을 한 번만 실행합니다.
+
+```powershell
+curl.exe --verbose --max-time 8 `
+    -X POST "http://localhost:18082/api/v1/reservations" `
+    -H "Content-Type: application/json" `
+    -H "X-User-Id: 9500001" `
+    -H "X-User-Role: USER" `
+    -H "Idempotency-Key: s05-reservation-response-loss-01" `
+    --data-raw '{\"seatHoldIds\":[\"52050000-0000-0000-0000-000000000001\"]}'
+```
+
+`upload completely sent off: 56 bytes`로 요청 본문 전송 완료를 확인합니다. 기대 관찰은 `8초 전후 Client Timeout`이며, HTTP 오류 응답을 기대하는 테스트가 아닙니다.
 
 ## 9. 재요청 전 최초 서버 처리 확인
 
-Postman Timeout 후 바로 재요청하지 않습니다. 먼저 동일한 검증 SQL을 실행합니다.
+curl Timeout 후 바로 재요청하지 않습니다. 먼저 동일한 검증 SQL을 실행합니다.
 
 ```powershell
 Get-Content -Raw -Encoding UTF8 .\scripts\test-scenarios\s05-response-loss-idempotency\verify\verify-ticketing.sql |
@@ -241,16 +234,26 @@ docker compose logs --since $firstRequestStart --timestamps ticketing-service pa
 
 이 상태가 확인되지 않으면 동일 요청을 재전송하지 않고 로그와 SQL 결과를 먼저 보존합니다.
 
-> **중간 공유 2:** Postman Timeout 메시지와 경과 시간, `$firstRequestStart`, 두 검증 SQL의 전체 출력, Ticketing·Payment 로그를 공유합니다. 이때 지연을 해제하거나 재요청하지 않습니다.
 
 ## 10. 응답 지연 해제와 동일 요청 재전송
 
 ```powershell
 Invoke-RestMethod -Method Delete `
-    -Uri "$toxiproxyApi/proxies/$proxyName/toxics/s05-response-latency"
+    -Uri "$toxiproxyApi/proxies/$proxyName/toxics/s05-response-latency" `
+    -Headers $toxiproxyHeaders
 ```
 
-Postman Request Timeout을 원래 값으로 복원한 뒤, 8절과 완전히 같은 URL·헤더·본문으로 한 번 재요청합니다.
+8절과 완전히 같은 URL·헤더·본문으로 `--max-time`만 제거하여 한 번 재요청합니다.
+
+```powershell
+curl.exe --silent --show-error --include `
+    -X POST "http://localhost:18082/api/v1/reservations" `
+    -H "Content-Type: application/json" `
+    -H "X-User-Id: 9500001" `
+    -H "X-User-Role: USER" `
+    -H "Idempotency-Key: s05-reservation-response-loss-01" `
+    --data-raw '{\"seatHoldIds\":[\"52050000-0000-0000-0000-000000000001\"]}'
+```
 
 기대 결과:
 
@@ -288,7 +291,6 @@ $testEnd
 | 재요청 HTTP 상태 | `200 OK` |
 | 재요청 반환 ID | 최초 서버 처리 결과와 동일 |
 
-> **중간 공유 3:** 재요청 HTTP 상태와 응답 본문, 두 최종 검증 SQL의 전체 출력, `$testEnd`를 공유합니다. 결과 기록이 끝날 때까지 Cleanup하지 않습니다.
 
 ## 12. 테스트 종료와 정리
 
@@ -296,7 +298,7 @@ $testEnd
 
 ```powershell
 try {
-    Invoke-RestMethod -Method Delete -Uri "$toxiproxyApi/proxies/$proxyName" -ErrorAction Stop
+    Invoke-RestMethod -Method Delete -Uri "$toxiproxyApi/proxies/$proxyName" -Headers $toxiproxyHeaders -ErrorAction Stop
 } catch {
     if ($_.Exception.Response.StatusCode.value__ -ne 404) { throw }
 }
@@ -308,7 +310,7 @@ try {
 
 - 테스트 시작·종료 시각
 - Branch와 Commit SHA
-- Postman 최초 요청의 Timeout 메시지와 경과 시간
+- curl 최초 요청의 전송 완료, Timeout 메시지와 경과 시간
 - 최초 요청 후 두 검증 SQL 결과
 - 동일 요청 재전송 HTTP 상태와 응답 본문
 - 재요청 후 두 검증 SQL 결과
