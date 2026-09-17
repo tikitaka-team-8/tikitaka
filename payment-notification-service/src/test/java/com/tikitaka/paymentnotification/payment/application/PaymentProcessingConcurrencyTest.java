@@ -4,23 +4,20 @@ import com.tikitaka.paymentnotification.payment.domain.payment.Payment;
 import com.tikitaka.paymentnotification.payment.domain.payment.PaymentProvider;
 import com.tikitaka.paymentnotification.payment.domain.payment.PaymentRepository;
 import com.tikitaka.paymentnotification.payment.domain.payment.PaymentStatus;
+import com.tikitaka.paymentnotification.testsupport.PostgresIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest
-@ActiveProfiles("local")
-@Disabled("실제 PostgreSQL이 필요한 동시성 통합 테스트 - CI 테스트 DB 환경 구성 후 활성화")
+@PostgresIntegrationTest
 class PaymentProcessingConcurrencyTest {
 
     @Autowired

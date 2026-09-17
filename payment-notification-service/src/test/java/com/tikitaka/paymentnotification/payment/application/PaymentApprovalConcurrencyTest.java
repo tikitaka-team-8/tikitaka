@@ -10,12 +10,10 @@ import com.tikitaka.paymentnotification.payment.domain.payment.*;
 import com.tikitaka.paymentnotification.payment.domain.transaction.PaymentTransactionRepository;
 import com.tikitaka.paymentnotification.payment.domain.transaction.PaymentTransactionType;
 import com.tikitaka.paymentnotification.payment.exception.PaymentException;
+import com.tikitaka.paymentnotification.testsupport.PostgresIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.util.ArrayList;
@@ -26,15 +24,12 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
-@SpringBootTest
-@ActiveProfiles("local")
-@Disabled("실제 PostgreSQL이 필요한 동시성 통합 테스트 - CI 테스트 DB 환경 구성 후 활성화 ")
+import static org.mockito.Mockito.*;
+
+@PostgresIntegrationTest
 class PaymentApprovalConcurrencyTest {
 
     @Autowired
