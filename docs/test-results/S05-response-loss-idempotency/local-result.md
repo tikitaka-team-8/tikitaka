@@ -35,15 +35,15 @@ S03에서 수행한 동일 `paymentId` 승인 요청의 순차·동시 중복 �
 
 | 구성 요소 | 역할 |
 |---|---|
-| Postman | 회원가입·로그인, 최초 예매 요청, 동일 요청 재전송 |
-| Toxiproxy 2.12.0 | `Postman → Gateway` 구간의 downstream 응답 10초 지연 |
+| Postman | Ticketing 직접 진입, 최초 예매 요청, 동일 요청 재전송 |
+| Toxiproxy 2.12.0 | `Postman → Ticketing` 구간의 downstream 응답 10초 지연 |
 | SQL Seed | 예매 생성 직전의 공연·회차·ScheduleSeat·SeatHold 상태 준비 |
 | SQL Verify | 멱등 키 기준 Reservation·Payment·Seat·Outbox 집계 |
 | SQL Cleanup | 세 DB의 S05 전용 데이터만 FK 의존 순서에 맞춰 정리 |
 | 서비스 로그 | 최초 요청 도달과 서버 처리 결과 추적 |
 
 ```text
-Postman → Toxiproxy:18000 → Gateway:8000 → Ticketing → Payment
+Postman → Toxiproxy:18082 → Ticketing:8082 → Payment
 ```
 
 상세 재현 순서와 명령은 [S05 로컬 테스트 가이드](../../../scripts/test-scenarios/s05-response-loss-idempotency/README.md)에 분리했습니다.
@@ -63,7 +63,7 @@ Postman → Toxiproxy:18000 → Gateway:8000 → Ticketing → Payment
 | 서비스 인스턴스 수 | 서비스별 1개                                  |
 | DB·Kafka 위치 | 서비스와 동일한 로컬 PC의 Docker Compose           |
 | 테스트 데이터 | S05 전용 SQL Fixture, 실행 전 초기화             |
-| 인증 정보 | Postman 회원가입·로그인으로 생성, 공유 문서에 미기록        |
+| 요청 사용자 | `X-User-Id: 9500001`, `X-User-Role: USER` |
 | 관련 대시보드 | 해당 없음                                    |
 
 ### 실행 머신과 도구 버전

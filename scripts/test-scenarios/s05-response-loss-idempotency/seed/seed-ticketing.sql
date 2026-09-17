@@ -1,5 +1,5 @@
 -- S05 응답 유실 멱등성 테스트 - Ticketing Fixture
--- 실행 시 회원가입 응답의 userId를 psql 변수 user_id로 전달합니다.
+-- Gateway 인증 흐름을 제외하기 위해 고정 테스트 사용자 ID 9500001을 사용합니다.
 \set ON_ERROR_STOP on
 BEGIN;
 
@@ -17,8 +17,8 @@ INSERT INTO p_schedule_seat (
     'S05',
     150000,
     'HELD',
-    :'user_id'::bigint,
-    :'user_id'::bigint
+    9500001,
+    9500001
 )
 ON CONFLICT (schedule_seat_id) DO UPDATE SET
     event_session_id = EXCLUDED.event_session_id,
@@ -42,7 +42,7 @@ INSERT INTO p_seat_hold (
 ) VALUES (
     '52050000-0000-0000-0000-000000000001',
     '51050000-0000-0000-0000-000000000001',
-    :'user_id'::bigint,
+    9500001,
     '53050000-0000-0000-0000-000000000001',
     'HOLDING',
     CURRENT_TIMESTAMP,
@@ -52,8 +52,8 @@ INSERT INTO p_seat_hold (
     's05-seat-hold-response-loss-01',
     NULL,
     NULL,
-    :'user_id'::bigint,
-    :'user_id'::bigint,
+    9500001,
+    9500001,
     NULL,
     NULL
 )

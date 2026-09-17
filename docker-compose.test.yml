@@ -10,7 +10,7 @@ services:
     container_name: tikitaka-toxiproxy
     ports:
       - "127.0.0.1:8474:8474"
-      - "127.0.0.1:18000:18000"
+      - "127.0.0.1:18082:18082"
     restart: unless-stopped
     networks:
       - tikitaka-network

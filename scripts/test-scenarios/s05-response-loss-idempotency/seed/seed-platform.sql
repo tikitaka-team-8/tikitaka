@@ -9,7 +9,7 @@ INSERT INTO p_user (
     9500000,
     's05-organizer@test.tikitaka.local',
     'fixture-user-not-for-login',
-    '[S05] 응답 유실 테스트 주최자',
+    '[S05] Response Loss Organizer',
     's05-response-loss-organizer',
     NULL,
     'ORGANIZER',
@@ -31,11 +31,11 @@ INSERT INTO p_organizer (
 ) VALUES (
     '50050000-0000-0000-0000-000000000001',
     9500000,
-    '[S05] 응답 유실 테스트 기획사',
-    'S05 테스트 담당자',
+    '[S05] Response Loss Agency',
+    'S05 Test Manager',
     's05-organizer@test.tikitaka.local',
     '010-0500-0001',
-    'S05 응답 유실 멱등성 테스트 전용 주최자',
+    'S05 response loss idempotency test organizer',
     'ACTIVE',
     CURRENT_TIMESTAMP
 )
@@ -53,10 +53,10 @@ INSERT INTO p_venue (
     id, name, postal_code, address, address_detail, contact_phone, active
 ) VALUES (
     '50050000-0000-0000-0000-000000000002',
-    '[S05] 응답 유실 테스트홀',
+    '[S05] Response Loss Test Hall',
     '05000',
-    '서울특별시 테스트구 멱등로 5',
-    'S05 테스트 공연장',
+    'S05 Test Address 5',
+    'S05 Test Venue',
     '02-0500-0002',
     TRUE
 )
@@ -106,8 +106,8 @@ INSERT INTO p_event (
     '50050000-0000-0000-0000-000000000005',
     '50050000-0000-0000-0000-000000000001',
     '50050000-0000-0000-0000-000000000002',
-    '[S05] 응답 유실 멱등성 테스트 공연',
-    '예매 생성 응답 유실과 동일 요청 재전송을 검증하는 공연입니다.',
+    '[S05] Response Loss Idempotency Event',
+    'S05 reservation response loss test event',
     120,
     'ON_SALE'
 )
