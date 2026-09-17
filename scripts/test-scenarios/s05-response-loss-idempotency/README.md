@@ -365,7 +365,7 @@ $ticketingSpringConfig.spring.cloud.openfeign.client.config.paymentCreationClien
 
 기대 설정은 Payment URL `http://toxiproxy:18083`, Connect Timeout `1000ms`, Read Timeout `2000ms`입니다.
 
-> **2차 중간 공유 1:** 실행 Commit SHA·시작 시각, 초기 Verify SQL, Ticketing 환경변수 확인 결과를 공유합니다.
+
 
 ### 8.3 Payment 생성 응답 지연 프록시 구성
 
@@ -436,7 +436,7 @@ curl.exe --silent --show-error --include `
 docker compose logs --since $paymentLossStart --timestamps ticketing-service payment-notification-service
 ```
 
-> **2차 중간 공유 2:** 최초 HTTP 응답, 두 Verify SQL 전체 출력, Ticketing·Payment 로그를 공유합니다. 이 시점에서 toxic을 제거하거나 재요청하지 않습니다.
+
 
 ### 8.5 응답 지연 해제와 동일 요청 재전송
 
@@ -453,7 +453,11 @@ $paymentLossRetryStart
 
 8.4와 같은 curl 요청을 한 번만 재전송합니다. HTTP 응답을 그대로 기록한 뒤 두 Verify SQL과 `$paymentLossRetryStart` 이후 서비스 로그를 다시 확인합니다.
 
-> **2차 중간 공유 3:** 재요청 HTTP 응답, 두 최종 Verify SQL, Ticketing·Payment 로그, 종료 시각을 공유합니다. 결과 기록 전에는 Cleanup하지 않습니다.
+```powershell
+$testEnd = Get-Date -Format o
+$testEnd
+```
+
 
 ### 8.6 실행 환경 복원과 Cleanup
 
