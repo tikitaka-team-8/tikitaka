@@ -54,7 +54,7 @@ $testStart
 
 ```powershell
 docker compose -f docker-compose.yml -f docker-compose.test.yml up -d toxiproxy
-docker compose ps gateway ticketing-service payment-notification-service toxiproxy
+docker compose -f docker-compose.yml -f docker-compose.test.yml ps gateway ticketing-service payment-notification-service toxiproxy
 ```
 
 전체 환경을 처음 실행하는 경우 다음 명령을 사용합니다.
