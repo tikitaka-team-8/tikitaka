@@ -8,18 +8,18 @@
 
 ## 시나리오별 결과
 
-| ID | 시나리오 | 주 담당 | Local 결과                                          | Staging 결과 |
-|---|---|---|---------------------------------------------------|---|
-| S01 | 전체 Happy Path | Infra·Gateway | [PASS · 완료](./S01-happy-path/local-result.md)     | 미실행 |
-| S02 | 동일 좌석 동시 선점 | Seat·Seat Hold | 미작성                                               | 미실행 |
-| S03 | 중복 결제 승인 | Payment | 미작성                                               | 미실행 |
-| S04 | Seat Hold 만료·예매 생성 경합 | Seat Hold·Reservation | 미작성                                               | 미실행 |
-| S05 | 응답 유실·재요청 | Reservation·Payment | 미작성                                               | 미실행 |
-| S06 | 인증·인가·헤더 위조 | Gateway·Auth·User | 미작성                                               | 미실행 |
-| S07 | 공연 변경 정합성 | Event·Session | 미작성                                               | 미실행 |
+| ID | 시나리오 | 주 담당 | Local 결과 | Staging 결과 |
+|---|---|---|---|---|
+| S01 | 전체 Happy Path | Infra·Gateway | [PASS · 완료](./S01-happy-path/local-result.md) | 미실행 |
+| S02 | 동일 좌석 동시 선점 | Seat·Seat Hold | 미작성 | 미실행 |
+| S03 | 중복 결제 승인 | Payment | 미작성 | 미실행 |
+| S04 | Seat Hold 만료·예매 생성 경합 | Seat Hold·Reservation | 미작성 | 미실행 |
+| S05 | 응답 유실·재요청 | Reservation·Payment | 미작성 | 미실행 |
+| S06 | 인증·인가·헤더 위조 | Gateway·Auth·User | 미작성 | 미실행 |
+| S07 | 공연 변경 정합성 | Event·Session | 미작성 | 미실행 |
 | S08 | Kafka·Consumer 장애 복구 | Reservation·Notification | [PASS · 완료](./S08-kafka-recovery/local-result.md) | 미실행 |
-| S09 | Queue 집중 부하 | Queue | 미작성                                               | 미실행 |
-| S10 | 전체 E2E 부하 | Infra | 미작성                                               | 미실행 |
+| S09 | Queue 집중 부하 | Queue | [PASS · 완료](./S09-queue-load/local-result.md) | 미실행 |
+| S10 | 전체 E2E 부하 | Infra | 미작성 | 미실행 |
 
 ## 결과 상태
 
