@@ -5,6 +5,16 @@
 # docker compose -f docker-compose.yml -f docker-compose.test.yml up -d
 
 services:
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.12.0
+    container_name: tikitaka-toxiproxy
+    ports:
+      - "127.0.0.1:8474:8474"
+      - "127.0.0.1:18000:18000"
+    restart: unless-stopped
+    networks:
+      - tikitaka-network
+
   gateway:
     environment:
       # HTTP 요청 처리 시간의 p95·p99를 Prometheus/Grafana에서 확인하기 위한 Histogram 활성화
