@@ -29,3 +29,24 @@ dependencies {
 
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
+
+// Opt-in standalone baseline; never runs as part of test/check/build.
+tasks.register('queueSchedulerBaseline', JavaExec) {
+    group = 'verification'
+    description = 'Measure 5,000 WAITING users with the unchanged batch-50 scheduler'
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.tikitaka.ticketing.queue.performance.QueueSchedulerBaseline'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+    workingDir = rootProject.projectDir
+}
+
+tasks.register('queueMultiInstanceVerify', JavaExec) {
+    group = 'verification'
+    description = 'Two isolated Scheduler JVMs sharing one disposable Redis; opt-in verification'
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.tikitaka.ticketing.queue.performance.QueueMultiInstanceVerification'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+    workingDir = rootProject.projectDir
+}
