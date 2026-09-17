@@ -15,7 +15,6 @@
 - Branch: `test/111-s03-payment-idempotency`
 - Commit SHA: `336f8b4d65d4d4cad2db40eded6d284b1d58a5f5`
 - Payment Provider: MOCK
-- 도구: Postman, k6, PostgreSQL, Prometheus, Grafana
 ## 2. 테스트 목적
 
 동일한 결제에 대해 승인 요청이 반복되거나 동시에 발생했을 때
