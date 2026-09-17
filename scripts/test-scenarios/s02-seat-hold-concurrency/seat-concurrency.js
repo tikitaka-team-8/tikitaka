@@ -1,9 +1,14 @@
 // 시나리오: 인기 공연의 동일 좌석(A-01)에 여러 사용자가 동시에 Seat Hold를 요청했을 때
 // 정확히 한 명만 선점에 성공하고, 나머지는 설명 가능한 충돌 응답을 받는지 검증한다.
 //
+// 범위: 이 스크립트는 "좌석 락 동시성"만 검증한다. 원래는 선점 성공자가 이어서 예매 생성 ->
+// 결제 승인까지 진행해 Kafka 이벤트 처리까지 확인했는데, 그건 동시 경쟁(락) 검증과는 별개의
+// 관심사라서(그리고 Kafka 소비까지 걸리는 비동기 대기 시간이 이 테스트의 목적을 흐려서) 뺐다.
+// 예매/결제/Kafka 흐름은 필요하면 별도 시나리오로 다시 만든다.
+//
 // 실행 전 준비:
-//   1. docker-compose로 gateway 없이 ticketing-service(8082), payment-notification-service(8083)만
-//      떠 있으면 된다 (이 스크립트는 Gateway/JWT를 거치지 않고 ticketing-service에 직접 X-User-Id로 요청한다 -
+//   1. docker-compose로 gateway 없이 ticketing-service(8082)만 떠 있으면 된다
+//      (이 스크립트는 Gateway/JWT를 거치지 않고 ticketing-service에 직접 X-User-Id로 요청한다 -
 //      좌석 동시성 자체가 관심사이므로 인증 계층은 이번 테스트 범위에서 뺐다. Gateway까지 포함해서 재려면
 //      README의 "Gateway를 포함하려면" 절 참고).
 //   2. scripts/integration-test/seed/ticketing-seed.sql 을 한 번 적용해서 좌석 데이터를 넣어둔다.
@@ -24,7 +29,6 @@ import { Counter, Trend } from 'k6/metrics';
 // 환경 변수
 // ─────────────────────────────────────────────
 const TICKETING_BASE_URL = __ENV.TICKETING_BASE_URL || 'http://localhost:8082';
-const PAYMENT_BASE_URL = __ENV.PAYMENT_BASE_URL || 'http://localhost:8083';
 const SESSION_ID = __ENV.SESSION_ID || '31000000-0000-0000-0000-000000000001';
 const SEAT_ID = __ENV.SEAT_ID || '40000000-0000-0000-0000-000000000001'; // seed 데이터의 VIP A-1
 const VUS = parseInt(__ENV.VUS || '10', 10);
@@ -46,8 +50,6 @@ const holdConflict = new Counter('seat_hold_conflict'); // 설명 가능한 충�
 const holdUnexpected = new Counter('seat_hold_unexpected'); // 그 외 실패 (5xx, 예상 못한 4xx)
 const holdTimeout = new Counter('seat_hold_timeout');
 const holdDuration = new Trend('seat_hold_duration', true);
-
-const winnerFlowFailed = new Counter('winner_flow_failed'); // 선점 성공자의 예매/결제 단계 실패
 
 export const options = {
   scenarios: {
@@ -156,6 +158,7 @@ export function setup() {
 
 // ─────────────────────────────────────────────
 // 측정 대상: 동일 좌석(SEAT_ID)에 대한 동시 Seat Hold 요청
+// 승자 판정만 하고 끝난다 - 예매 생성/결제 승인/Kafka 이벤트 처리는 이 스크립트의 범위 밖.
 // ─────────────────────────────────────────────
 export default function (data) {
   const me = data.users[__VU - 1];
@@ -186,9 +189,6 @@ export default function (data) {
   if (res.status === 201) {
     holdSuccess.add(1);
     check(res, { '선점 성공(201)': (r) => r.status === 201 });
-
-    const seatHoldId = JSON.parse(res.body).data.seatHoldId;
-    proceedToReservationAndPayment(me.userId, seatHoldId, data.runTag);
     return;
   }
 
@@ -205,56 +205,4 @@ export default function (data) {
   holdUnexpected.add(1);
   console.error(`[unexpected] userId=${me.userId} status=${res.status} body=${res.body}`);
   check(res, { [`[unexpected] status=${res.status}`]: () => false });
-}
-
-// 좌석 선점에 성공한 단 한 명만 예매 생성 -> 결제 승인까지 이어서 진행한다.
-// (이 구간은 "동시 경쟁" 측정과 무관한 후속 처리라 다른 VU의 동시 요청과는 시간이 겹치지 않는다.)
-function proceedToReservationAndPayment(userId, seatHoldId, runTag) {
-  const headers = { 'X-User-Id': String(userId), 'X-User-Role': 'USER' };
-
-  const reservationRes = http.post(
-    `${TICKETING_BASE_URL}/api/v1/reservations`,
-    JSON.stringify({ seatHoldIds: [seatHoldId] }),
-    {
-      headers: {
-        ...headers,
-        'Content-Type': 'application/json',
-        'Idempotency-Key': `race-rsv-${runTag}-${userId}`,
-      },
-      tags: { name: 'reservation_create' },
-    }
-  );
-
-  const reservationOk = check(reservationRes, {
-    '예매 생성 성공(201)': (r) => r.status === 201,
-  });
-  if (!reservationOk) {
-    winnerFlowFailed.add(1);
-    console.error(`[winner] 예매 생성 실패 status=${reservationRes.status} body=${reservationRes.body}`);
-    return;
-  }
-
-  const reservationBody = JSON.parse(reservationRes.body).data;
-  const paymentId = reservationBody.paymentId;
-
-  const approveRes = http.post(
-    `${PAYMENT_BASE_URL}/api/v1/payments/${paymentId}/approve`,
-    JSON.stringify({ paymentMethod: 'CARD' }),
-    {
-      headers: { 'X-User-Id': String(userId), 'Content-Type': 'application/json' },
-      tags: { name: 'payment_approve' },
-    }
-  );
-
-  const approveOk = check(approveRes, {
-    '결제 승인 성공(200)': (r) => r.status === 200,
-  });
-  if (!approveOk) {
-    winnerFlowFailed.add(1);
-    console.error(`[winner] 결제 승인 실패 status=${approveRes.status} body=${approveRes.body}`);
-    return;
-  }
-
-  console.log(`[winner] userId=${userId} seatHoldId=${seatHoldId} reservationId=${reservationBody.reservationId} 예매/결제 완료. ` +
-    `Kafka 결제 성공 이벤트 반영(CONFIRMED 전이)은 비동기이므로 scripts/test-scenarios/s02-seat-hold-concurrency/verify-seat-hold-race.sql 로 잠시 후 확인하세요.`);
 }
