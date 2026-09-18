@@ -84,15 +84,15 @@ Client와 Ticketing 사이의 응답만 유실된 1차 테스트에서는 기존
 | Docker 할당 CPU·메모리 | 32 CPU·15.48GiB |
 | PostgreSQL | 16.15 |
 | Docker / Docker Compose | 29.6.1 / v5.1.4 |
-| 결과 기록 Commit SHA | `853a9d7d4c8c3a0839dd75f2048c1f5262b503eb` |
+| 결과 기록 Commit SHA | [`8b30c53`](https://github.com/tikitaka-team-8/tikitaka/commit/8b30c53) |
 
 ### 3.5 회차별 실행 정보
 
 | 회차 | Commit SHA | 장애 조건 |
 |---|---|---|
-| 1차 Client 응답 유실 | `1642c55cf98e138fcc7a17fd0a3ce40f4c5d7662` | Ticketing 응답 10,000ms 지연, curl Timeout 8,000ms |
-| 2차 Payment 응답 유실 Baseline | `7f5fa03e242d86d2e53a314799acb6bfad67ccd1` | Payment 응답 5,000ms 지연, Feign Read Timeout 2,000ms |
-| 개선 후 재테스트 | `9754e62aff885eb6fba897f0aa59c8b807d6450a` | 2차 Baseline과 동일 |
+| 1차 Client 응답 유실 | [`fb82d19`](https://github.com/tikitaka-team-8/tikitaka/commit/fb82d19) | Ticketing 응답 10,000ms 지연, curl Timeout 8,000ms |
+| 2차 Payment 응답 유실 Baseline | [`1a5c747`](https://github.com/tikitaka-team-8/tikitaka/commit/1a5c747) | Payment 응답 5,000ms 지연, Feign Read Timeout 2,000ms |
+| 개선 후 재테스트 | [`ab8d994`](https://github.com/tikitaka-team-8/tikitaka/commit/ab8d994) | 2차 Baseline과 동일 |
 
 ## 4. 1차 결과: Client → Ticketing 응답 유실
 
