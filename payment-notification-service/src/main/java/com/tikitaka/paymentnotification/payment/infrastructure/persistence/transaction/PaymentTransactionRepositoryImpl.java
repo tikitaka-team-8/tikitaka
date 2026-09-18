@@ -28,4 +28,10 @@ public class PaymentTransactionRepositoryImpl implements PaymentTransactionRepos
                         PaymentTransactionType.APPROVE
                 );
     }
+    @Override
+    public long countByPaymentIdAndTransactionType(UUID paymentId, PaymentTransactionType transactionType) {
+        return paymentTransactionJpaRepository
+                .countByPayment_PaymentIdAndTransactionType(paymentId, transactionType);
+    }
+
 }

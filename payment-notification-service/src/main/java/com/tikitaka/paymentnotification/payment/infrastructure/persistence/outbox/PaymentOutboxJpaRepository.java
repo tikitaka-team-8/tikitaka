@@ -27,5 +27,5 @@ public interface PaymentOutboxJpaRepository extends JpaRepository<PaymentOutbox,
             @Param("limit") int limit
     );
 
-
+    long countByPayment_PaymentIdAndEventType(UUID paymentId, String eventType);
 }
