@@ -8,6 +8,7 @@ import com.tikitaka.paymentnotification.notification.application.service.Reserva
 import com.tikitaka.paymentnotification.notification.application.command.ReservationConfirmedNotificationCommand;
 import com.tikitaka.paymentnotification.notification.application.command.ReservationFailedNotificationCommand;
 import com.tikitaka.paymentnotification.notification.exception.NotificationErrorCode;
+import com.tikitaka.paymentnotification.notification.infrastructure.kafka.consumer.ReservationEventConsumer;
 import com.tikitaka.paymentnotification.notification.infrastructure.kafka.event.ReservationConfirmedEvent;
 import com.tikitaka.paymentnotification.notification.infrastructure.kafka.event.ReservationFailedEvent;
 import org.junit.jupiter.api.BeforeEach;

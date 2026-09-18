@@ -64,3 +64,8 @@ internal:
 logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [traceId:%X{traceId:--}] %logger{36} - %msg%n"
+
+reservation:
+  kafka:
+    consumer:
+      auto-startup: ${RESERVATION_KAFKA_CONSUMER_AUTO_STARTUP:true}

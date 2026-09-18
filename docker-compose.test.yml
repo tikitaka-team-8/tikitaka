@@ -25,6 +25,9 @@ services:
       # false로 설정하면 Consumer를 시작하지 않아 Kafka Consumer 장애 상황을 테스트할 수 있음
       SPRING_KAFKA_LISTENER_AUTO_STARTUP: ${TICKETING_KAFKA_LISTENER_AUTO_STARTUP:-true}
 
+      # S08 Reservation Consumer 장애·복구 테스트용 Listener 실행 여부
+      RESERVATION_KAFKA_CONSUMER_AUTO_STARTUP: ${RESERVATION_KAFKA_CONSUMER_AUTO_STARTUP:-true}
+
   payment-notification-service:
     environment:
       # HTTP 요청 처리 시간의 p95·p99를 Prometheus/Grafana에서 확인하기 위한 Histogram 활성화
@@ -34,3 +37,6 @@ services:
       # 기본값: true (Consumer 정상 실행)
       # false로 설정하면 Consumer를 시작하지 않아 Kafka Consumer 장애 상황을 테스트할 수 있음
       SPRING_KAFKA_LISTENER_AUTO_STARTUP: ${PAYMENT_KAFKA_LISTENER_AUTO_STARTUP:-true}
+
+      # S08 Notification Consumer 장애·복구 테스트용 Listener 실행 여부
+      NOTIFICATION_KAFKA_CONSUMER_AUTO_STARTUP: ${NOTIFICATION_KAFKA_CONSUMER_AUTO_STARTUP:-true}
