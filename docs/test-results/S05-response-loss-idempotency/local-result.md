@@ -9,13 +9,13 @@
 | 관련 도메인 | Reservation, Seat Hold, Payment                                                                 |
 | 테스트 유형 | 멱등성·네트워크 장애·데이터 정합성                                                                             |
 | 실행 환경 | Windows Local Docker Compose                                                                    |
-| 실행 회차 | 1차 Client 응답 유실 / 2차 Payment 생성 응답 유실 / 개선 후 재테스트 예정                                      |
-| 테스트 결과 | **1차 PASS / 2차 Baseline FAIL / 개선 후 판정 대기**                                                                        |
-| 진행 상태 | **개선 구현 완료·동일 조건 재테스트 대기**                                                                                       |
+| 실행 회차 | 1차 Client 응답 유실 / 2차 Payment 생성 응답 유실 Baseline / 개선 후 재테스트                                      |
+| 테스트 결과 | **1차 PASS / 2차 Baseline FAIL → 개선 후 PASS**                                                                        |
+| 진행 상태 | **완료**                                                                                       |
 | 관련 Issue | [#118 S05 응답 유실 멱등성 및 Payment 생성 복구 검증](https://github.com/tikitaka-team-8/tikitaka/issues/118) |
 | 관련 PR | 작성 후 연결 예정                                                                                      |
 
-1차에서는 Client 응답이 유실돼도 서버 처리·동일 요청 재전송·최종 정합성이 모두 정상이었습니다. 2차에서는 Payment 생성 응답이 Ticketing에 도달하지 않았을 때 Ticketing만 롤백되고 Payment가 커밋되어 고아 데이터가 남았으며, 동일 요청 재전송으로도 복구되지 않음을 확인했습니다. 이를 해결하기 위해 예매 의도 저장과 Payment 호출, 결제 연결 완료의 트랜잭션 경계를 분리했으며 동일 조건 재테스트를 남겨두고 있습니다.
+1차에서는 Client 응답이 유실돼도 서버 처리·동일 요청 재전송·최종 정합성이 모두 정상이었습니다. 2차 Baseline에서는 Payment 생성 응답이 Ticketing에 도달하지 않았을 때 Ticketing만 롤백되고 Payment가 커밋되어 고아 데이터가 남았으며, 동일 요청 재전송으로도 복구되지 않음을 확인했습니다. 예매 의도 저장과 Payment 호출, 결제 연결 완료의 트랜잭션 경계를 분리한 뒤 같은 장애 조건으로 재검증하여 중복·고아 데이터 없이 기존 예매를 복구했습니다.
 
 ## 2. 테스트 목적과 범위
 
@@ -188,7 +188,7 @@ curl.exe → Toxiproxy:18082 → Ticketing:8082 → Payment
 | curl Timeout·전송 완료 출력 | 2026-09-17 로컬 터미널 출력 |
 | 서비스 로그 | 실행 중 확인, 민감정보 제외 후 요약 기록 |
 
-## 8. 후속 테스트 계획
+## 8. 후속 테스트 진행 결과
 
 - 동일 Idempotency-Key에 다른 SeatHold를 넣은 요청은 `ReservationServiceTest`의 `동일한_멱등키를_다른_좌석에_사용하면_예외가_발생한다`로 검증함
 - 결제 승인 재요청·중복 처리는 S03 검증 범위로 유지함
@@ -196,7 +196,7 @@ curl.exe → Toxiproxy:18082 → Ticketing:8082 → Payment
 - 예매 의도 선커밋과 동일 멱등 요청 기반 복구 구현 완료
 - 2차 Baseline과 같은 지연·Timeout 조건으로 개선 후 재검증
 
-## 9. 2차 Baseline 계획: Ticketing → Payment 생성 응답 유실
+## 9. 2차 Baseline 및 개선 후 재테스트: Ticketing → Payment 생성 응답 유실
 
 ### 9.1 테스트 목적과 조건
 
@@ -229,9 +229,7 @@ Payment의 결제 생성 처리가 커밋된 뒤 Ticketing으로 돌아오는 �
 3. Payment가 Ticketing에 존재하지 않는 Reservation ID를 참조하는 고아 상태가 남습니다.
 4. 동일 멱등 키 재요청은 새 Reservation ID와 기존 Payment의 Reservation ID 불일치로 복구에 실패합니다.
 
-### 9.3 실제 발견 결과
-
-2차 Baseline 실행 후 다음 순서로 기록합니다.
+### 9.3 Baseline 실제 발견 결과
 
 | 구분 | 실제 결과 |
 |---|---|
@@ -252,7 +250,22 @@ Payment의 결제 생성 처리가 커밋된 뒤 Ticketing으로 돌아오는 �
 
 ### 9.4 원인·구현 개선·재검증 기록
 
-실제 실패 흐름이 확인된 경우에만 아래 항목을 채웁니다. 발견된 문제와 구현 개선을 인과관계로 연결하고, 개선 전·후를 같은 장애 조건으로 비교합니다.
+발견된 문제와 구현 개선을 인과관계로 연결하고, 개선 전·후를 같은 장애 조건으로 비교했습니다.
+
+#### 개선 후 실행 정보
+
+| 항목 | 실제값 |
+|---|---|
+| 실행 Commit SHA | `9754e62aff885eb6fba897f0aa59c8b807d6450a` |
+| 실행 시작·종료 시각 | `2026-09-18T14:14:41.7741272+09:00` ~ `2026-09-18T14:22:12.5836459+09:00` |
+| Payment 응답 지연·Feign Read Timeout | 5,000ms·2,000ms, Baseline과 동일 |
+| 최초 요청 시작 시각 | `2026-09-18T14:18:33.4537195+09:00` |
+| 재요청 시작 시각 | `2026-09-18T14:20:55.2395103+09:00` |
+| Reservation ID | `f4576900-6444-4c11-9651-45f92d55875d` |
+| Payment ID | `57e4ab58-50ed-41e4-b750-27f765a47906` |
+| Fixture 초기화 | Payment → Ticketing → Platform Cleanup 후 재생성 완료 |
+| 환경 복원 | Payment 직접 URL, Feign Connect·Read Timeout 1,000ms·60,000ms 복원 |
+| 정리 결과 | Payment 프록시 삭제(`404` 확인), S05 Fixture 삭제 완료 |
 
 | 항목 | 기록 내용 |
 |---|---|
@@ -260,8 +273,21 @@ Payment의 결제 생성 처리가 커밋된 뒤 Ticketing으로 돌아오는 �
 | 근본 원인 | 서비스별 트랜잭션 분리로 Payment만 커밋되고 Ticketing은 롤백됨. 재요청 시 Ticketing이 새 Reservation ID를 생성하여, Payment의 멱등 키 재사용 검증에서 기존 Reservation ID와 불일치함 |
 | 구현 변경 | 예매 의도 저장과 SeatHold `RESERVED` 전환을 Payment 호출 전에 별도 트랜잭션으로 커밋함. Payment는 트랜잭션 밖에서 호출하고, 응답 검증·`paymentId` 연결·`PAYMENT_PROCESSING` 전환은 다시 별도 트랜잭션으로 처리함. 기존 `PAYMENT_PENDING` 멱등 요청은 같은 Reservation ID·사용자·금액·멱등 키로 Payment를 재호출하여 기존 Payment 결과를 받아 복구함 |
 | 개선 전 결과 | 최초 Ticketing `504`·2,199ms, Payment `201`·93ms, 재요청 Ticketing `503`·77ms, Payment `409`·52ms, 고아 Payment 1건 |
-| 개선 후 결과 | 동일 조건 재테스트 후 기록 |
-| 최종 판정 | 2차 Baseline `FAIL`, 개선 구현 완료·동일 조건 재테스트 대기 |
+| 개선 후 결과 | 최초 Ticketing `504`·2,522ms와 Payment `201`·415ms 후 Reservation `PAYMENT_PENDING` 1건과 Payment `READY` 1건이 동일 Reservation ID로 유지됨. 재요청은 Ticketing `200`·50ms, Payment `201`·12ms로 성공하고 기존 Payment ID를 연결함 |
+| 최종 판정 | **PASS** — Reservation·ReservationSeat·SeatHold·Payment 각 1건, 중복·고아 데이터 0건, 기존 예매 복구 완료 |
+
+#### 개선 전·후 핵심 비교
+
+| 관측 항목 | 개선 전 | 개선 후 | 변화 |
+|---|---|---|---|
+| 최초 Timeout 후 Reservation | 0건, 전체 롤백 | 1건, `PAYMENT_PENDING` | 복구 기준점 확보 |
+| 최초 Timeout 후 Payment | 1건, Ticketing에 없는 Reservation 참조 | 1건, Ticketing Reservation과 ID 일치 | 고아 Payment 1건 → 0건 |
+| 최초 Timeout 후 SeatHold | `HOLDING` | `RESERVED` | 예매 처리 권한 유지 |
+| 동일 요청 재전송 | Ticketing `503`, Payment `409` | Ticketing `200`, Payment `201` | 복구 실패 → 성공 |
+| Ticketing 재요청 처리시간 | 77ms | 50ms | 27ms·35.1% 감소 |
+| Payment 재요청 처리시간 | 52ms | 12ms | 40ms·76.9% 감소 |
+| 최종 Reservation·Payment | Reservation 0건·Payment 1건 | Reservation 1건·Payment 1건 | 연결 정합성 회복 |
+| 최종 중복·고아 데이터 | 고아 Payment 1건 | 0건 | 100% 제거 |
 
 ### 9.5 개선 구현의 복구 흐름
 
