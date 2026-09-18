@@ -4,7 +4,7 @@
 
 Ticketing Service가 예매와 Payment 생성을 완료했지만 클라이언트가 응답을 받지 못한 상황을 재현합니다. 같은 사용자가 동일한 `Idempotency-Key`와 `seatHoldId`로 재요청했을 때 기존 결과를 반환하고 중복 데이터가 생성되지 않는지 확인합니다.
 
-현재 가이드의 범위는 S05 1단계인 **예매 생성 응답 유실 후 동일 요청 재전송**입니다. 예매 생성 이전의 인증·대기열·좌석 선점 흐름은 검증 범위에서 제외합니다.
+현재 가이드의 범위는 **Client → Ticketing 응답 유실**과 **Ticketing → Payment 생성 응답 유실**입니다. 예매 생성 이전의 인증·대기열·좌석 선점 흐름은 검증 범위에서 제외합니다.
 
 Gateway의 인증·라우팅·Timeout이 결과에 영향을 주지 않도록 `curl.exe`에서 Toxiproxy를 거쳐 Ticketing Service로 직접 요청합니다. Ticketing에서 Payment로 이어지는 실제 내부 호출은 그대로 수행합니다.
 
@@ -22,6 +22,7 @@ Gateway의 인증·라우팅·Timeout이 결과에 영향을 주지 않도록 `c
 
 ```text
 curl.exe → Toxiproxy:18082 → Ticketing:8082 → Payment
+curl.exe → Ticketing:8082 → Toxiproxy:18083 → Payment:8083
 ```
 
 Toxiproxy의 `downstream latency`는 Ticketing에서 `curl.exe`로 돌아오는 응답에만 적용합니다. curl Timeout보다 긴 지연을 적용하여 클라이언트는 실패로 인식하지만 서버 처리는 완료되는 조건을 만듭니다.
@@ -478,3 +479,73 @@ docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --no-deps 
 ```
 
 마지막으로 4.3 Cleanup을 Payment → Ticketing → Platform 순서로 실행합니다.
+
+---
+
+## 9. 개선 후 재테스트: Ticketing → Payment 생성 응답 유실
+
+### 9.1 구현 변경 확인
+
+2차 Baseline에서 Payment는 생성됐지만 Ticketing 트랜잭션 전체가 롤백되어 고아 Payment가 남았습니다. 이를 다음 트랜잭션 경계로 개선합니다.
+
+```text
+준비 트랜잭션: Reservation(PAYMENT_PENDING)·ReservationSeat 저장, SeatHold RESERVED 커밋
+        ↓
+트랜잭션 외부: Payment 생성 HTTP 호출
+        ↓
+완료 트랜잭션: paymentId 연결, Reservation PAYMENT_PROCESSING 전환
+```
+
+Payment 응답을 받지 못하면 준비 트랜잭션 결과는 유지됩니다. 같은 멱등 요청을 재전송하면 기존 `PAYMENT_PENDING` Reservation ID로 Payment 생성을 다시 요청하고, Payment의 기존 멱등 결과를 받아 완료 트랜잭션을 수행합니다.
+
+### 9.2 실행 버전과 환경 준비
+
+변경 사항을 커밋한 뒤 4.1의 Commit SHA·시작 시각을 새로 기록합니다. Docker Desktop 실행 상태를 확인하고 Ticketing 이미지를 다시 빌드합니다.
+
+```powershell
+docker info
+
+$env:S05_PAYMENT_SERVICE_URL = "http://toxiproxy:18083"
+$env:S05_PAYMENT_CONNECT_TIMEOUT = "1000"
+$env:S05_PAYMENT_READ_TIMEOUT = "2000"
+
+docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --force-recreate toxiproxy
+docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --build --no-deps --force-recreate ticketing-service
+```
+
+4.3 Cleanup → 5절 Fixture → 6절 초기 상태 확인을 순서대로 실행합니다.
+
+### 9.3 동일 장애 조건 재현
+
+8.3과 동일하게 Payment downstream 지연을 `5,000ms`로 구성하고, Ticketing의 Payment Read Timeout을 `2,000ms`로 유지합니다. 8.4의 요청을 한 번 실행한 뒤 Verify SQL과 서비스 로그를 확인합니다.
+
+최초 요청 후 기대값은 다음과 같습니다.
+
+| 항목 | 기대값 |
+|---|---:|
+| Ticketing 응답 | `504 Gateway Timeout` |
+| Reservation | 1건, `PAYMENT_PENDING` |
+| ReservationSeat | 1건 |
+| SeatHold | 1건, `RESERVED` |
+| Payment | 1건, `READY` |
+| Reservation.payment_id | `NULL` |
+| 고아 Payment | 0건 |
+
+### 9.4 동일 요청 재전송과 최종 검증
+
+8.5와 동일하게 toxic을 제거하고 같은 사용자·SeatHold·`Idempotency-Key`로 한 번 재전송합니다. 응답, Verify SQL, 서비스 로그를 확인한 뒤 `$testEnd`를 기록합니다.
+
+최종 PASS 기준은 다음과 같습니다.
+
+| 항목 | 기대값 |
+|---|---:|
+| 재요청 HTTP 상태 | `200 OK` |
+| Reservation | 1건, `PAYMENT_PROCESSING` |
+| ReservationSeat | 1건 |
+| SeatHold | 1건, `RESERVED` |
+| Payment | 1건, `READY` |
+| Reservation.payment_id | 기존 Payment ID와 일치 |
+| Reservation·Payment 연결 | 동일 Reservation ID |
+| 중복·고아 데이터 | 0건 |
+
+결과 기록 후 8.6의 환경 복원과 Cleanup을 수행합니다.
