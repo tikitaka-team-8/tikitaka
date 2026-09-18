@@ -8,6 +8,7 @@ import com.tikitaka.ticketing.seat.domain.entity.ScheduleSeat;
 import com.tikitaka.ticketing.seat.domain.entity.SeatHold;
 import com.tikitaka.ticketing.seat.domain.enums.HoldStatus;
 import com.tikitaka.ticketing.seat.domain.enums.ReleaseReason;
+import com.tikitaka.ticketing.seat.domain.enums.SeatStatus;
 import com.tikitaka.ticketing.seat.domain.repository.ScheduleSeatRepository;
 import com.tikitaka.ticketing.seat.domain.repository.SeatHoldRepository;
 import com.tikitaka.ticketing.seat.exception.SeatErrorCode;
@@ -43,6 +44,9 @@ class SeatServiceTest {
     private ScheduleSeatRepository scheduleSeatRepository;
 
     @Mock
+    private SeatListReader seatListReader;
+
+    @Mock
     private SeatHoldRepository seatHoldRepository;
 
     @Mock
@@ -76,12 +80,13 @@ class SeatServiceTest {
     @Test
     void 회차_좌석_목록을_조회한다() {
 
-        ScheduleSeat seat1 = mock(ScheduleSeat.class);
-        ScheduleSeat seat2 = mock(ScheduleSeat.class);
-        ScheduleSeat seat3 = mock(ScheduleSeat.class);
-
-        List<ScheduleSeat> seats =
-                List.of(seat1, seat2, seat3);
+        // 실제 좌석 조회/매핑은 SeatListReader(별도 캐시 빈)에 위임되므로,
+        // SeatService 단위 테스트에서는 위임 결과(Page<ScheduleSeatResponse>)만 목킹한다.
+        List<ScheduleSeatResponse> responses = List.of(
+                sampleSeatResponse("1"),
+                sampleSeatResponse("2"),
+                sampleSeatResponse("3")
+        );
 
         doNothing().when(queueAdmissionValidator)
                 .validateAndEnter(
@@ -90,12 +95,12 @@ class SeatServiceTest {
                         admissionToken
                 );
 
-        when(scheduleSeatRepository.findSeats(
+        when(seatListReader.readSeatList(
                 eq(eventSessionId),
                 eq(null),
                 eq(null),
                 any(Pageable.class)
-        )).thenReturn(new PageImpl<>(seats));
+        )).thenReturn(new PageImpl<>(responses));
 
         Page<ScheduleSeatResponse> response =
                 seatService.getSeatList(
@@ -118,8 +123,8 @@ class SeatServiceTest {
                         admissionToken
                 );
 
-        verify(scheduleSeatRepository)
-                .findSeats(
+        verify(seatListReader)
+                .readSeatList(
                         eq(eventSessionId),
                         eq(null),
                         eq(null),
@@ -130,15 +135,17 @@ class SeatServiceTest {
     @Test
     void section과_grade로_좌석_목록을_조회한다() {
 
-        ScheduleSeat seat1 = mock(ScheduleSeat.class);
-        ScheduleSeat seat2 = mock(ScheduleSeat.class);
+        List<ScheduleSeatResponse> responses = List.of(
+                sampleSeatResponse("1"),
+                sampleSeatResponse("2")
+        );
 
-        when(scheduleSeatRepository.findSeats(
+        when(seatListReader.readSeatList(
                 eq(eventSessionId),
                 eq("A"),
                 eq("VIP"),
                 any(Pageable.class)
-        )).thenReturn(new PageImpl<>(List.of(seat1, seat2)));
+        )).thenReturn(new PageImpl<>(responses));
 
         Page<ScheduleSeatResponse> response =
                 seatService.getSeatList(
@@ -161,13 +168,25 @@ class SeatServiceTest {
                         admissionToken
                 );
 
-        verify(scheduleSeatRepository)
-                .findSeats(
+        verify(seatListReader)
+                .readSeatList(
                         eq(eventSessionId),
                         eq("A"),
                         eq("VIP"),
                         any(Pageable.class)
                 );
+    }
+
+    private ScheduleSeatResponse sampleSeatResponse(String seatNumber) {
+        return new ScheduleSeatResponse(
+                UUID.randomUUID(),
+                "A",
+                "1",
+                seatNumber,
+                "VIP",
+                100_000L,
+                SeatStatus.AVAILABLE
+        );
     }
 
     @Test
@@ -262,6 +281,13 @@ class SeatServiceTest {
                 );
         verify(scheduleSeatRepository, never())
                 .findSeats(
+                        eq(eventSessionId),
+                        eq(null),
+                        eq(null),
+                        any(Pageable.class)
+                );
+        verify(seatListReader, never())
+                .readSeatList(
                         eq(eventSessionId),
                         eq(null),
                         eq(null),
