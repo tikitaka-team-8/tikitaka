@@ -11,11 +11,13 @@ import com.tikitaka.ticketing.seat.domain.repository.ScheduleSeatRepository;
 import com.tikitaka.ticketing.seat.domain.repository.SeatHoldRepository;
 import com.tikitaka.ticketing.seat.exception.SeatErrorCode;
 import com.tikitaka.ticketing.seat.presentation.dto.response.CreateScheduleSeatsResponse;
-import com.tikitaka.ticketing.seat.presentation.dto.response.ScheduleSeatListResponse;
 import com.tikitaka.ticketing.seat.presentation.dto.response.ScheduleSeatResponse;
 import com.tikitaka.ticketing.seat.presentation.dto.response.SeatHoldResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,24 +38,41 @@ public class SeatService implements SeatHoldReservationValidator {
 
     private static final Duration HOLD_EXTENSION_DURATION = Duration.ofMinutes(10);
     private static final Long SYSTEM_USER_ID = 0L;
+    private static final int DEFAULT_SEAT_PAGE_SIZE = 50;
+    private static final int MAX_SEAT_PAGE_SIZE = 200;
 
     private final ScheduleSeatRepository scheduleSeatRepository;
     private final SeatHoldRepository seatHoldRepository;
     private final QueueAdmissionValidator queueAdmissionValidator;
+    private final SeatListReader seatListReader;
     private final Clock clock;
 
 
-    public ScheduleSeatListResponse getSeatList(UUID eventSessionId, String section, String grade, Long userId, String admissionToken) {
+    public Page<ScheduleSeatResponse> getSeatList(
+            UUID eventSessionId,
+            String section,
+            String grade,
+            Long userId,
+            String admissionToken,
+            int page,
+            int size
+    ) {
 
         queueAdmissionValidator.validateAndEnter(eventSessionId,userId,admissionToken);
 
-        List<ScheduleSeat> seats =
-                scheduleSeatRepository.findSeats(
-                        eventSessionId,
-                        section,
-                        grade
-                );
-        return ScheduleSeatListResponse.from(seats);
+        Pageable pageable = normalizeSeatPageable(page, size);
+
+        // 실제 좌석 조회는 SeatListReader에 위임한다 (필드 프로젝션 / 짧은 TTL 캐시 실험용 토글은
+        // seat.list.* 설정으로 제어되며, @Cacheable은 별도 빈을 통해서만 동작하기 때문).
+        return seatListReader.readSeatList(eventSessionId, section, grade, pageable);
+    }
+
+    private Pageable normalizeSeatPageable(int page, int size) {
+        int resolvedPage = Math.max(page, 0);
+        int resolvedSize = size <= 0
+                ? DEFAULT_SEAT_PAGE_SIZE
+                : Math.min(size, MAX_SEAT_PAGE_SIZE);
+        return PageRequest.of(resolvedPage, resolvedSize);
     }
 
     public ScheduleSeatResponse getSeatDetail(
@@ -93,6 +112,18 @@ public class SeatService implements SeatHoldReservationValidator {
         ScheduleSeat seat = scheduleSeatRepository
                 .findByIdForUpdate(eventSessionId, scheduleSeatId)
                 .orElseThrow(() -> new BusinessException(SeatErrorCode.SESSION_OR_SEAT_NOT_FOUND));
+
+        // 락을 획득한 후 Idempotency 재확인
+        existingHold =
+                seatHoldRepository.findByUserIdAndIdempotencyKey(
+                        userId,
+                        idempotencyKey
+                );
+
+        if (existingHold.isPresent()) {
+            return SeatHoldResponse.from(existingHold.get());
+        }
+
         seat.hold();
 
         Instant heldAt = Instant.now(clock);

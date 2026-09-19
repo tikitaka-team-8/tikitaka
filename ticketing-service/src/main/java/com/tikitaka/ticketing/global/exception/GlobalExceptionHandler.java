@@ -7,6 +7,7 @@ import org.springframework.context.MessageSourceResolvable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
@@ -27,6 +28,7 @@ public class GlobalExceptionHandler {
     // 비즈니스 예외 처리
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiErrorResponse> handleBusinessException(BusinessException exception) {
+        log.warn("비즈니스 예외 발생: code={}, message={}", exception.getErrorCode().getCode(), exception.getMessage());
         return createResponse(exception.getErrorCode());
     }
 
@@ -108,6 +110,15 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleUnsupportedRequest(Exception exception) {
         log.warn("지원하지 않는 요청입니다.", exception);
         return createResponse(CommonErrorCode.UNSUPPORTED_REQUEST);
+    }
+
+    // 클라이언트가 응답을 받기 전에 연결을 끊은 경우 (타임아웃/중도 취소 등).
+    // 이미 커넥션이 끊어진 상태라 응답을 다시 쓸 수 없으므로, 여기서 잡아서 조용히 로그만 남기고
+    // 아래 handleUnexpectedException(500 처리)로 흘러가 노이즈성 에러 로그가 남는 것을 막는다.
+    // (부하테스트처럼 클라이언트 타임아웃이 잦은 상황에서 응답 생성이 느려질 때 자주 발생 - 실제 버그가 아님)
+    @ExceptionHandler(AsyncRequestNotUsableException.class)
+    public void handleAsyncRequestNotUsable(AsyncRequestNotUsableException exception) {
+        log.warn("클라이언트가 응답 수신 전 연결을 종료했습니다(타임아웃/취소 등): {}", exception.getMessage());
     }
 
     // 예상하지 못한 서버 오류 처리
