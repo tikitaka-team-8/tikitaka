@@ -14,7 +14,7 @@
 | S02 | 동일 좌석 동시 선점 | Seat·Seat Hold | 미작성 | 미실행 |
 | S03 | 중복 결제 승인 | Payment | 미작성 | 미실행 |
 | S04 | Seat Hold 만료·예매 생성 경합 | Seat Hold·Reservation | 미작성 | 미실행 |
-| S05 | 응답 유실·재요청 | Reservation·Payment | 미작성 | 미실행 |
+| S05 | 응답 유실·재요청 | Reservation·Payment | [PASS · 완료](./S05-response-loss-idempotency/local-result.md) | 미실행 |
 | S06 | 인증·인가·헤더 위조 | Gateway·Auth·User | 미작성 | 미실행 |
 | S07 | 공연 변경 정합성 | Event·Session | 미작성 | 미실행 |
 | S08 | Kafka·Consumer 장애 복구 | Reservation·Notification | [PASS · 완료](./S08-kafka-recovery/local-result.md) | 미실행 |
