@@ -98,9 +98,11 @@ docker compose ps
 
 ```powershell
 .\gradlew test --no-daemon
+.\gradlew integrationTest --no-daemon
+.\gradlew build --no-daemon
 ```
 
-DB 통합 테스트는 PostgreSQL Testcontainers를 사용하므로 Docker Desktop이 실행 중이어야 합니다. 테스트는 `.env`, `local`, `docker` 프로파일과 고정 포트에 의존하지 않습니다.
+`test`는 Docker 없이 실행할 수 있는 일반 테스트만 수행합니다. `integrationTest`는 PostgreSQL·Redis Testcontainers 등을 사용하는 테스트를 수행하므로 Docker Desktop이 실행 중이어야 합니다. `build`는 두 테스트 그룹을 모두 실행합니다. 테스트는 `.env`, `local`, `docker` 프로파일과 고정 포트에 의존하지 않습니다.
 
 ## 8. 주요 주소
 
