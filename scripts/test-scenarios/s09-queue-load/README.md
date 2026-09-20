@@ -86,11 +86,11 @@ runner는 실행 회차의 Redis 키와 registry 항목을 정리하고 임시 J
 
 ## Queue API 직접 호출과 추가 진단
 
-이슈 #115의 멘토 요청과 담당자 추가 진단 결과는
-[직접 호출 결과](../../../docs/test-results/S09-queue-load/direct-result.md)에 구분했다.
+S09 보강 검증으로 수행한 등록 API 직접 호출 및 연결·의존성 진단 결과는
+[직접 호출 결과](../../../docs/test-results/S09-queue-load/direct-result.md)에 정리했다.
 기존 Gateway 경유 S09 기본 실행은 유지한다. 아래 명령은 저장소 루트의 PowerShell에서 실행한다.
 
-### 준비 및 멘토 요청 1,000 VU
+### 준비 및 1,000 VU 직접 호출
 
 공통 Compose 환경과 위 기준 회차가 필요하다. 실행 중인 Ticketing 환경을 보존하며 현재 소스를 빌드한다.
 운영/공유 서비스 대상으로 실행하지 않는다. 직접 호출은 테스트 전용 신뢰 헤더를 사용한다.
@@ -107,7 +107,7 @@ Start-Sleep -Seconds 180
 기존 journey 명령과 달리 직접 호출 wrapper에는 DB fixture 자동 정리가 켜져 있다.
 등록만 측정하므로 admission journey·구매·자연 회복 성공으로 판단하지 않는다.
 
-### 담당자 추가 진단
+### 연결·의존성 추가 검증
 
 ```powershell
 # 실제 Platform과 정상 stub 각 1회. 추가 빌드는 필요 없다.

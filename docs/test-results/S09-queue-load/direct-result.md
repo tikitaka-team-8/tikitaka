@@ -3,14 +3,14 @@
 ## 범위와 판정
 
 기존 Gateway 경유 S09 결과는 [local-result.md](local-result.md)에 유지한다.
-이번 자료는 이슈 #115의 Gateway 우회 후속 검증과 담당자 추가 진단이다.
+기존 S09 검증을 보강하기 위해 Gateway를 우회한 등록 API 성능과 연결·의존성 영향을 추가로 확인했다.
 성능 SLO는 별도로 합의하지 않았으므로 p95/p99만으로 운영 적합성을 판정하지 않는다.
 아래 성공/실패는 **요청 5초 timeout과 등록 성공 응답** 기준이며, 클라이언트 성공과 서버 Redis 반영은 구분한다.
 
 | 구분 | 수행 내용 |
 |---|---|
-| 멘토 요청 | 기존 데이터 재사용, 1,000 VU·5초 timeout, Ticketing 등록 API 직접 호출, HTTP 성공/실패·p95/p99, CPU·Tomcat·Redis 관측 |
-| 담당자 추가 진단 | TCP backlog 비교, Platform 정상 stub·500ms 지연·503 오류 주입, 2,000/10,000 VU, 30초 분산 유입 및 최대 연결 수 비교 |
+| 등록 API 직접 호출 | 기존 데이터 재사용, 1,000 VU·5초 timeout, Ticketing 등록 API 직접 호출, HTTP 성공/실패·p95/p99, CPU·Tomcat·Redis 관측 |
+| 연결·의존성 추가 검증 | TCP backlog 비교, Platform 정상 stub·500ms 지연·503 오류 주입, 2,000/10,000 VU, 30초 분산 유입 및 최대 연결 수 비교 |
 
 호출 경로는 `k6 → Ticketing Queue 등록 API → Platform 판매 상태 조회 → Redis`다.
 Gateway만 제외했으며 Platform 동기 조회는 실제 실행한다. stub 실험만 호출 대상을 fixture 응답 서버로 교체한다.
@@ -31,7 +31,7 @@ Seat 호출, 입장 후 구매 흐름, Scheduler 단독 성능·토큰 정합성
 - 이 PR은 최신 develop 통합, 테스트 전용 계측 활성화 및 자료 정리를 포함한다. 아래 수치를 최종 PR commit에서 새로 측정한 결과로 표기하지 않는다.
 - 원본 result / TCP delta / Tomcat sample / k6 log는 로컬 artifacts에 보존한다. 이 문서에는 필요한 수치만 옮겼으며 원본 로그·계정·개인 경로는 제출하지 않는다.
 
-## 멘토 요청: 1,000 VU 직접 호출
+## 1,000 VU 직접 호출
 
 대표 실행(2026-09-20, 실제 Platform, backlog 1,000):
 
@@ -44,7 +44,7 @@ Seat 호출, 입장 후 구매 흐름, Scheduler 단독 성능·토큰 정합성
 backlog 100에서는 실행별 overflow 584·792·647, backlog 1,000에서는 모두 0이었다.
 따라서 연결 수용 지연 완화의 근거이며, 원래의 모든 간헐 timeout이 해결됐다는 증거로 쓰지 않는다.
 
-## 담당자 추가 진단: Platform 의존성
+## Platform 의존성 검증
 
 2026-09-20의 각 조건 1회 결과다. stub도 Feign·HTTP 통신을 유지하므로 Kafka 또는 로컬 상태 복제의 성능을 측정한 것이 아니다.
 
@@ -60,7 +60,7 @@ backlog 100에서는 실행별 overflow 584·792·647, backlog 1,000에서는 �
 과거 85건의 504와 이후 부하에서의 connect timeout은 관련 후보이나, 과거 실행에는 동일한 상세 계측이 없어 같은 원인으로 확정하지 않는다.
 Kafka 기반 판매 상태 복제는 검토만 했다. 판매 중단 정보 반영 지연·복구 정책과 다른 도메인 협의가 필요하여 이번 구현에는 포함하지 않는다.
 
-## 담당자 추가 진단: 등록 규모와 연결 한도
+## 등록 규모와 연결 한도 검증
 
 모든 행은 2026-09-20, 요청 timeout 5초, backlog 1,000이다.
 

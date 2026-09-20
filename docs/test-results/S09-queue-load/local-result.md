@@ -275,5 +275,5 @@ Prometheus 쿼리와 run-vu.py의 수집 시각을 함께 확인한다.
 
 ## 후속 직접 호출 검증
 
-멘토 요청의 Gateway 우회 등록 API 검증과 담당자 추가 연결·의존성 진단은
+S09 보강 검증으로 수행한 Gateway 우회 등록 API 성능 및 연결·의존성 진단은
 [직접 호출 결과](direct-result.md)에 별도로 정리했다. 기존 S09·Scheduler 개선 결과와 구분한다.
