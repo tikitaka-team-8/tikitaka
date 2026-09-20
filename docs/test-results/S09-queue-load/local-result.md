@@ -271,3 +271,9 @@ Prometheus 시계열, JFR과 실행별 상세 JSON·CSV는 저장소에 커밋�
 
 Grafana 화면 캡처는 필수 근거로 커밋하지 않는다. Dashboard `queue-performance`,
 Prometheus 쿼리와 run-vu.py의 수집 시각을 함께 확인한다.
+
+
+## 후속 직접 호출 검증
+
+멘토 요청의 Gateway 우회 등록 API 검증과 담당자 추가 연결·의존성 진단은
+[직접 호출 결과](direct-result.md)에 별도로 정리했다. 기존 S09·Scheduler 개선 결과와 구분한다.

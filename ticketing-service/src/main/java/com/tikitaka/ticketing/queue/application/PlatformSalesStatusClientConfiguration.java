@@ -6,6 +6,13 @@ import org.springframework.context.annotation.Bean;
 
 public class PlatformSalesStatusClientConfiguration {
 
+    @Bean
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+            name = "queue.diagnostics.platform-client", havingValue = "true")
+    public PlatformFeignDiagnostics platformFeignDiagnostics(io.micrometer.core.instrument.MeterRegistry registry) {
+        return new PlatformFeignDiagnostics(registry);
+    }
+
     private static final String SERVICE_KEY_HEADER = "X-Service-Key";
 
     @Bean

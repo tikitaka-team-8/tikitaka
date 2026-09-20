@@ -1,5 +1,12 @@
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '../../..')).Path
+$running = docker inspect tikitaka-ticketing-service | ConvertFrom-Json
+if ($LASTEXITCODE -ne 0) { throw 'Cannot preserve current Ticketing environment' }
+$preservedEnvironment = @{}
+foreach ($entry in @($running)[0].Config.Env) {
+    $parts = $entry.Split('=', 2)
+    $preservedEnvironment[$parts[0]] = $parts[1].Replace('$', '$$')
+}
 $revision = git -C $repo rev-parse HEAD
 if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve HEAD' }
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
@@ -36,11 +43,18 @@ services:
   ticketing-service:
     image: $image
 "@ | Set-Content -LiteralPath $override -Encoding utf8
+$environmentOverride = Join-Path ([IO.Path]::GetTempPath()) ('queue-build-env-' + [guid]::NewGuid().ToString() + '.json')
+try {
+@{services=@{'ticketing-service'=@{environment=$preservedEnvironment}}} |
+    ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $environmentOverride -Encoding UTF8
 docker compose --project-directory $repo `
     -f (Join-Path $repo 'docker-compose.yml') `
     -f (Join-Path $repo 'docker-compose.test.yml') `
-    -f $override up -d --no-deps --no-build --wait --wait-timeout 120 ticketing-service
+    -f $override -f $environmentOverride up -d --no-deps --no-build --wait --wait-timeout 120 ticketing-service
 if ($LASTEXITCODE -ne 0) { throw 'Observed Ticketing did not become healthy' }
+} finally {
+    if (Test-Path -LiteralPath $environmentOverride) { Remove-Item -LiteralPath $environmentOverride }
+}
 [ordered]@{ baseRevision = $revision; workingTree = $true; sourceSha256 = $hash; image = $image; snapshot = $snapshot } |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $snapshot 'build.json') -Encoding utf8
 Write-Host "Observed source snapshot: $snapshot"
