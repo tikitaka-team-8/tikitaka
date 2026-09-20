@@ -1,0 +1,153 @@
+name: tikitaka-staging-data
+
+# 스테이징 데이터 계층 전용 Compose 구성
+# 애플리케이션 서비스는 ECS Fargate에서 실행하며 본 구성에는 미포함
+# STAGING_DATA_PRIVATE_IP에 데이터 EC2의 사설 IPv4 주소 사용
+# 데이터 서비스 포트는 EC2 보안 그룹에서 ECS 애플리케이션 작업 보안 그룹에 대해서만 허용
+services:
+  platform-postgres:
+    image: postgres:16.15-alpine
+    ports:
+      - "${STAGING_DATA_PRIVATE_IP:?Set the EC2 private IPv4 address}:5433:5432"
+    environment:
+      POSTGRES_DB: ${PLATFORM_DB_NAME:?Set the Platform database name}
+      POSTGRES_USER: ${PLATFORM_DB_USERNAME:?Set the Platform database user}
+      POSTGRES_PASSWORD: ${PLATFORM_DB_PASSWORD:?Set the Platform database password}
+      TZ: Asia/Seoul
+    volumes:
+      - platform-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - staging-data-network
+
+  ticketing-postgres:
+    image: postgres:16.15-alpine
+    ports:
+      - "${STAGING_DATA_PRIVATE_IP:?Set the EC2 private IPv4 address}:5434:5432"
+    environment:
+      POSTGRES_DB: ${TICKETING_DB_NAME:?Set the Ticketing database name}
+      POSTGRES_USER: ${TICKETING_DB_USERNAME:?Set the Ticketing database user}
+      POSTGRES_PASSWORD: ${TICKETING_DB_PASSWORD:?Set the Ticketing database password}
+      TZ: Asia/Seoul
+    volumes:
+      - ticketing-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - staging-data-network
+
+  payment-postgres:
+    image: postgres:16.15-alpine
+    ports:
+      - "${STAGING_DATA_PRIVATE_IP:?Set the EC2 private IPv4 address}:5435:5432"
+    environment:
+      POSTGRES_DB: ${PAYMENT_DB_NAME:?Set the Payment database name}
+      POSTGRES_USER: ${PAYMENT_DB_USERNAME:?Set the Payment database user}
+      POSTGRES_PASSWORD: ${PAYMENT_DB_PASSWORD:?Set the Payment database password}
+      TZ: Asia/Seoul
+    volumes:
+      - payment-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - staging-data-network
+
+  # Redis는 로컬 환경과 동일하게 AOF 영속화 사용
+  # 스테이징 환경에서는 별도 인증 미적용
+  # Redis 포트 접근은 EC2 보안 그룹에서 ECS 애플리케이션 작업 보안 그룹에 대해서만 허용
+  platform-redis:
+    image: redis:7.2.14-alpine
+    ports:
+      - "${STAGING_DATA_PRIVATE_IP:?Set the EC2 private IPv4 address}:6380:6379"
+    command: [redis-server, --appendonly, "yes"]
+    volumes:
+      - platform-redis-data:/data
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - staging-data-network
+
+  ticketing-redis:
+    image: redis:7.2.14-alpine
+    ports:
+      - "${STAGING_DATA_PRIVATE_IP:?Set the EC2 private IPv4 address}:6381:6379"
+    command: [redis-server, --appendonly, "yes"]
+    volumes:
+      - ticketing-redis-data:/data
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - staging-data-network
+
+  kafka:
+    image: apache/kafka:3.9.1
+    hostname: kafka
+    ports:
+      - "${STAGING_DATA_PRIVATE_IP:?Set the EC2 private IPv4 address}:9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      # ECS 애플리케이션은 EC2 사설 주소의 EXTERNAL Listener 사용
+      # EC2 내부 컨테이너는 kafka:19092의 INTERNAL Listener 사용
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:19092,EXTERNAL://${STAGING_DATA_PRIVATE_IP:?Set the EC2 private IPv4 address}:9092
+      KAFKA_LISTENERS: CONTROLLER://:29093,INTERNAL://:19092,EXTERNAL://:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      # 스테이징 Kafka는 로컬 환경과 동일하게 단일 브로커 구성
+      # 복제 계수 및 최소 ISR은 1로 설정
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      CLUSTER_ID: 4L6g3nShT-eMCtK--X86sw
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: [CMD-SHELL, "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --list"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - staging-data-network
+
+volumes:
+  platform-postgres-data:
+  ticketing-postgres-data:
+  payment-postgres-data:
+  platform-redis-data:
+  ticketing-redis-data:
+  kafka-data:
+
+networks:
+  staging-data-network:
