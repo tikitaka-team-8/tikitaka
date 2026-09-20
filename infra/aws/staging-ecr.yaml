@@ -1,0 +1,45 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Tikitaka staging application image repositories
+
+Resources:
+  GatewayRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: tikitaka/staging/gateway
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  PlatformRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: tikitaka/staging/platform-service
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  TicketingRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: tikitaka/staging/ticketing-service
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  PaymentNotificationRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: tikitaka/staging/payment-notification-service
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+Outputs:
+  GatewayRepositoryUri:
+    Value: !GetAtt GatewayRepository.RepositoryUri
+  PlatformRepositoryUri:
+    Value: !GetAtt PlatformRepository.RepositoryUri
+  TicketingRepositoryUri:
+    Value: !GetAtt TicketingRepository.RepositoryUri
+  PaymentNotificationRepositoryUri:
+    Value: !GetAtt PaymentNotificationRepository.RepositoryUri
