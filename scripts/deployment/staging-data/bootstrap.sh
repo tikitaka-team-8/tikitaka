@@ -17,7 +17,12 @@ if [[ "${ID:-}" != 'amzn' || "${VERSION_ID:-}" != '2023' || "$(uname -m)" != 'x8
   exit 1
 fi
 
-dnf install -y docker curl
+if ! command -v curl >/dev/null 2>&1; then
+  echo 'curl 명령을 찾을 수 없습니다.' >&2
+  exit 1
+fi
+
+dnf install -y docker
 systemctl enable --now docker
 
 # 서버 재구성 시 동일 환경 재현을 위한 Docker Compose 플러그인 버전 고정
