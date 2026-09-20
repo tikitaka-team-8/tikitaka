@@ -95,7 +95,6 @@ Resources:
       SubnetId: !Ref PublicSubnetB
       RouteTableId: !Ref PublicRouteTable
 
-  # 후속 ECS 구성에서 서비스별 작업 보안 그룹 할당
   PlatformTaskSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -205,6 +204,41 @@ Resources:
       ToPort: 9092
       SourceSecurityGroupId: !Ref PaymentTaskSecurityGroup
 
+  # Secret은 저장하지 않으며 staging-data/ 하위에 Compose, bootstrap.sh, deploy.sh 배치
+  StagingArtifactBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: Name
+          Value: tikitaka-staging-data-artifacts
+
+  StagingArtifactBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref StagingArtifactBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !GetAtt StagingArtifactBucket.Arn
+              - !Sub '${StagingArtifactBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
   DataInstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -217,6 +251,22 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: StagingDataArtifactsAndPasswords
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: ReadStagingDataFiles
+                Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub '${StagingArtifactBucket.Arn}/staging-data/*'
+              - Sid: ReadStagingDatabasePasswords
+                Effect: Allow
+                Action: ssm:GetParameter
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/data/platform-db-password'
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/data/ticketing-db-password'
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/data/payment-db-password'
       Tags:
         - Key: Name
           Value: tikitaka-staging-data
@@ -236,7 +286,6 @@ Resources:
       ImageId: !Ref LatestAmiId
       InstanceType: !Ref DataInstanceType
       IamInstanceProfile: !Ref DataInstanceProfile
-      # EC2 호스트의 IMDSv2 사용 필수 설정
       # 데이터 컨테이너의 IMDS 접근 제한을 위한 응답 홉 제한 1
       MetadataOptions:
         HttpEndpoint: enabled
@@ -250,7 +299,6 @@ Resources:
             - !Ref DataSecurityGroup
           SubnetId: !Ref PublicSubnetA
 
-      # Docker Named Volume의 EC2 재부팅 후 유지
       # EC2 인스턴스 교체·삭제 시 루트 EBS와 Docker 데이터 함께 삭제
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
@@ -274,6 +322,8 @@ Outputs:
     Value: !Ref DataInstance
   DataPrivateIp:
     Value: !GetAtt DataInstance.PrivateIp
+  StagingArtifactBucketName:
+    Value: !Ref StagingArtifactBucket
   PlatformTaskSecurityGroupId:
     Value: !Ref PlatformTaskSecurityGroup
   TicketingTaskSecurityGroupId:

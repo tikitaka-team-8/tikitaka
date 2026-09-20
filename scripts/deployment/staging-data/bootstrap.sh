@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# 스테이징 데이터 EC2에서 root 권한으로 1회 실행
-# Docker 및 Docker Compose 실행 환경만 구성
-# DB Secret 준비 및 데이터 컨테이너 기동은 후속 배포 단계로 분리
 if [[ "$(id -u)" -ne 0 ]]; then
   echo 'root 권한으로 실행해야 합니다.' >&2
   exit 1
@@ -14,7 +11,6 @@ if [[ ! -r /etc/os-release ]]; then
   exit 1
 fi
 
-# CloudFormation 구성과 동일한 Amazon Linux 2023 x86_64 환경 사용
 source /etc/os-release
 if [[ "${ID:-}" != 'amzn' || "${VERSION_ID:-}" != '2023' || "$(uname -m)" != 'x86_64' ]]; then
   echo 'Amazon Linux 2023 x86_64에서만 실행할 수 있습니다.' >&2
@@ -41,4 +37,4 @@ docker --version
 docker compose version
 install -d -m 0700 /opt/tikitaka/staging-data
 
-echo 'Docker 준비가 끝났습니다. 스테이징 Compose 파일과 Secret 주입은 후속 단계에서 진행합니다.'
+echo 'Docker 준비가 끝났습니다. Compose 파일을 배치한 뒤 deploy.sh를 실행하세요.'
