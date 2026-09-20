@@ -1,0 +1,546 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Tikitaka staging Fargate applications and HTTPS entry point
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  PublicSubnetAId:
+    Type: AWS::EC2::Subnet::Id
+  PublicSubnetBId:
+    Type: AWS::EC2::Subnet::Id
+  PlatformTaskSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+  TicketingTaskSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+  PaymentTaskSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+  DataPrivateIp:
+    Type: String
+    Description: Private IPv4 address from the staging data stack outputs
+  GatewayImage:
+    Type: String
+    MinLength: 1
+  PlatformImage:
+    Type: String
+    MinLength: 1
+  TicketingImage:
+    Type: String
+    MinLength: 1
+  PaymentNotificationImage:
+    Type: String
+    MinLength: 1
+  PlatformDatabaseName:
+    Type: String
+    Default: tikitaka_platform
+  PlatformDatabaseUser:
+    Type: String
+    Default: platform
+  TicketingDatabaseName:
+    Type: String
+    Default: tikitaka_ticketing
+  TicketingDatabaseUser:
+    Type: String
+    Default: ticketing
+  PaymentDatabaseName:
+    Type: String
+    Default: tikitaka_payment
+  PaymentDatabaseUser:
+    Type: String
+    Default: payment
+
+Resources:
+  StagingCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: tikitaka-staging
+      ClusterSettings:
+        - Name: containerInsights
+          Value: disabled
+
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: ReadStagingParameters
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ssm:GetParameters
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/data/platform-db-password'
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/data/ticketing-db-password'
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/data/payment-db-password'
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/app/jwt-secret'
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/app/internal-service-key'
+
+  GatewayLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /tikitaka/staging/gateway
+      RetentionInDays: 7
+  PlatformLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /tikitaka/staging/platform-service
+      RetentionInDays: 7
+  TicketingLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /tikitaka/staging/ticketing-service
+      RetentionInDays: 7
+  PaymentNotificationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /tikitaka/staging/payment-notification-service
+      RetentionInDays: 7
+
+  GatewayTaskSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Staging gateway ECS tasks
+      VpcId: !Ref VpcId
+
+  VpcLinkSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Staging API Gateway VPC link
+      VpcId: !Ref VpcId
+
+  GatewayFromVpcLink:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref GatewayTaskSecurityGroup
+      IpProtocol: tcp
+      FromPort: 8000
+      ToPort: 8000
+      SourceSecurityGroupId: !Ref VpcLinkSecurityGroup
+  PlatformFromGateway:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref PlatformTaskSecurityGroupId
+      IpProtocol: tcp
+      FromPort: 8081
+      ToPort: 8081
+      SourceSecurityGroupId: !Ref GatewayTaskSecurityGroup
+  PlatformFromTicketing:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref PlatformTaskSecurityGroupId
+      IpProtocol: tcp
+      FromPort: 8081
+      ToPort: 8081
+      SourceSecurityGroupId: !Ref TicketingTaskSecurityGroupId
+  TicketingFromGateway:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref TicketingTaskSecurityGroupId
+      IpProtocol: tcp
+      FromPort: 8082
+      ToPort: 8082
+      SourceSecurityGroupId: !Ref GatewayTaskSecurityGroup
+  TicketingFromPlatform:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref TicketingTaskSecurityGroupId
+      IpProtocol: tcp
+      FromPort: 8082
+      ToPort: 8082
+      SourceSecurityGroupId: !Ref PlatformTaskSecurityGroupId
+  TicketingFromPayment:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref TicketingTaskSecurityGroupId
+      IpProtocol: tcp
+      FromPort: 8082
+      ToPort: 8082
+      SourceSecurityGroupId: !Ref PaymentTaskSecurityGroupId
+  PaymentFromGateway:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref PaymentTaskSecurityGroupId
+      IpProtocol: tcp
+      FromPort: 8083
+      ToPort: 8083
+      SourceSecurityGroupId: !Ref GatewayTaskSecurityGroup
+  PaymentFromTicketing:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref PaymentTaskSecurityGroupId
+      IpProtocol: tcp
+      FromPort: 8083
+      ToPort: 8083
+      SourceSecurityGroupId: !Ref TicketingTaskSecurityGroupId
+
+  DiscoveryNamespace:
+    Type: AWS::ServiceDiscovery::PrivateDnsNamespace
+    Properties:
+      Name: staging.tikitaka.internal
+      Vpc: !Ref VpcId
+  GatewayDiscovery:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: gateway
+      NamespaceId: !Ref DiscoveryNamespace
+      DnsConfig:
+        RoutingPolicy: MULTIVALUE
+        DnsRecords:
+          - Type: SRV
+            TTL: 10
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+  PlatformDiscovery:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: platform-service
+      NamespaceId: !Ref DiscoveryNamespace
+      DnsConfig:
+        RoutingPolicy: MULTIVALUE
+        DnsRecords:
+          - Type: A
+            TTL: 10
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+  TicketingDiscovery:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: ticketing-service
+      NamespaceId: !Ref DiscoveryNamespace
+      DnsConfig:
+        RoutingPolicy: MULTIVALUE
+        DnsRecords:
+          - Type: A
+            TTL: 10
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+  PaymentDiscovery:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: payment-notification-service
+      NamespaceId: !Ref DiscoveryNamespace
+      DnsConfig:
+        RoutingPolicy: MULTIVALUE
+        DnsRecords:
+          - Type: A
+            TTL: 10
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  GatewayTask:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: tikitaka-staging-gateway
+      RequiresCompatibilities: [FARGATE]
+      NetworkMode: awsvpc
+      Cpu: '512'
+      Memory: '1024'
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: gateway
+          Image: !Ref GatewayImage
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8000
+          Environment:
+            - Name: SPRING_PROFILES_ACTIVE
+              Value: staging
+            - Name: PLATFORM_SERVICE_URL
+              Value: http://platform-service.staging.tikitaka.internal:8081
+            - Name: TICKETING_SERVICE_URL
+              Value: http://ticketing-service.staging.tikitaka.internal:8082
+            - Name: PAYMENT_NOTIFICATION_SERVICE_URL
+              Value: http://payment-notification-service.staging.tikitaka.internal:8083
+            - Name: TZ
+              Value: Asia/Seoul
+          Secrets:
+            - Name: JWT_SECRET
+              ValueFrom: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/app/jwt-secret'
+          HealthCheck:
+            Command: [CMD-SHELL, 'wget --spider --quiet http://localhost:8000/actuator/health']
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 60
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref GatewayLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+
+  PlatformTask:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: tikitaka-staging-platform
+      RequiresCompatibilities: [FARGATE]
+      NetworkMode: awsvpc
+      Cpu: '512'
+      Memory: '1024'
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: platform-service
+          Image: !Ref PlatformImage
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8081
+          Environment:
+            - Name: SPRING_PROFILES_ACTIVE
+              Value: staging
+            - Name: STAGING_DATA_PRIVATE_IP
+              Value: !Ref DataPrivateIp
+            - Name: PLATFORM_DB_NAME
+              Value: !Ref PlatformDatabaseName
+            - Name: PLATFORM_DB_USERNAME
+              Value: !Ref PlatformDatabaseUser
+            - Name: TICKETING_SERVICE_URL
+              Value: http://ticketing-service.staging.tikitaka.internal:8082
+            - Name: JWT_ACCESS_TOKEN_EXPIRATION
+              Value: 15m
+            - Name: JWT_REFRESH_TOKEN_EXPIRATION
+              Value: 14d
+            - Name: TZ
+              Value: Asia/Seoul
+          Secrets:
+            - Name: PLATFORM_DB_PASSWORD
+              ValueFrom: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/data/platform-db-password'
+            - Name: JWT_SECRET
+              ValueFrom: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/app/jwt-secret'
+            - Name: INTERNAL_SERVICE_KEY
+              ValueFrom: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/app/internal-service-key'
+          HealthCheck:
+            Command: [CMD-SHELL, 'wget --spider --quiet http://localhost:8081/actuator/health']
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 90
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref PlatformLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+
+  TicketingTask:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: tikitaka-staging-ticketing
+      RequiresCompatibilities: [FARGATE]
+      NetworkMode: awsvpc
+      Cpu: '512'
+      Memory: '1024'
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: ticketing-service
+          Image: !Ref TicketingImage
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8082
+          Environment:
+            - Name: SPRING_PROFILES_ACTIVE
+              Value: staging
+            - Name: STAGING_DATA_PRIVATE_IP
+              Value: !Ref DataPrivateIp
+            - Name: TICKETING_DB_NAME
+              Value: !Ref TicketingDatabaseName
+            - Name: TICKETING_DB_USERNAME
+              Value: !Ref TicketingDatabaseUser
+            - Name: PLATFORM_SERVICE_URL
+              Value: http://platform-service.staging.tikitaka.internal:8081
+            - Name: PAYMENT_NOTIFICATION_SERVICE_URL
+              Value: http://payment-notification-service.staging.tikitaka.internal:8083
+            - Name: TZ
+              Value: Asia/Seoul
+          Secrets:
+            - Name: TICKETING_DB_PASSWORD
+              ValueFrom: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/data/ticketing-db-password'
+            - Name: INTERNAL_SERVICE_KEY
+              ValueFrom: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/app/internal-service-key'
+          HealthCheck:
+            Command: [CMD-SHELL, 'wget --spider --quiet http://localhost:8082/actuator/health']
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 90
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref TicketingLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+
+  PaymentTask:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: tikitaka-staging-payment-notification
+      RequiresCompatibilities: [FARGATE]
+      NetworkMode: awsvpc
+      Cpu: '512'
+      Memory: '1024'
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: payment-notification-service
+          Image: !Ref PaymentNotificationImage
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8083
+          Environment:
+            - Name: SPRING_PROFILES_ACTIVE
+              Value: staging
+            - Name: STAGING_DATA_PRIVATE_IP
+              Value: !Ref DataPrivateIp
+            - Name: PAYMENT_DB_NAME
+              Value: !Ref PaymentDatabaseName
+            - Name: PAYMENT_DB_USERNAME
+              Value: !Ref PaymentDatabaseUser
+            - Name: TICKETING_SERVICE_URL
+              Value: http://ticketing-service.staging.tikitaka.internal:8082
+            - Name: PAYMENT_PROVIDER
+              Value: mock
+            - Name: TZ
+              Value: Asia/Seoul
+          Secrets:
+            - Name: PAYMENT_DB_PASSWORD
+              ValueFrom: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/data/payment-db-password'
+            - Name: INTERNAL_SERVICE_KEY
+              ValueFrom: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/app/internal-service-key'
+          HealthCheck:
+            Command: [CMD-SHELL, 'wget --spider --quiet http://localhost:8083/actuator/health']
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 90
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref PaymentNotificationLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+
+  GatewayVpcLink:
+    Type: AWS::ApiGatewayV2::VpcLink
+    Properties:
+      Name: tikitaka-staging-gateway
+      SubnetIds: [!Ref PublicSubnetAId, !Ref PublicSubnetBId]
+      SecurityGroupIds: [!Ref VpcLinkSecurityGroup]
+  StagingHttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: tikitaka-staging
+      ProtocolType: HTTP
+  GatewayIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref StagingHttpApi
+      IntegrationType: HTTP_PROXY
+      IntegrationMethod: ANY
+      IntegrationUri: !GetAtt GatewayDiscovery.Arn
+      ConnectionType: VPC_LINK
+      ConnectionId: !Ref GatewayVpcLink
+      PayloadFormatVersion: '1.0'
+  GatewayRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref StagingHttpApi
+      RouteKey: '$default'
+      Target: !Sub 'integrations/${GatewayIntegration}'
+  DefaultStage:
+    Type: AWS::ApiGatewayV2::Stage
+    DependsOn: GatewayRoute
+    Properties:
+      ApiId: !Ref StagingHttpApi
+      StageName: '$default'
+      AutoDeploy: true
+
+  PlatformService:
+    Type: AWS::ECS::Service
+    DependsOn: [PlatformFromGateway, PlatformFromTicketing]
+    Properties:
+      Cluster: !Ref StagingCluster
+      ServiceName: platform-service
+      LaunchType: FARGATE
+      DesiredCount: 1
+      TaskDefinition: !Ref PlatformTask
+      ServiceRegistries:
+        - RegistryArn: !GetAtt PlatformDiscovery.Arn
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets: [!Ref PublicSubnetAId, !Ref PublicSubnetBId]
+          SecurityGroups: [!Ref PlatformTaskSecurityGroupId]
+  TicketingService:
+    Type: AWS::ECS::Service
+    DependsOn: [TicketingFromGateway, TicketingFromPlatform, TicketingFromPayment]
+    Properties:
+      Cluster: !Ref StagingCluster
+      ServiceName: ticketing-service
+      LaunchType: FARGATE
+      DesiredCount: 1
+      TaskDefinition: !Ref TicketingTask
+      ServiceRegistries:
+        - RegistryArn: !GetAtt TicketingDiscovery.Arn
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets: [!Ref PublicSubnetAId, !Ref PublicSubnetBId]
+          SecurityGroups: [!Ref TicketingTaskSecurityGroupId]
+  PaymentService:
+    Type: AWS::ECS::Service
+    DependsOn: [PaymentFromGateway, PaymentFromTicketing]
+    Properties:
+      Cluster: !Ref StagingCluster
+      ServiceName: payment-notification-service
+      LaunchType: FARGATE
+      DesiredCount: 1
+      TaskDefinition: !Ref PaymentTask
+      ServiceRegistries:
+        - RegistryArn: !GetAtt PaymentDiscovery.Arn
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets: [!Ref PublicSubnetAId, !Ref PublicSubnetBId]
+          SecurityGroups: [!Ref PaymentTaskSecurityGroupId]
+  GatewayService:
+    Type: AWS::ECS::Service
+    DependsOn: GatewayFromVpcLink
+    Properties:
+      Cluster: !Ref StagingCluster
+      ServiceName: gateway
+      LaunchType: FARGATE
+      DesiredCount: 1
+      TaskDefinition: !Ref GatewayTask
+      ServiceRegistries:
+        - RegistryArn: !GetAtt GatewayDiscovery.Arn
+          ContainerName: gateway
+          ContainerPort: 8000
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets: [!Ref PublicSubnetAId, !Ref PublicSubnetBId]
+          SecurityGroups: [!Ref GatewayTaskSecurityGroup]
+
+Outputs:
+  ClusterName:
+    Value: !Ref StagingCluster
+  ClusterArn:
+    Value: !GetAtt StagingCluster.Arn
+  TaskExecutionRoleArn:
+    Value: !GetAtt TaskExecutionRole.Arn
+  ApiInvokeUrl:
+    Value: !GetAtt StagingHttpApi.ApiEndpoint
+  GatewayServiceName:
+    Value: !GetAtt GatewayService.Name
+  PlatformServiceName:
+    Value: !GetAtt PlatformService.Name
+  TicketingServiceName:
+    Value: !GetAtt TicketingService.Name
+  PaymentServiceName:
+    Value: !GetAtt PaymentService.Name

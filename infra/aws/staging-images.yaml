@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: GitHub Actions OIDC role for Tikitaka staging image publishing
+Description: ECR repositories and GitHub Actions image publisher for Tikitaka staging
 
 Parameters:
   ExistingGitHubOidcProviderArn:
@@ -15,6 +15,38 @@ Conditions:
   CreateGitHubOidcProvider: !Equals [!Ref ExistingGitHubOidcProviderArn, '']
 
 Resources:
+  GatewayRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: tikitaka/staging/gateway
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  PlatformRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: tikitaka/staging/platform-service
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  TicketingRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: tikitaka/staging/ticketing-service
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  PaymentNotificationRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: tikitaka/staging/payment-notification-service
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
   GitHubOidcProvider:
     Type: AWS::IAM::OIDCProvider
     Condition: CreateGitHubOidcProvider
@@ -60,12 +92,20 @@ Resources:
                   - ecr:PutImage
                   - ecr:UploadLayerPart
                 Resource:
-                  - !Sub 'arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/tikitaka/staging/gateway'
-                  - !Sub 'arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/tikitaka/staging/platform-service'
-                  - !Sub 'arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/tikitaka/staging/ticketing-service'
-                  - !Sub 'arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/tikitaka/staging/payment-notification-service'
+                  - !GetAtt GatewayRepository.Arn
+                  - !GetAtt PlatformRepository.Arn
+                  - !GetAtt TicketingRepository.Arn
+                  - !GetAtt PaymentNotificationRepository.Arn
 
 Outputs:
+  GatewayRepositoryUri:
+    Value: !GetAtt GatewayRepository.RepositoryUri
+  PlatformRepositoryUri:
+    Value: !GetAtt PlatformRepository.RepositoryUri
+  TicketingRepositoryUri:
+    Value: !GetAtt TicketingRepository.RepositoryUri
+  PaymentNotificationRepositoryUri:
+    Value: !GetAtt PaymentNotificationRepository.RepositoryUri
   StagingImagePublisherRoleArn:
     Value: !GetAtt StagingImagePublisherRole.Arn
   GitHubOidcProviderArn:
