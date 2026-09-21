@@ -1,7 +1,7 @@
 package com.tikitaka.paymentnotification;
 
-import org.junit.jupiter.api.Test;
 import com.tikitaka.paymentnotification.testsupport.PostgresIntegrationTest;
+import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest(properties = {

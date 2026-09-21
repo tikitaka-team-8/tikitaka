@@ -5,14 +5,15 @@ import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGatew
 import com.tikitaka.paymentnotification.payment.application.gateway.PaymentGatewayResult;
 import com.tikitaka.paymentnotification.payment.application.gateway.ReservationPaymentValidator;
 import com.tikitaka.paymentnotification.payment.application.result.ReservationPaymentValidationResult;
+import com.tikitaka.paymentnotification.payment.domain.outbox.PaymentOutboxRepository;
 import com.tikitaka.paymentnotification.payment.domain.payment.*;
+import com.tikitaka.paymentnotification.payment.domain.transaction.PaymentTransactionRepository;
+import com.tikitaka.paymentnotification.payment.domain.transaction.PaymentTransactionType;
 import com.tikitaka.paymentnotification.payment.exception.PaymentException;
+import com.tikitaka.paymentnotification.testsupport.PostgresIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.util.ArrayList;
@@ -23,15 +24,12 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
-@SpringBootTest
-@ActiveProfiles("local")
-@Disabled("실제 PostgreSQL이 필요한 동시성 통합 테스트 - CI 테스트 DB 환경 구성 후 활성화")
+import static org.mockito.Mockito.*;
+
+@PostgresIntegrationTest
 class PaymentApprovalConcurrencyTest {
 
     @Autowired
@@ -39,6 +37,12 @@ class PaymentApprovalConcurrencyTest {
 
     @Autowired
     private PaymentRepository paymentRepository;
+
+    @Autowired
+    private PaymentTransactionRepository paymentTransactionRepository;
+
+    @Autowired
+    private PaymentOutboxRepository paymentOutboxRepository;
 
     @MockitoBean
     private ReservationPaymentValidator reservationPaymentValidator;
@@ -103,7 +107,8 @@ class PaymentApprovalConcurrencyTest {
             Thread.sleep(300);
 
             return PaymentGatewayResult.success(
-                    "pg-payment-key"
+                    "pg-payment-key",
+                    PaymentMethod.CARD
             );
         });
 
@@ -140,7 +145,7 @@ class PaymentApprovalConcurrencyTest {
                                 paymentService.approvePayment(
                                         paymentId,
                                         USER_ID,
-                                        PaymentMethod.CARD
+                                        "test-payment-key"
                                 );
 
                             } catch (PaymentException ignored) {
@@ -201,6 +206,22 @@ class PaymentApprovalConcurrencyTest {
 
             assertThat(payment.getStatus())
                     .isEqualTo(PaymentStatus.APPROVED);
+
+            // APPROVE Transaction은 정확히 1건만 생성되어야 한다.
+            assertThat(
+                    paymentTransactionRepository.countByPaymentIdAndTransactionType(
+                            paymentId,
+                            PaymentTransactionType.APPROVE
+                    )
+            ).isEqualTo(1L);
+
+            // PAYMENT_SUCCEEDED Outbox도 정확히 1건만 생성되어야 한다.
+            assertThat(
+                    paymentOutboxRepository.countByPaymentIdAndEventType(
+                            paymentId,
+                            "PAYMENT_SUCCEEDED"
+                    )
+            ).isEqualTo(1L);
 
         } finally {
 

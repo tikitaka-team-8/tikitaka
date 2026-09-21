@@ -104,6 +104,8 @@ services:
       PAYMENT_DB_USERNAME: ${PAYMENT_DB_USERNAME}
       PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD}
       INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY}
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-mock}
+      TOSS_SECRET_KEY: ${TOSS_SECRET_KEY:-}
       TZ: Asia/Seoul
     depends_on:
       payment-postgres:

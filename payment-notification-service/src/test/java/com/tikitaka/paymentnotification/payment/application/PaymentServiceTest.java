@@ -17,7 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
+import static org.mockito.ArgumentMatchers.argThat;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -56,6 +56,9 @@ class PaymentServiceTest {
     @Mock
     private PaymentTransactionRepository paymentTransactionRepository;
 
+    @Mock
+    private PaymentKeyBinder paymentKeyBinder;
+
     @InjectMocks
     private PaymentService paymentService;
 
@@ -81,7 +84,7 @@ class PaymentServiceTest {
     void 결제_승인에_성공하면_PG_결과를_처리한다() {
         // given
         PaymentGatewayResult gatewayResult =
-                PaymentGatewayResult.success("MOCK-success-key");
+                PaymentGatewayResult.success("MOCK-success-key", PaymentMethod.CARD);
 
         PaymentApproveResult approveResult =
                 PaymentApproveResult.from(payment);
@@ -108,7 +111,6 @@ class PaymentServiceTest {
 
         when(paymentApprovalResultProcessor.process(
                 eq(paymentId),
-                eq(PaymentMethod.CARD),
                 eq(gatewayResult),
                 any()
         )).thenReturn(approveResult);
@@ -118,7 +120,7 @@ class PaymentServiceTest {
                 paymentService.approvePayment(
                         paymentId,
                         payment.getUserId(),
-                        PaymentMethod.CARD
+                        "test-payment-key"
                 );
 
         // then
@@ -128,12 +130,18 @@ class PaymentServiceTest {
                 .acquire(paymentId);
 
         verify(paymentGateway)
-                .approve(any());
+                .approve(argThat(request ->
+                        request.paymentKey().equals("test-payment-key")
+                                && request.orderId().equals(payment.getOrderId())
+                                && request.amount().equals(payment.getAmount())
+                                && request.idempotencyKey().equals(
+                                "PAYMENT-APPROVE-" + paymentId
+                        )
+                ));
 
         verify(paymentApprovalResultProcessor)
                 .process(
                         eq(paymentId),
-                        eq(PaymentMethod.CARD),
                         eq(gatewayResult),
                         any()
                 );
@@ -164,7 +172,6 @@ class PaymentServiceTest {
 
         when(paymentApprovalResultProcessor.process(
                 eq(paymentId),
-                eq(PaymentMethod.CARD),
                 eq(gatewayResult),
                 any()
         )).thenReturn(approveResult);
@@ -174,7 +181,7 @@ class PaymentServiceTest {
                 paymentService.approvePayment(
                         paymentId,
                         payment.getUserId(),
-                        PaymentMethod.CARD
+                        "test-payment-key"
                 );
 
         // then
@@ -183,7 +190,6 @@ class PaymentServiceTest {
         verify(paymentApprovalResultProcessor)
                 .process(
                         eq(paymentId),
-                        eq(PaymentMethod.CARD),
                         eq(gatewayResult),
                         any()
                 );
@@ -212,7 +218,6 @@ class PaymentServiceTest {
 
         when(paymentApprovalResultProcessor.process(
                 eq(paymentId),
-                eq(PaymentMethod.CARD),
                 eq(gatewayResult),
                 any()
         )).thenReturn(approveResult);
@@ -222,7 +227,7 @@ class PaymentServiceTest {
                 paymentService.approvePayment(
                         paymentId,
                         payment.getUserId(),
-                        PaymentMethod.CARD
+                        "test-payment-key"
                 );
 
         // then
@@ -231,7 +236,6 @@ class PaymentServiceTest {
         verify(paymentApprovalResultProcessor)
                 .process(
                         eq(paymentId),
-                        eq(PaymentMethod.CARD),
                         eq(gatewayResult),
                         any()
                 );
@@ -262,7 +266,7 @@ class PaymentServiceTest {
                 paymentService.approvePayment(
                         paymentId,
                         payment.getUserId(),
-                        PaymentMethod.CARD
+                        "test-payment-key"
                 )
         ).isInstanceOf(PaymentException.class);
 
@@ -270,7 +274,7 @@ class PaymentServiceTest {
 
         verify(paymentGateway, never()).approve(any());
 
-        verify(paymentApprovalResultProcessor, never()).process(any(), any(), any(), any());
+        verify(paymentApprovalResultProcessor, never()).process(any(), any(), any());
     }
 
 
@@ -296,7 +300,7 @@ class PaymentServiceTest {
                 paymentService.approvePayment(
                         paymentId,
                         payment.getUserId(),
-                        PaymentMethod.CARD
+                        "test-payment-key"
                 )
         ).isInstanceOf(PaymentException.class);
 
@@ -307,7 +311,7 @@ class PaymentServiceTest {
                 .validate(any(), any());
 
         verify(paymentApprovalResultProcessor, never())
-                .process(any(), any(), any(), any());
+                .process(any(), any(), any());
     }
 
     @Test
@@ -334,7 +338,7 @@ class PaymentServiceTest {
     void 다른_사용자는_결제를_승인할_수_없다() {
         when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(payment));
 
-        assertThatThrownBy(() -> paymentService.approvePayment(paymentId, 999L, PaymentMethod.CARD))
+        assertThatThrownBy(() -> paymentService.approvePayment(paymentId, 999L,  "test-payment-key"))
                 .isInstanceOf(PaymentException.class)
                 .satisfies(exception -> assertThat(((PaymentException) exception).getErrorCode())
                         .isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND));

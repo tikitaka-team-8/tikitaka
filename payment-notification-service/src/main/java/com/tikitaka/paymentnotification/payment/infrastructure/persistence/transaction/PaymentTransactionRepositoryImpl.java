@@ -2,8 +2,12 @@ package com.tikitaka.paymentnotification.payment.infrastructure.persistence.tran
 
 import com.tikitaka.paymentnotification.payment.domain.transaction.PaymentTransaction;
 import com.tikitaka.paymentnotification.payment.domain.transaction.PaymentTransactionRepository;
+import com.tikitaka.paymentnotification.payment.domain.transaction.PaymentTransactionType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
+
+import java.util.Optional;
+import java.util.UUID;
 
 @Repository
 @RequiredArgsConstructor
@@ -15,4 +19,19 @@ public class PaymentTransactionRepositoryImpl implements PaymentTransactionRepos
     public PaymentTransaction save(PaymentTransaction paymentTransaction) {
         return paymentTransactionJpaRepository.save(paymentTransaction);
     }
+
+    @Override
+    public Optional<PaymentTransaction> findLatestApproveTransaction(UUID paymentId) {
+        return paymentTransactionJpaRepository
+                .findTopByPayment_PaymentIdAndTransactionTypeOrderByAttemptNoDesc(
+                        paymentId,
+                        PaymentTransactionType.APPROVE
+                );
+    }
+    @Override
+    public long countByPaymentIdAndTransactionType(UUID paymentId, PaymentTransactionType transactionType) {
+        return paymentTransactionJpaRepository
+                .countByPayment_PaymentIdAndTransactionType(paymentId, transactionType);
+    }
+
 }

@@ -4,6 +4,15 @@ server:
 spring:
   application:
     name: payment-notification-service
+
+  cloud:
+    openfeign:
+      client:
+        config:
+          tossPaymentsClient:
+            connectTimeout: 3000
+            readTimeout: 5000
+
   kafka:
     consumer:
       group-id: notification-reservation-group
@@ -12,10 +21,12 @@ spring:
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
     listener:
       ack-mode: record
+
   jpa:
     hibernate:
       ddl-auto: validate
     open-in-view: false
+
   flyway:
     enabled: true
     validate-on-migrate: true
@@ -31,9 +42,29 @@ management:
     health:
       probes:
         enabled: true
+
 internal:
   service:
     key: ${INTERNAL_SERVICE_KEY}
+
 payment:
+  provider: ${PAYMENT_PROVIDER:mock}
+
   outbox:
     publish-delay-ms: 1000
+
+  reconciliation:
+    processing-delay-ms: 60000
+    processing-timeout-minutes: 5
+
+  toss:
+    base-url: https://api.tosspayments.com
+    secret-key: ${TOSS_SECRET_KEY:}
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [traceId:%X{traceId:--}] %logger{36} - %msg%n"
+notification:
+  kafka:
+    consumer:
+      auto-startup: ${NOTIFICATION_KAFKA_CONSUMER_AUTO_STARTUP:true}

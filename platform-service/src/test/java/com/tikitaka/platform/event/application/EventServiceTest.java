@@ -43,6 +43,7 @@ import java.util.UUID;
 
 import static com.tikitaka.platform.fixture.EventFixture.createEvent;
 import static com.tikitaka.platform.fixture.EventFixture.createPublicEvent;
+import static com.tikitaka.platform.fixture.EventSessionFixture.createEventSession;
 import static com.tikitaka.platform.fixture.OrganizerFixture.activeOrganizer;
 import static com.tikitaka.platform.fixture.OrganizerFixture.createOrganizer;
 import static com.tikitaka.platform.fixture.VenueFixture.createVenue;
@@ -375,8 +376,11 @@ class EventServiceTest {
 
     assertThat(response.skippedSeatCount())
         .isZero();
-
   }
+
+
+
+
 
   private PublicEventListRequest publicEventListRequest(UUID venueId) {
     return new PublicEventListRequest(

@@ -176,6 +176,18 @@ public class Payment {
         this.updatedAt = now;
     }
 
+    public void recoverFailed(
+            String failureCode,
+            String failureReason
+    ) {
+        validateStatus(PaymentStatus.UNKNOWN);
+
+        this.status = PaymentStatus.FAILED;
+        this.failureCode = failureCode;
+        this.failureReason = failureReason;
+        this.updatedAt = OffsetDateTime.now();
+    }
+
     private void validateCancelable() {
         if (this.status == PaymentStatus.CANCELED) {
             throw new PaymentException(
@@ -203,6 +215,41 @@ public class Payment {
             );
         }
     }
+
+    // PG 호출 전에 paymentKey 보존
+    public void bindPaymentKey(String paymentKey) {
+        // 프로세싱일 때만 key를 저장할 수 있음.
+        validateStatus(PaymentStatus.PROCESSING);
+
+        if (paymentKey == null || paymentKey.isBlank()) {
+            throw new PaymentException(
+                    PaymentErrorCode.INVALID_PAYMENT_REQUEST
+            );
+        }
+
+        this.pgPaymentKey = paymentKey;
+        this.updatedAt = OffsetDateTime.now();
+    }
+
+
+    public void recoverApproved(
+            PaymentMethod paymentMethod
+    ) {
+        validateStatus(PaymentStatus.UNKNOWN);
+
+        OffsetDateTime now = OffsetDateTime.now();
+
+        this.paymentMethod = paymentMethod;
+        this.status = PaymentStatus.APPROVED;
+        this.approvedAt = now;
+        this.failureCode = null;
+        this.failureReason = null;
+        this.updatedAt = now;
+    }
+
+
+
+
     private void validateStatus(PaymentStatus expectedStatus) {
         if (this.status != expectedStatus) {
             throw new PaymentException(PaymentErrorCode.PAYMENT_NOT_ALLOWED);

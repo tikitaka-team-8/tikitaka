@@ -26,9 +26,9 @@ import com.tikitaka.ticketing.reservation.exception.ReservationErrorCode;
 import com.tikitaka.ticketing.seat.application.service.SeatHoldReservationValidator;
 import com.tikitaka.ticketing.seat.domain.enums.HoldStatus;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
@@ -86,8 +86,15 @@ class ReservationServiceTest {
     @Mock
     private PaymentCreationPort paymentCreationPort;
 
-    @InjectMocks
     private ReservationService reservationService;
+
+    @BeforeEach
+    void setUp() {
+        ReservationCreationTransactionService transactionService = new ReservationCreationTransactionService(
+                reservationRepositoryPort, seatHoldQueryPort, eventSessionQueryPort, seatHoldReservationValidator);
+        reservationService = new ReservationService(
+                reservationRepositoryPort, seatHoldQueryPort, paymentCreationPort, transactionService);
+    }
 
     @Test
     void 사용자는_자신의_예매_상세를_조회한다() {
@@ -337,6 +344,8 @@ class ReservationServiceTest {
         });
         given(paymentCreationPort.createPayment(RESERVATION_ID, OWNER_ID, 50_000L, IDEMPOTENCY_KEY))
                 .willReturn(paymentInfo);
+        given(reservationRepositoryPort.findById(RESERVATION_ID))
+                .willReturn(Optional.of(createReservation()));
 
         // when
         CreateReservationResult result = reservationService.createReservation(command);
@@ -365,7 +374,7 @@ class ReservationServiceTest {
     @Test
     void 동일한_멱등키와_좌석으로_재요청하면_기존_예매를_반환한다() {
         // given
-        Reservation existingReservation = createReservation();
+        Reservation existingReservation = createPaymentProcessingReservation();
         CreateReservationCommand command = new CreateReservationCommand(
                 OWNER_ID, "USER", IDEMPOTENCY_KEY, List.of(SEAT_HOLD_ID));
         given(reservationRepositoryPort.findByUserIdAndIdempotencyKey(OWNER_ID, IDEMPOTENCY_KEY))
@@ -379,6 +388,71 @@ class ReservationServiceTest {
         assertThat(result.getReservationId()).isEqualTo(RESERVATION_ID);
         verify(reservationRepositoryPort, never()).save(any(Reservation.class));
         verifyNoInteractions(seatHoldQueryPort, eventSessionQueryPort, seatHoldReservationValidator, paymentCreationPort);
+    }
+
+    @Test
+    void 결제대기중인_동일_요청을_재시도하면_기존_예매의_결제_연결을_완료한다() {
+        // given
+        Reservation pendingReservation = createReservation();
+        CreateReservationCommand command = new CreateReservationCommand(
+                OWNER_ID, "USER", IDEMPOTENCY_KEY, List.of(SEAT_HOLD_ID));
+        PaymentCreationInfo paymentInfo = new PaymentCreationInfo(
+                PAYMENT_ID, RESERVATION_ID, "PAY-001", 50_000L, "READY",
+                OffsetDateTime.parse("2026-09-01T18:50:00+09:00"));
+
+        given(reservationRepositoryPort.findByUserIdAndIdempotencyKey(OWNER_ID, IDEMPOTENCY_KEY))
+                .willReturn(Optional.of(pendingReservation));
+        given(paymentCreationPort.createPayment(RESERVATION_ID, OWNER_ID, 50_000L, IDEMPOTENCY_KEY))
+                .willReturn(paymentInfo);
+        given(reservationRepositoryPort.findById(RESERVATION_ID))
+                .willReturn(Optional.of(pendingReservation));
+
+        // when
+        CreateReservationResult result = reservationService.createReservation(command);
+
+        // then
+        assertThat(result.isCreated()).isFalse();
+        assertThat(result.getReservationId()).isEqualTo(RESERVATION_ID);
+        assertThat(result.getPaymentId()).isEqualTo(PAYMENT_ID);
+        assertThat(result.getReservationStatus()).isEqualTo(ReservationStatus.PAYMENT_PROCESSING);
+        verify(paymentCreationPort).createPayment(RESERVATION_ID, OWNER_ID, 50_000L, IDEMPOTENCY_KEY);
+        verify(reservationRepositoryPort, never()).save(any(Reservation.class));
+        verifyNoInteractions(seatHoldQueryPort, eventSessionQueryPort, seatHoldReservationValidator);
+    }
+
+    @Test
+    void 결제_호출에_실패하면_예매는_결제대기중_상태로_남는다() {
+        // given
+        CreateReservationCommand command = new CreateReservationCommand(
+                OWNER_ID, "USER", IDEMPOTENCY_KEY, List.of(SEAT_HOLD_ID));
+        ReservationEventSessionInfo eventSessionInfo = new ReservationEventSessionInfo(
+                EVENT_SESSION_ID, EVENT_ID, "테스트 공연", OffsetDateTime.parse("2026-09-01T19:00:00+09:00"));
+
+        given(reservationRepositoryPort.findByUserIdAndIdempotencyKey(OWNER_ID, IDEMPOTENCY_KEY))
+                .willReturn(Optional.empty());
+        given(seatHoldQueryPort.findCreationInfosBySeatHoldIds(List.of(SEAT_HOLD_ID)))
+                .willReturn(List.of(createCreationSeatInfo()));
+        given(reservationRepositoryPort.findUsedSeatHoldIds(List.of(SEAT_HOLD_ID))).willReturn(List.of());
+        given(eventSessionQueryPort.getReservationInfo(EVENT_SESSION_ID)).willReturn(eventSessionInfo);
+        given(reservationRepositoryPort.save(any(Reservation.class))).willAnswer(invocation -> {
+            Reservation reservation = invocation.getArgument(0);
+            ReflectionTestUtils.setField(reservation, "reservationId", RESERVATION_ID);
+            return reservation;
+        });
+        given(paymentCreationPort.createPayment(RESERVATION_ID, OWNER_ID, 50_000L, IDEMPOTENCY_KEY))
+                .willThrow(new BusinessException(CommonErrorCode.DOWNSTREAM_SERVICE_TIMEOUT));
+
+        // when
+        BusinessException exception = catchThrowableOfType(
+                () -> reservationService.createReservation(command), BusinessException.class);
+
+        // then
+        assertThat(exception.getErrorCode()).isEqualTo(CommonErrorCode.DOWNSTREAM_SERVICE_TIMEOUT);
+        ArgumentCaptor<Reservation> reservationCaptor = ArgumentCaptor.forClass(Reservation.class);
+        verify(reservationRepositoryPort).save(reservationCaptor.capture());
+        assertThat(reservationCaptor.getValue().getPaymentId()).isNull();
+        assertThat(reservationCaptor.getValue().getReservationStatus()).isEqualTo(ReservationStatus.PAYMENT_PENDING);
+        verify(reservationRepositoryPort, never()).findById(RESERVATION_ID);
     }
 
     @Test
@@ -424,6 +498,8 @@ class ReservationServiceTest {
         });
         given(paymentCreationPort.createPayment(RESERVATION_ID, OWNER_ID, 50_000L, IDEMPOTENCY_KEY))
                 .willReturn(invalidPaymentInfo);
+        given(reservationRepositoryPort.findById(RESERVATION_ID))
+                .willReturn(Optional.of(createReservation()));
 
         // when
         BusinessException exception = catchThrowableOfType(
@@ -622,7 +698,7 @@ class ReservationServiceTest {
         Reservation reservation = createPaymentProcessingReservation();
         PaymentValidationCommand command = new PaymentValidationCommand(RESERVATION_ID, OWNER_ID);
         SeatHoldValidationInfo seatHold = createSeatHoldValidationInfo(
-                OWNER_ID, HoldStatus.HOLDING, Instant.now().plus(Duration.ofMinutes(10)));
+                OWNER_ID, HoldStatus.RESERVED, Instant.now().plus(Duration.ofMinutes(10)));
 
         given(reservationRepositoryPort.findById(RESERVATION_ID)).willReturn(Optional.of(reservation));
         given(seatHoldQueryPort.findAllByIds(List.of(SEAT_HOLD_ID))).willReturn(List.of(seatHold));
@@ -750,24 +826,21 @@ class ReservationServiceTest {
     }
 
     @Test
-    void 만료된_좌석_선점은_결제_검증을_할_수_없다() {
+    void 만료_시각이_지난_RESERVED_좌석도_결제_검증을_할_수_있다() {
         // given
         Reservation reservation = createPaymentProcessingReservation();
         PaymentValidationCommand command = new PaymentValidationCommand(RESERVATION_ID, OWNER_ID);
         SeatHoldValidationInfo seatHold = createSeatHoldValidationInfo(
-                OWNER_ID, HoldStatus.HOLDING,Instant.now().minusSeconds(1));
+                OWNER_ID, HoldStatus.RESERVED, Instant.now().minusSeconds(1));
 
         given(reservationRepositoryPort.findById(RESERVATION_ID)).willReturn(Optional.of(reservation));
         given(seatHoldQueryPort.findAllByIds(List.of(SEAT_HOLD_ID))).willReturn(List.of(seatHold));
 
         // when
-        BusinessException exception = catchThrowableOfType(
-                () -> reservationService.validatePayment(command),
-                BusinessException.class
-        );
+        PaymentValidationResult result = reservationService.validatePayment(command);
 
         // then
-        assertThat(exception.getErrorCode()).isEqualTo(ReservationErrorCode.SEAT_HOLD_EXPIRED);
+        assertThat(result.getReservationId()).isEqualTo(RESERVATION_ID);
     }
 
     private Reservation createReservation() {

@@ -41,11 +41,17 @@ public class GatewaySecurityConfig {
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             GatewayAuthenticationEntryPoint authenticationEntryPoint,
+            GatewayAccessDeniedHandler accessDeniedHandler,
             JwtDecoder jwtDecoder
     ) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // Gateway에서 발생한 인증·인가 오류를 Trace ID가 포함된 공통 응답으로 처리
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler)
+                )
                 .authorizeHttpRequests(authorize -> authorize
                         // 모니터링 엔드포인트 - 인증 없이 접근 허용
                         .requestMatchers(
