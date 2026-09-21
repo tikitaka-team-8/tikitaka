@@ -1,0 +1,83 @@
+name: Publish Staging Images
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/develop'
+    name: Publish ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - gateway
+          - platform-service
+          - ticketing-service
+          - payment-notification-service
+    env:
+      AWS_REGION: ap-northeast-2
+      REPOSITORY: tikitaka/staging/${{ matrix.service }}
+      IMAGE_TAG: ${{ github.sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Check publisher role configuration
+        env:
+          PUBLISHER_ROLE_ARN: ${{ vars.STAGING_IMAGE_PUBLISHER_ROLE_ARN }}
+        run: |
+          test -n "$PUBLISHER_ROLE_ARN" || { echo 'Set the STAGING_IMAGE_PUBLISHER_ROLE_ARN repository variable.' >&2; exit 1; }
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.STAGING_IMAGE_PUBLISHER_ROLE_ARN }}
+          role-session-name: staging-images-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Check whether image already exists
+        id: image
+        run: |
+          if aws ecr describe-images --repository-name "$REPOSITORY" --image-ids "imageTag=$IMAGE_TAG" > /dev/null 2> "$RUNNER_TEMP/ecr-describe-error"; then
+            echo 'already_exists=true' >> "$GITHUB_OUTPUT"
+          elif grep -q 'ImageNotFoundException' "$RUNNER_TEMP/ecr-describe-error"; then
+            echo 'already_exists=false' >> "$GITHUB_OUTPUT"
+          else
+            cat "$RUNNER_TEMP/ecr-describe-error" >&2
+            exit 1
+          fi
+
+      - name: Login to Amazon ECR
+        if: steps.image.outputs.already_exists == 'false'
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        if: steps.image.outputs.already_exists == 'false'
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          IMAGE="$REGISTRY/$REPOSITORY:$IMAGE_TAG"
+          docker build -f "${{ matrix.service }}/Dockerfile" -t "$IMAGE" .
+          docker push "$IMAGE"
+
+      - name: Report image
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          if [ -n "$REGISTRY" ]; then
+            echo "$REGISTRY/$REPOSITORY:$IMAGE_TAG" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "$REPOSITORY:$IMAGE_TAG already exists in ECR" >> "$GITHUB_STEP_SUMMARY"
+          fi
