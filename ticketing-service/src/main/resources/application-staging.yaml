@@ -1,0 +1,26 @@
+spring:
+  config:
+    activate:
+      on-profile: staging
+  datasource:
+    url: jdbc:postgresql://${STAGING_DATA_PRIVATE_IP}:5434/${TICKETING_DB_NAME}
+    username: ${TICKETING_DB_USERNAME}
+    password: ${TICKETING_DB_PASSWORD}
+  data:
+    redis:
+      host: ${STAGING_DATA_PRIVATE_IP}
+      port: 6381
+  kafka:
+    bootstrap-servers: ${STAGING_DATA_PRIVATE_IP}:9092
+
+clients:
+  platform-service:
+    url: ${PLATFORM_SERVICE_URL}
+  payment-notification-service:
+    url: ${PAYMENT_NOTIFICATION_SERVICE_URL}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

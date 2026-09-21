@@ -1,0 +1,333 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Tikitaka staging data EC2 and network foundation
+
+Parameters:
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: Amazon Linux 2023 x86_64 AMI
+  DataInstanceType:
+    Type: String
+    Default: m7i-flex.large
+    AllowedValues:
+      - m7i-flex.large
+      - t3.large
+      - t3.xlarge
+    Description: 데이터 컨테이너 기동 후 사용량을 보고 조정한다.
+  RootVolumeGiB:
+    Type: Number
+    Default: 60
+    MinValue: 30
+    MaxValue: 200
+    Description: Docker 데이터와 세 PostgreSQL 볼륨을 저장하는 루트 EBS 용량
+
+Resources:
+  StagingVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.92.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: tikitaka-staging-vpc
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: tikitaka-staging-igw
+
+  GatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref StagingVpc
+      InternetGatewayId: !Ref InternetGateway
+
+  # ALB 구성을 위한 서로 다른 가용 영역의 퍼블릭 서브넷 2개 구성
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref StagingVpc
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.92.1.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: tikitaka-staging-public-a
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref StagingVpc
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.92.2.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: tikitaka-staging-public-b
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref StagingVpc
+      Tags:
+        - Key: Name
+          Value: tikitaka-staging-public-rt
+
+  DefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: GatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetARoute:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetBRoute:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref PublicRouteTable
+
+  PlatformTaskSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Staging Platform ECS tasks
+      VpcId: !Ref StagingVpc
+      Tags:
+        - Key: Name
+          Value: tikitaka-staging-platform-tasks
+
+  TicketingTaskSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Staging Ticketing ECS tasks
+      VpcId: !Ref StagingVpc
+      Tags:
+        - Key: Name
+          Value: tikitaka-staging-ticketing-tasks
+
+  PaymentTaskSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Staging Payment and Notification ECS tasks
+      VpcId: !Ref StagingVpc
+      Tags:
+        - Key: Name
+          Value: tikitaka-staging-payment-tasks
+
+  DataSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Staging data EC2; no internet or SSH ingress
+      VpcId: !Ref StagingVpc
+      Tags:
+        - Key: Name
+          Value: tikitaka-staging-data
+
+  # 서비스별 DB·Redis 접근은 해당 데이터를 소유한 ECS 작업 보안 그룹으로 제한
+  PlatformPostgresIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DataSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5433
+      ToPort: 5433
+      SourceSecurityGroupId: !Ref PlatformTaskSecurityGroup
+
+  PlatformRedisIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DataSecurityGroup
+      IpProtocol: tcp
+      FromPort: 6380
+      ToPort: 6380
+      SourceSecurityGroupId: !Ref PlatformTaskSecurityGroup
+
+  TicketingPostgresIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DataSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5434
+      ToPort: 5434
+      SourceSecurityGroupId: !Ref TicketingTaskSecurityGroup
+
+  TicketingRedisIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DataSecurityGroup
+      IpProtocol: tcp
+      FromPort: 6381
+      ToPort: 6381
+      SourceSecurityGroupId: !Ref TicketingTaskSecurityGroup
+
+  PaymentPostgresIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DataSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5435
+      ToPort: 5435
+      SourceSecurityGroupId: !Ref PaymentTaskSecurityGroup
+
+  PlatformKafkaIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DataSecurityGroup
+      IpProtocol: tcp
+      FromPort: 9092
+      ToPort: 9092
+      SourceSecurityGroupId: !Ref PlatformTaskSecurityGroup
+
+  TicketingKafkaIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DataSecurityGroup
+      IpProtocol: tcp
+      FromPort: 9092
+      ToPort: 9092
+      SourceSecurityGroupId: !Ref TicketingTaskSecurityGroup
+
+  PaymentKafkaIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DataSecurityGroup
+      IpProtocol: tcp
+      FromPort: 9092
+      ToPort: 9092
+      SourceSecurityGroupId: !Ref PaymentTaskSecurityGroup
+
+  # Secret은 저장하지 않으며 staging-data/ 하위에 Compose, bootstrap.sh, deploy.sh 배치
+  StagingArtifactBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: Name
+          Value: tikitaka-staging-data-artifacts
+
+  StagingArtifactBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref StagingArtifactBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !GetAtt StagingArtifactBucket.Arn
+              - !Sub '${StagingArtifactBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
+  DataInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: StagingDataArtifactsAndPasswords
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: ReadStagingDataFiles
+                Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub '${StagingArtifactBucket.Arn}/staging-data/*'
+              - Sid: ReadStagingDatabasePasswords
+                Effect: Allow
+                Action: ssm:GetParameter
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/data/platform-db-password'
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/data/ticketing-db-password'
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/data/payment-db-password'
+      Tags:
+        - Key: Name
+          Value: tikitaka-staging-data
+
+  DataInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref DataInstanceRole
+
+  DataInstance:
+    Type: AWS::EC2::Instance
+    DependsOn: GatewayAttachment
+    Properties:
+      # 스택 생성 후 Systems Manager를 통한 bootstrap.sh 실행
+      # 데이터 컨테이너 기동은 후속 배포 단계로 분리
+      ImageId: !Ref LatestAmiId
+      InstanceType: !Ref DataInstanceType
+      IamInstanceProfile: !Ref DataInstanceProfile
+      # 데이터 컨테이너의 IMDS 접근 제한을 위한 응답 홉 제한 1
+      MetadataOptions:
+        HttpEndpoint: enabled
+        HttpTokens: required
+        HttpPutResponseHopLimit: 1
+      NetworkInterfaces:
+        - DeviceIndex: '0'
+          AssociatePublicIpAddress: true
+          DeleteOnTermination: true
+          GroupSet:
+            - !Ref DataSecurityGroup
+          SubnetId: !Ref PublicSubnetA
+
+      # EC2 인스턴스 교체·삭제 시 루트 EBS와 Docker 데이터 함께 삭제
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: !Ref RootVolumeGiB
+            VolumeType: gp3
+            Encrypted: true
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: tikitaka-staging-data
+
+Outputs:
+  VpcId:
+    Value: !Ref StagingVpc
+  PublicSubnetAId:
+    Value: !Ref PublicSubnetA
+  PublicSubnetBId:
+    Value: !Ref PublicSubnetB
+  DataInstanceId:
+    Value: !Ref DataInstance
+  DataPrivateIp:
+    Value: !GetAtt DataInstance.PrivateIp
+  StagingArtifactBucketName:
+    Value: !Ref StagingArtifactBucket
+  PlatformTaskSecurityGroupId:
+    Value: !Ref PlatformTaskSecurityGroup
+  TicketingTaskSecurityGroupId:
+    Value: !Ref TicketingTaskSecurityGroup
+  PaymentTaskSecurityGroupId:
+    Value: !Ref PaymentTaskSecurityGroup
