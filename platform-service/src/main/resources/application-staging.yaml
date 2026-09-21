@@ -1,0 +1,24 @@
+spring:
+  config:
+    activate:
+      on-profile: staging
+  datasource:
+    url: jdbc:postgresql://${STAGING_DATA_PRIVATE_IP}:5433/${PLATFORM_DB_NAME}
+    username: ${PLATFORM_DB_USERNAME}
+    password: ${PLATFORM_DB_PASSWORD}
+  data:
+    redis:
+      host: ${STAGING_DATA_PRIVATE_IP}
+      port: 6380
+  kafka:
+    bootstrap-servers: ${STAGING_DATA_PRIVATE_IP}:9092
+
+clients:
+  ticketing-service:
+    url: ${TICKETING_SERVICE_URL}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

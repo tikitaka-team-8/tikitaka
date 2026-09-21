@@ -1,0 +1,18 @@
+spring:
+  config:
+    activate:
+      on-profile: staging
+
+services:
+  platform:
+    url: ${PLATFORM_SERVICE_URL}
+  ticketing:
+    url: ${TICKETING_SERVICE_URL}
+  payment-notification:
+    url: ${PAYMENT_NOTIFICATION_SERVICE_URL}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

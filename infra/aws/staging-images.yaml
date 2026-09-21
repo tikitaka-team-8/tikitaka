@@ -1,0 +1,231 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: ECR repositories and GitHub Actions image publisher for Tikitaka staging
+
+Parameters:
+  ExistingGitHubOidcProviderArn:
+    Type: String
+    Default: ''
+    Description: Existing GitHub OIDC provider ARN, or leave empty to create one
+  GitHubOidcSubject:
+    Type: String
+    MinLength: 1
+    Description: Exact GitHub OIDC sub claim for this repository's develop branch; include immutable IDs if used
+  StagingTaskExecutionRoleArn:
+    Type: String
+    MinLength: 1
+    AllowedPattern: 'arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]+'
+    Description: TaskExecutionRoleArn output from the staging app stack
+  StagingDataInstanceId:
+    Type: String
+    AllowedPattern: 'i-[0-9a-f]+'
+    Description: DataInstanceId output from the staging data stack
+  StagingArtifactBucketName:
+    Type: String
+    MinLength: 1
+    Description: StagingArtifactBucketName output from the staging data stack
+
+Conditions:
+  CreateGitHubOidcProvider: !Equals [!Ref ExistingGitHubOidcProviderArn, '']
+
+Resources:
+  GatewayRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: tikitaka/staging/gateway
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  PlatformRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: tikitaka/staging/platform-service
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  TicketingRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: tikitaka/staging/ticketing-service
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  PaymentNotificationRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: tikitaka/staging/payment-notification-service
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: CreateGitHubOidcProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+
+  StagingImagePublisherRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If
+                - CreateGitHubOidcProvider
+                - !Ref GitHubOidcProvider
+                - !Ref ExistingGitHubOidcProviderArn
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Ref GitHubOidcSubject
+      Policies:
+        - PolicyName: PublishStagingImages
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: AuthenticateToEcr
+                Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: '*'
+              - Sid: PublishToStagingRepositories
+                Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:BatchGetImage
+                  - ecr:CompleteLayerUpload
+                  - ecr:DescribeImages
+                  - ecr:InitiateLayerUpload
+                  - ecr:PutImage
+                  - ecr:UploadLayerPart
+                Resource:
+                  - !GetAtt GatewayRepository.Arn
+                  - !GetAtt PlatformRepository.Arn
+                  - !GetAtt TicketingRepository.Arn
+                  - !GetAtt PaymentNotificationRepository.Arn
+
+  StagingDeployerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If
+                - CreateGitHubOidcProvider
+                - !Ref GitHubOidcProvider
+                - !Ref ExistingGitHubOidcProviderArn
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Ref GitHubOidcSubject
+      Policies:
+        - PolicyName: DeployStagingServices
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: CheckPublishedImages
+                Effect: Allow
+                Action: ecr:DescribeImages
+                Resource:
+                  - !GetAtt GatewayRepository.Arn
+                  - !GetAtt PlatformRepository.Arn
+                  - !GetAtt TicketingRepository.Arn
+                  - !GetAtt PaymentNotificationRepository.Arn
+              - Sid: ReadStagingTaskDefinitions
+                Effect: Allow
+                Action:
+                  - ecs:DescribeTaskDefinition
+                  - ecs:RegisterTaskDefinition
+                Resource: '*'
+              - Sid: UpdateStagingServices
+                Effect: Allow
+                Action:
+                  - ecs:DescribeServices
+                  - ecs:UpdateService
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:service/tikitaka-staging/platform-service'
+                  - !Sub 'arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:service/tikitaka-staging/ticketing-service'
+                  - !Sub 'arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:service/tikitaka-staging/payment-notification-service'
+                  - !Sub 'arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:service/tikitaka-staging/gateway'
+              - Sid: PassStagingTaskExecutionRole
+                Effect: Allow
+                Action: iam:PassRole
+                Resource: !Ref StagingTaskExecutionRoleArn
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: ecs-tasks.amazonaws.com
+              - Sid: ReadStagingApiUrl
+                Effect: Allow
+                Action: cloudformation:DescribeStacks
+                Resource: !Sub 'arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/tikitaka-staging-app/*'
+
+  StagingDataDeployerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If
+                - CreateGitHubOidcProvider
+                - !Ref GitHubOidcProvider
+                - !Ref ExistingGitHubOidcProviderArn
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Ref GitHubOidcSubject
+      Policies:
+        - PolicyName: DeployStagingData
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: ReadStagingDataStack
+                Effect: Allow
+                Action: cloudformation:DescribeStacks
+                Resource: !Sub 'arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/tikitaka-staging-data/*'
+              - Sid: UploadStagingDataFiles
+                Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub 'arn:${AWS::Partition}:s3:::${StagingArtifactBucketName}/staging-data/releases/*'
+              - Sid: RunStagingDataCommand
+                Effect: Allow
+                Action: ssm:SendCommand
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}::document/AWS-RunShellScript'
+                  - !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/${StagingDataInstanceId}'
+              - Sid: ReadStagingDataCommandResult
+                Effect: Allow
+                Action: ssm:GetCommandInvocation
+                Resource: '*'
+
+Outputs:
+  GatewayRepositoryUri:
+    Value: !GetAtt GatewayRepository.RepositoryUri
+  PlatformRepositoryUri:
+    Value: !GetAtt PlatformRepository.RepositoryUri
+  TicketingRepositoryUri:
+    Value: !GetAtt TicketingRepository.RepositoryUri
+  PaymentNotificationRepositoryUri:
+    Value: !GetAtt PaymentNotificationRepository.RepositoryUri
+  StagingImagePublisherRoleArn:
+    Value: !GetAtt StagingImagePublisherRole.Arn
+  StagingDeployerRoleArn:
+    Value: !GetAtt StagingDeployerRole.Arn
+  StagingDataDeployerRoleArn:
+    Value: !GetAtt StagingDataDeployerRole.Arn
+  GitHubOidcProviderArn:
+    Value: !If
+      - CreateGitHubOidcProvider
+      - !Ref GitHubOidcProvider
+      - !Ref ExistingGitHubOidcProviderArn
