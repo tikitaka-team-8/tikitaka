@@ -22,6 +22,13 @@ foreach ($relative in $paths) {
     New-Item -ItemType Directory -Path (Split-Path $target) -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $repo $relative) -Destination $target -Recurse
 }
+# Instrument only the disposable source snapshot. Normal bootJar/production sources stay unchanged.
+$diagnosticPatch = Join-Path $PSScriptRoot 'diagnostics.patch'
+$snapshotRelative = "artifacts/queue-build/$stamp"
+git -C $repo apply --check --directory=$snapshotRelative -- $diagnosticPatch
+if ($LASTEXITCODE -ne 0) { throw 'Diagnostic patch does not match source; review instrumentation before building' }
+git -C $repo apply --directory=$snapshotRelative -- $diagnosticPatch
+if ($LASTEXITCODE -ne 0) { throw 'Diagnostic patch failed' }
 # All files come from this directory; prefix removal also works on Windows PowerShell 5.1.
 $snapshotPrefix = [IO.Path]::GetFullPath($snapshot).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
 $manifest = @(Get-ChildItem -LiteralPath $snapshot -File -Recurse | Sort-Object FullName | ForEach-Object {

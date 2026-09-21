@@ -99,7 +99,7 @@ try {
         $label += "-maxconn-$MaxConnections"
     }
     if ($RequirePlatformDiagnostics -and $prom -notmatch '(?m)^queue_platform_client_total') {
-        throw 'Platform client diagnostics missing. Build with docker-compose.test.yml first. No load executed.'
+        throw 'Platform client diagnostics missing. Run build-observed.ps1 first. No load executed.'
     }
     if ($RequireStageMetrics -and $prom -notmatch '(?m)^queue_registration_stage_seconds_count') {
         throw 'Registration metrics missing. Build and apply the observed Ticketing image first. No load executed.'

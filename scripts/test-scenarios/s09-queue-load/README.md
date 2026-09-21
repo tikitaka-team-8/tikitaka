@@ -142,6 +142,8 @@ stub은 `docker-compose.test.yml`의 opt-in `queue-dependency-test` profile이�
 - OOM·재시작·정합성 오류·지속 timeout이면 증량하지 않는다. k6와 서버가 같은 호스트를 공유하므로 부하 발생기 포화도 구분한다.
 - 원본 JSON/로그/HTML/JFR 및 개인 환경 파일은 artifacts에만 보관한다. 결과 문서에 선별한 수치와 조건을 기록한다.
 
+`build-observed.ps1`은 복사한 임시 소스에만 `diagnostics.patch`를 적용하여 진단 이미지를 만든다.
+운영 소스와 일반 bootJar에는 이 계측을 포함하지 않는다. 패치가 맞지 않으면 빌드를 중단한다.
 계측 기능은 공통 test Compose에서 `QUEUE_DIAGNOSTICS_REGISTRATION=true`,
-`QUEUE_DIAGNOSTICS_PLATFORM_CLIENT=true`로 활성화한다. 애플리케이션 기본값은 비활성이다.
+`QUEUE_DIAGNOSTICS_PLATFORM_CLIENT=true`로 활성화한다. 이 설정만으로 일반 운영 이미지에 계측 코드가 추가되지는 않는다.
 테스트 전용 임시 Compose override는 생성 후 정리되며 별도 시나리오 Compose 파일을 저장소에 추가하지 않는다.

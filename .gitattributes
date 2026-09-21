@@ -1,3 +1,5 @@
 /gradlew text eol=lf
 *.bat text eol=crlf
 *.jar binary
+
+/scripts/test-scenarios/s09-queue-load/diagnostics.patch text eol=lf whitespace=-blank-at-eol

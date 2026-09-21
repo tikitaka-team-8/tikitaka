@@ -20,7 +20,6 @@ import java.time.OffsetDateTime;
 import java.net.SocketTimeoutException;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.function.Supplier;
 import java.util.concurrent.TimeoutException;
 import org.springframework.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,23 +33,6 @@ public class QueueService implements QueueAdmissionValidator {
     private final QueueProperties queueProperties;
     private final Clock clock;
     private final ObjectMapper objectMapper;
-    private QueueRegistrationMetrics registrationMetrics;
-
-    @Autowired(required = false)
-    void setRegistrationMetrics(QueueRegistrationMetrics registrationMetrics) {
-        this.registrationMetrics = registrationMetrics;
-    }
-
-    private <T> T measureRegistration(String stage, Supplier<T> action) {
-        return registrationMetrics == null ? action.get() : registrationMetrics.measure(stage, action);
-    }
-
-    private void registerWaitingSessionMeasured(UUID sessionId) {
-        measureRegistration("redis_registry", () -> {
-            queueRepository.registerWaitingSession(sessionId);
-            return null;
-        });
-    }
 
     @Autowired
     public QueueService(
@@ -78,41 +60,40 @@ public class QueueService implements QueueAdmissionValidator {
 
     public QueueEntry enterQueue(UUID sessionId, long userId) {
         try {
-            return measureRegistration("total", () -> enterQueueInternal(sessionId, userId));
+            return enterQueueInternal(sessionId, userId);
         } catch (RedisConnectionFailureException exception) {
             throw new BusinessException(QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE);
         }
     }
 
     private QueueEntry enterQueueInternal(UUID sessionId, long userId) {
-        Optional<QueueEntry> existingEntry = measureRegistration("redis_lookup",
-                () -> queueRepository.findEntry(sessionId, userId));
+        Optional<QueueEntry> existingEntry = queueRepository.findEntry(sessionId, userId);
         if (existingEntry.isPresent() && existingEntry.get().status().isActive()) {
             if (existingEntry.get().status() == QueueStatus.WAITING) {
-                registerWaitingSessionMeasured(sessionId);
+                queueRepository.registerWaitingSession(sessionId);
             }
             return existingEntry.get();
         }
-        PlatformSalesStatus salesStatus = measureRegistration("platform", () -> getSalesStatus(sessionId));
+        PlatformSalesStatus salesStatus = getSalesStatus(sessionId);
         Instant now = Instant.now(clock);
         validateSellableSession(salesStatus, now);
         Instant queueExpiresAt = salesStatus.salesCloseAt().toInstant()
                 .plus(queueProperties.retentionAfterSalesClose());
-        Optional<QueueEntry> createdEntry = measureRegistration("redis_create", () -> queueRepository.createWaitingEntryIfAbsent(
+        Optional<QueueEntry> createdEntry = queueRepository.createWaitingEntryIfAbsent(
                 sessionId,
                 userId,
                 now,
                 queueExpiresAt,
                 Duration.between(now, queueExpiresAt)
-        ));
+        );
         if (createdEntry.isPresent()) {
             return createdEntry.get();
         }
 
-        QueueEntry concurrentEntry = measureRegistration("redis_reread", () -> getEntry(sessionId, userId));
+        QueueEntry concurrentEntry = getEntry(sessionId, userId);
         if (concurrentEntry.status().isActive()) {
             if (concurrentEntry.status() == QueueStatus.WAITING) {
-                registerWaitingSessionMeasured(sessionId);
+                queueRepository.registerWaitingSession(sessionId);
             }
             return concurrentEntry;
         }
