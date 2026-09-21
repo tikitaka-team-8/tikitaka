@@ -1,5 +1,6 @@
-name: Publish Staging Images
+name: Deploy ECS
 
+# develop 브랜치 반영 시 ECR 이미지 게시 및 ECS 스테이징 배포 실행
 on:
   push:
     branches:
@@ -8,9 +9,13 @@ on:
 
 permissions:
   contents: read
+  # AWS OIDC 인증을 위한 GitHub ID 토큰 발급 권한
   id-token: write
 
 jobs:
+  # ────────────────────────────
+  # 1. 서비스별 이미지 빌드 및 ECR 게시
+  # ────────────────────────────
   publish:
     if: github.ref == 'refs/heads/develop'
     name: Publish ${{ matrix.service }}
@@ -27,12 +32,14 @@ jobs:
     env:
       AWS_REGION: ap-northeast-2
       REPOSITORY: tikitaka/staging/${{ matrix.service }}
+      # develop 커밋 SHA 기반 이미지 태그 사용
       IMAGE_TAG: ${{ github.sha }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # 저장소 변수 누락 시 AWS 인증 전에 중단
       - name: Check publisher role configuration
         env:
           PUBLISHER_ROLE_ARN: ${{ vars.STAGING_IMAGE_PUBLISHER_ROLE_ARN }}
@@ -46,6 +53,7 @@ jobs:
           role-session-name: staging-images-${{ github.run_id }}
           aws-region: ${{ env.AWS_REGION }}
 
+      # 동일 커밋 이미지가 있으면 빌드 및 게시 생략
       - name: Check whether image already exists
         id: image
         run: |
@@ -63,6 +71,7 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      # 서비스 Dockerfile로 빌드한 이미지를 ECR에 게시
       - name: Build and push image
         if: steps.image.outputs.already_exists == 'false'
         env:
@@ -81,3 +90,43 @@ jobs:
           else
             echo "$REPOSITORY:$IMAGE_TAG already exists in ECR" >> "$GITHUB_STEP_SUMMARY"
           fi
+
+  # ────────────────────────────
+  # 2. ECS 서비스 순차 배포
+  # ────────────────────────────
+  deploy:
+    if: github.ref == 'refs/heads/develop'
+    needs: publish
+    name: Deploy staging services
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # 동일 ECS 환경의 동시 배포 방지
+    concurrency:
+      group: staging-ecs-deploy
+      cancel-in-progress: false
+    env:
+      AWS_REGION: ap-northeast-2
+      IMAGE_TAG: ${{ github.sha }}
+      STAGING_CLUSTER: tikitaka-staging
+      STAGING_STACK_NAME: tikitaka-staging-app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # 배포 전용 OIDC 역할 ARN 확인
+      - name: Check deployer role configuration
+        env:
+          DEPLOYER_ROLE_ARN: ${{ vars.STAGING_DEPLOYER_ROLE_ARN }}
+        run: |
+          test -n "$DEPLOYER_ROLE_ARN" || { echo 'Set the STAGING_DEPLOYER_ROLE_ARN repository variable.' >&2; exit 1; }
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.STAGING_DEPLOYER_ROLE_ARN }}
+          role-session-name: staging-deploy-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # 게시 이미지 기반 ECS 스테이징 배포 스크립트 실행
+      - name: Deploy published images
+        run: bash scripts/deployment/staging-app/deploy.sh
