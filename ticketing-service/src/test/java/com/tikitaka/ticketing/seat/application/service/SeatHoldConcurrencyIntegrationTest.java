@@ -126,7 +126,7 @@ class SeatHoldConcurrencyIntegrationTest {
 
             readyLatch.await();
             startLatch.countDown();
-            boolean completed = doneLatch.await(300000, TimeUnit.SECONDS);
+            boolean completed = doneLatch.await(30, TimeUnit.SECONDS);
 
             assertThat(completed).isTrue();
             assertThat(successCount.get()).isEqualTo(1);
