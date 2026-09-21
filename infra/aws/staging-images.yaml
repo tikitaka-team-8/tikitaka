@@ -15,6 +15,14 @@ Parameters:
     MinLength: 1
     AllowedPattern: 'arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]+'
     Description: TaskExecutionRoleArn output from the staging app stack
+  StagingDataInstanceId:
+    Type: String
+    AllowedPattern: 'i-[0-9a-f]+'
+    Description: DataInstanceId output from the staging data stack
+  StagingArtifactBucketName:
+    Type: String
+    MinLength: 1
+    Description: StagingArtifactBucketName output from the staging data stack
 
 Conditions:
   CreateGitHubOidcProvider: !Equals [!Ref ExistingGitHubOidcProviderArn, '']
@@ -160,6 +168,47 @@ Resources:
                 Action: cloudformation:DescribeStacks
                 Resource: !Sub 'arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/tikitaka-staging-app/*'
 
+  StagingDataDeployerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If
+                - CreateGitHubOidcProvider
+                - !Ref GitHubOidcProvider
+                - !Ref ExistingGitHubOidcProviderArn
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Ref GitHubOidcSubject
+      Policies:
+        - PolicyName: DeployStagingData
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: ReadStagingDataStack
+                Effect: Allow
+                Action: cloudformation:DescribeStacks
+                Resource: !Sub 'arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/tikitaka-staging-data/*'
+              - Sid: UploadStagingDataFiles
+                Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub 'arn:${AWS::Partition}:s3:::${StagingArtifactBucketName}/staging-data/releases/*'
+              - Sid: RunStagingDataCommand
+                Effect: Allow
+                Action: ssm:SendCommand
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}::document/AWS-RunShellScript'
+                  - !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/${StagingDataInstanceId}'
+              - Sid: ReadStagingDataCommandResult
+                Effect: Allow
+                Action: ssm:GetCommandInvocation
+                Resource: '*'
+
 Outputs:
   GatewayRepositoryUri:
     Value: !GetAtt GatewayRepository.RepositoryUri
@@ -173,6 +222,8 @@ Outputs:
     Value: !GetAtt StagingImagePublisherRole.Arn
   StagingDeployerRoleArn:
     Value: !GetAtt StagingDeployerRole.Arn
+  StagingDataDeployerRoleArn:
+    Value: !GetAtt StagingDataDeployerRole.Arn
   GitHubOidcProviderArn:
     Value: !If
       - CreateGitHubOidcProvider
