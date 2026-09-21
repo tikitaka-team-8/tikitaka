@@ -103,3 +103,62 @@ Kafka 기반 판매 상태 복제는 검토만 했다. 판매 중단 정보 반�
 이 중 Redis Testcontainers 통합 테스트는 23개다. stub 테스트, 등록 실패 후 다음 요청 진행 검사,
 관측 timeout 처리 검사, PowerShell/Python 문법 및 공통 Compose config 검사를 수행했다.
 제출 정리 중 실제 부하·이미지 빌드/교체·운영 설정 변경은 수행하지 않았다.
+
+## 등록 Lua 통합 전후 코드 보존
+
+이번 비교는 기존 Scheduler Pipeline 비교 태그와 별개다.
+
+| 태그 | 코드 의미 |
+|---|---|
+| `queue-register-before-reconstructed` | Git 기준 `8bdecc1183895fcb174ffbc335a10a67a63a6a1a`의 등록 방식: 생성 Lua 후 별도 registry SADD. 아래 After와 같은 실행기·계측을 적용한 비교용 재구성 버전 |
+| `queue-register-after-snapshot` | 생성 Lua에 registry SADD를 통합한 제출 코드와 실행기·계측 보존 버전 |
+
+Before의 RedisQueueRepository와 QueueRepository는 위 기준 커밋에서 가져온다.
+QueueService는 After의 계측을 유지하면서 신규 생성 성공 시 별도 registry 호출을 복원한다.
+버전별 동작에 맞춰 등록 관련 테스트도 달라진다. 그 외 실행기·계측·Compose·의존성은 동일하다.
+이는 과거 실행 이미지를 그대로 복원한 것이 아니다. 위 표의 기존 측정값은 이 비교 태그로 실행한 결과가 아니며,
+등록 Lua 통합의 API 개선율을 주장하려면 아래 동일 조건으로 새로 측정해야 한다.
+
+### 비교 실행 방법
+
+두 태그는 로컬에 보존하며 브랜치 push만으로 원격에 올라가지 않는다.
+공유하려면 별도 승인 후 두 태그를 명시적으로 push해야 한다. 원격에 게시된 뒤에는 다음으로 가져온다.
+
+```powershell
+git fetch ticket tag queue-register-before-reconstructed tag queue-register-after-snapshot
+```
+
+저장소 루트에서 비교용 작업 폴더를 만든다. 개인 `.env`는 기존 로컬 파일을 복사하며 Git에 추가하지 않는다.
+
+```powershell
+git worktree add --detach artifacts/queue-register-before queue-register-before-reconstructed
+git worktree add --detach artifacts/queue-register-after queue-register-after-snapshot
+Copy-Item -LiteralPath .env -Destination artifacts/queue-register-before/.env
+Copy-Item -LiteralPath .env -Destination artifacts/queue-register-after/.env
+```
+
+기존 공통 테스트 환경이 실행 중이어야 한다. 두 폴더에서 동시에 실행하지 않는다.
+아래 명령을 Before 폴더에서 먼저 실행하고, After 폴더에서도 동일하게 실행한다.
+각 버전마다 반드시 빌드하여 실행 이미지를 교체한다. Platform·Redis·Docker 자원 설정은 유지한다.
+
+```powershell
+$ErrorActionPreference = 'Stop'
+.\scripts\test-scenarios\s09-queue-load\build-observed.ps1
+if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
+.\scripts\test-scenarios\s09-queue-load\run-ticketing-direct-spike.ps1 -PrepareMonitoring -ForceRecreate -AcceptCount 1000 -MaxConnections 16384 -PlatformMode real
+Start-Sleep -Seconds 180
+.\scripts\test-scenarios\s09-queue-load\run-ticketing-direct-spike.ps1 -AcceptCount 1000 -MaxConnections 16384 -PlatformMode real -RequireStageMetrics -RequirePlatformDiagnostics
+```
+
+조건은 두 버전 모두 1,000 VU 순간 등록, timeout 5초, backlog 1,000, max-connections 16,384,
+실제 Platform, batch·회차별 승인 상한 50이다. 연결 설정 비교와 코드 비교를 혼합하지 않는다.
+Before→After, After→Before처럼 실행 순서를 교대해 각각 최소 3회 측정한다.
+HTTP 성공률·p95/p99·등록 전체 시간을 먼저 비교하고, 내부 단계·TCP·CPU·Redis 지표로 차이를 해석한다.
+After의 `redis_registry=0`은 해당 작업이 `redis_create` 안에 포함됐다는 뜻이며 비용이 0이라는 뜻이 아니다.
+수집 누락·Platform 오류·자원 조건 차이가 있는 실행은 정상 실행과 구분한다.
+결과는 각 폴더의 artifacts에 저장된다. 최종 실행 후 원래 연결 설정으로 복구한다.
+원래 최대 연결 수가 8,192였다면 마지막 After 폴더에서 다음을 실행한다.
+
+```powershell
+.\scripts\test-scenarios\s09-queue-load\run-ticketing-direct-spike.ps1 -PrepareMonitoring -ForceRecreate -AcceptCount 1000 -MaxConnections 8192 -PlatformMode real
+```
