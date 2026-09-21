@@ -5,21 +5,6 @@
 # docker compose -f docker-compose.yml -f docker-compose.test.yml up -d
 
 services:
-  queue-platform-stub:
-    profiles: [queue-dependency-test]
-    image: python:3.12.12-alpine
-    container_name: tikitaka-queue-platform-stub
-    command: [python, /stub/platform-stub.py]
-    volumes:
-      - ./scripts/test-scenarios/s09-queue-load/platform-stub.py:/stub/platform-stub.py:ro
-    networks: [tikitaka-network]
-    read_only: true
-    healthcheck:
-      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/health', timeout=2)"]
-      interval: 2s
-      timeout: 3s
-      retries: 15
-
   toxiproxy:
     image: ghcr.io/shopify/toxiproxy:2.12.0
     container_name: tikitaka-toxiproxy
@@ -43,8 +28,6 @@ services:
   ticketing-service:
     environment:
       SERVER_TOMCAT_MBEANREGISTRY_ENABLED: "true"
-      QUEUE_DIAGNOSTICS_PLATFORM_CLIENT: "true"
-      QUEUE_DIAGNOSTICS_REGISTRATION: "true"
       # HTTP Histogram은 항상 활성화하고, S05 환경변수가 있을 때만 Payment 주소·Feign Timeout이 테스트 값으로 바뀐
       # JSON으로 paymentCreationClient Map key를 보존함
       SPRING_APPLICATION_JSON: >-

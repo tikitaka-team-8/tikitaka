@@ -76,9 +76,16 @@ Kafka 기반 판매 상태 복제는 검토만 했다. 판매 중단 정보 반�
 - 30초 분산의 max 8,192 조건은 연결 수가 누적됐고 keep-alive 8,192개, busy thread 1개가 동시에 관측됐다. 관측용 Actuator timeout 1건이 있어 `observationComplete=false`다. k6 부하는 끝까지 완료했다.
 - max 16,384 비교에서는 연결 수 최대 10,004, keep-alive 최대 10,003, busy thread 표본 최대 9, TCP overflow/Platform timeout 모두 0이었다. 등록 로직 내부 평균 5.00ms, Platform 평균 3.03ms였다.
 - 동일 이미지에서 최대 연결 수만 변경한 비교는 **이 로컬 분산 유입 조건에서 연결 한도 점유가 실패 원인이었다는 근거**다. 운영 기본값 변경이나 순간 Spike 전체 해결을 의미하지 않는다. 실행 후 기존 최대 연결 수로 복구했다.
-- max 16,384에서 10,000 VU 순간 Spike는 아직 측정하지 않았다. 다음 비교는 timeout·유입 방식·코드를 유지하고 이 연결 한도만 바꿔 수행한다. 실패가 남으면 client timeout 시각과 Tomcat 연결/스레드, Platform transport, Redis·호스트/k6 자원을 대조한다. 현재 결과만으로 순간 Spike 실패 전체를 Platform이나 Queue 로직 하나의 원인으로 확정하지 않는다.
+- max 16,384에서 10,000 VU 순간 Spike는 측정하지 않았다. 순간 1만 명 수용 여부는 이번 검증의 보장 범위에 포함하지 않으며, 순간 Spike 실패 전체를 Platform이나 Queue 로직 하나의 원인으로 확정하지 않는다.
 - 30초 분산은 목표 유입 약 333명/s다. 1만 요청을 같은 순간에 받은 결과로 표현하지 않는다. 위 표는 p95/p99와 실패가 함께 있는 원본 집계이며 실패 요청도 포함한다.
 - 서버 반영과 클라이언트 응답은 다르다. 순간 실제/stub 실행에서 Redis WAITING+ACTIVE는 각각 9,268/9,199로 관측됐으나 클라이언트 성공은 4,496/5,549였다. timeout 뒤에도 서버 처리가 이어질 수 있다.
+
+### 연결 한도 검증 결론
+
+1만 명·30초 분산 유입에서는 Tomcat의 유지 연결이 최대 연결 수 8,192개를 점유하며 timeout이 발생했다.
+동일 이미지·부하 조건에서 최대 연결 수만 16,384로 변경한 실행은 10,000건 모두 성공했고 HTTP p95는 28.5ms였다.
+해당 현상은 로컬 테스트 환경의 연결 한도 제약으로 정리하고, 이번 범위의 연결 설정 진단 및 추가 튜닝을 종료한다.
+운영 기본 설정에는 반영하지 않았으며, 이 결과를 순간 1만 명 수용 보장이나 등록 Lua 통합의 성능 개선율로 해석하지 않는다.
 
 ### 중단된 실행의 취급
 
@@ -90,78 +97,34 @@ Kafka 기반 판매 상태 복제는 검토만 했다. 판매 중단 정보 반�
 
 - 신규 Entry 생성 Lua에 회차 registry SADD를 포함해 생성·발견 가능 상태를 한 번에 반영한다. 별도 registry 호출을 제거하며 중복 WAITING·경합 복구 경로는 유지한다.
 - Redis 명령 자체를 제거한 것은 아니다. 새 등록의 별도 애플리케이션 왕복 1회를 줄인다. 전체 API 개선율은 분리 검증하지 않아 주장하지 않는다.
-- 등록 단계 timer와 Feign transport 계측은 운영 소스·일반 bootJar에 포함하지 않는다. `build-observed.ps1`이 임시 소스 snapshot에만 `diagnostics.patch`를 적용하며 공통 test Compose에서 활성화한다. 테스트 소스에 있는 계측 구현과 테스트는 운영 JAR에 포함되지 않는다. 사용자·회차·토큰을 메트릭 label로 넣지 않는다.
+- 과거 단계별 계측·Feign 진단은 원인 분석 당시의 자료이며, 관련 구현은 현재 제출 코드에서 제거했다.
 - 이 PR은 운영 Compose, 기본 연결 한도, batch·승인 상한, Platform 코드, Kafka 구조를 변경하지 않는다.
 - 10만 데이터·10만 활성 사용자·분산 부하·스테이징은 이 추가 결과의 검증 범위가 아니다.
 - CPU/Tomcat/Redis 표본은 짧은 순간 피크를 놓칠 수 있다. 데이터 정리는 자연 회복의 증거가 아니며 등록 전용 결과의 recovery 값은 null이다.
 
-실행법은 [시나리오 README](../../../scripts/test-scenarios/s09-queue-load/README.md#queue-api-직접-호출과-추가-진단)를 참고한다.
+실행법은 [시나리오 README](../../../scripts/test-scenarios/s09-queue-load/README.md#queue-api-직접-호출)를 참고한다.
 
 
-## 제출 브랜치 검증
+## 계측 제거 전 제출 브랜치 검증
 
 최신 develop 통합 후 Java 컴파일과 Queue·Seat JUnit 130개를 통과했다(실패·오류·skip 0).
 이 중 Redis Testcontainers 통합 테스트는 23개다. stub 테스트, 등록 실패 후 다음 요청 진행 검사,
 관측 timeout 처리 검사, PowerShell/Python 문법 및 공통 Compose config 검사를 수행했다.
 제출 정리 중 실제 부하·이미지 빌드/교체·운영 설정 변경은 수행하지 않았다.
 
-## 등록 Lua 통합 전후 코드 보존
+## 비교 코드 보존 및 제출 범위
 
-아래 태그는 계측을 운영 소스에서 분리하기 전의 비교 전용 스냅샷으로 유지한다. 현재 PR의 일반 빌드에는 계측이 없으며, 태그는 운영 배포용으로 사용하지 않는다. 태그를 변경하거나 기존 비교 결과의 출처를 바꾸지 않는다.
+`queue-register-before-reconstructed`와 `queue-register-after-snapshot`은 이전에 만든 비교 전용 태그로 보존한다.
+이 태그에는 당시의 계측·테스트 환경 교체 기능이 포함되어 있으므로 현재 PR의 권장 실행 경로가 아니다.
+태그를 변경하거나 과거 결과의 출처를 현재 코드로 바꾸지 않는다. Lua 통합 단독의 API 개선율은 측정하지 않았다.
 
-이번 비교는 기존 Scheduler Pipeline 비교 태그와 별개다.
+Platform stub·장애 주입 실행기·Feign 진단·등록 단계 계측과 진단 이미지 생성 추가 기능은 이번 제출에서 제거했다.
+기존 업무용 Platform 판매 상태 동기 조회와 Queue 등록 Lua 개선은 유지한다.
+과거 실험 결과는 위 표에 기록하되 현재 제출 스크립트에서 Platform 장애 주입을 재현할 수 있다고 표기하지 않는다.
+직접 호출 실행기는 이미 기동한 공통 테스트 환경을 사용하며 이미지·전체 환경을 교체하지 않는다.
 
-| 태그 | 코드 의미 |
-|---|---|
-| `queue-register-before-reconstructed` | Git 기준 `8bdecc1183895fcb174ffbc335a10a67a63a6a1a`의 등록 방식: 생성 Lua 후 별도 registry SADD. 아래 After와 같은 실행기·계측을 적용한 비교용 재구성 버전 |
-| `queue-register-after-snapshot` | 생성 Lua에 registry SADD를 통합한 제출 코드와 실행기·계측 보존 버전 |
+## 진단 기능 제거 후 검증
 
-Before의 RedisQueueRepository와 QueueRepository는 위 기준 커밋에서 가져온다.
-QueueService는 After의 계측을 유지하면서 신규 생성 성공 시 별도 registry 호출을 복원한다.
-버전별 동작에 맞춰 등록 관련 테스트도 달라진다. 그 외 실행기·계측·Compose·의존성은 동일하다.
-이는 과거 실행 이미지를 그대로 복원한 것이 아니다. 위 표의 기존 측정값은 이 비교 태그로 실행한 결과가 아니며,
-등록 Lua 통합의 API 개선율을 주장하려면 아래 동일 조건으로 새로 측정해야 한다.
-
-### 비교 실행 방법
-
-두 태그는 로컬에 보존하며 브랜치 push만으로 원격에 올라가지 않는다.
-공유하려면 별도 승인 후 두 태그를 명시적으로 push해야 한다. 원격에 게시된 뒤에는 다음으로 가져온다.
-
-```powershell
-git fetch ticket tag queue-register-before-reconstructed tag queue-register-after-snapshot
-```
-
-저장소 루트에서 비교용 작업 폴더를 만든다. 개인 `.env`는 기존 로컬 파일을 복사하며 Git에 추가하지 않는다.
-
-```powershell
-git worktree add --detach artifacts/queue-register-before queue-register-before-reconstructed
-git worktree add --detach artifacts/queue-register-after queue-register-after-snapshot
-Copy-Item -LiteralPath .env -Destination artifacts/queue-register-before/.env
-Copy-Item -LiteralPath .env -Destination artifacts/queue-register-after/.env
-```
-
-기존 공통 테스트 환경이 실행 중이어야 한다. 두 폴더에서 동시에 실행하지 않는다.
-아래 명령을 Before 폴더에서 먼저 실행하고, After 폴더에서도 동일하게 실행한다.
-각 버전마다 반드시 빌드하여 실행 이미지를 교체한다. Platform·Redis·Docker 자원 설정은 유지한다.
-
-```powershell
-$ErrorActionPreference = 'Stop'
-.\scripts\test-scenarios\s09-queue-load\build-observed.ps1
-if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
-.\scripts\test-scenarios\s09-queue-load\run-ticketing-direct-spike.ps1 -PrepareMonitoring -ForceRecreate -AcceptCount 1000 -MaxConnections 16384 -PlatformMode real
-Start-Sleep -Seconds 180
-.\scripts\test-scenarios\s09-queue-load\run-ticketing-direct-spike.ps1 -AcceptCount 1000 -MaxConnections 16384 -PlatformMode real -RequireStageMetrics -RequirePlatformDiagnostics
-```
-
-조건은 두 버전 모두 1,000 VU 순간 등록, timeout 5초, backlog 1,000, max-connections 16,384,
-실제 Platform, batch·회차별 승인 상한 50이다. 연결 설정 비교와 코드 비교를 혼합하지 않는다.
-Before→After, After→Before처럼 실행 순서를 교대해 각각 최소 3회 측정한다.
-HTTP 성공률·p95/p99·등록 전체 시간을 먼저 비교하고, 내부 단계·TCP·CPU·Redis 지표로 차이를 해석한다.
-After의 `redis_registry=0`은 해당 작업이 `redis_create` 안에 포함됐다는 뜻이며 비용이 0이라는 뜻이 아니다.
-수집 누락·Platform 오류·자원 조건 차이가 있는 실행은 정상 실행과 구분한다.
-결과는 각 폴더의 artifacts에 저장된다. 최종 실행 후 원래 연결 설정으로 복구한다.
-원래 최대 연결 수가 8,192였다면 마지막 After 폴더에서 다음을 실행한다.
-
-```powershell
-.\scripts\test-scenarios\s09-queue-load\run-ticketing-direct-spike.ps1 -PrepareMonitoring -ForceRecreate -AcceptCount 1000 -MaxConnections 8192 -PlatformMode real
-```
+Java 컴파일 및 Queue·Seat 테스트 127개 통과(실패·오류·skip 0).
+관측 오류 처리 테스트 2개, 등록 실패 후 진행 검사, Python/PowerShell 문법 검사를 통과했다.
+실제 부하·서비스 이미지 교체는 수행하지 않았다.

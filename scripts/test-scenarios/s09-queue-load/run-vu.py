@@ -43,7 +43,6 @@ parser.add_argument('--target', choices=['gateway', 'ticketing'], default='gatew
                     help='Route load through Gateway or call Ticketing directly with trusted test headers')
 parser.add_argument('--registration-only', action='store_true',
                     help='Measure Queue registration only; skip admission journey and existing integrity/recovery checks')
-parser.add_argument('--platform-mode', choices=['real', 'stub'], default='real')
 parser.add_argument('--spike-vus', type=int, choices=[1000, 2000, 10000], default=1000,
                     help='Explicit direct-registration capacity probe; original S09 remains 1000')
 parser.add_argument('--restart', choices=['none', 'gateway', 'apps'], default='none',
@@ -56,8 +55,6 @@ parser.add_argument('--cleanup-db-fixtures', action='store_true',
 args = parser.parse_args()
 if args.spike_vus != 1000 and not (args.mode == 'spike' and args.target == 'ticketing' and args.registration_only):
     raise SystemExit('--spike-vus above 1000 requires direct registration-only spike')
-if args.platform_mode == 'stub' and not (args.registration_only and args.target == 'ticketing'):
-    raise SystemExit('Stub is restricted to direct registration diagnostics')
 if args.mode == 'spike':
     args.vus, args.seconds = [args.spike_vus], 120
 elif args.mode == 'soak':
@@ -131,7 +128,7 @@ def metrics(port):
 
 def tcp_snapshot():
     result = {'at': time.time(), 'containers': {}}
-    for name in ['tikitaka-ticketing-service', 'tikitaka-platform-service']:
+    for name in ['tikitaka-ticketing-service']:
         identity = json.loads(cmd(['docker', 'inspect', name]))[0]
         lines = cmd(['docker', 'exec', name, 'cat', '/proc/net/netstat']).splitlines()
         counters = {}
@@ -145,32 +142,8 @@ def tcp_snapshot():
     return result
 
 
-def registration_metrics():
-    return {k: v for k, v in metrics(8082).items()
-            if k.startswith(('queue_registration_stage_seconds', 'queue_platform_'))}
 
 
-def registration_breakdown(before, after):
-    stages = {}
-    for key, value in after.items():
-        if not key.startswith('queue_registration_stage_seconds_count{'):
-            continue
-        stage = re.search(r'stage="([^"]+)"', key).group(1)
-        sum_key = key.replace('_count{', '_sum{', 1)
-        count = value - before.get(key, 0)
-        seconds = after[sum_key] - before.get(sum_key, 0)
-        stages[stage] = dict(count=count, totalSeconds=seconds,
-                             meanMs=seconds*1000/count if count > 0 else None)
-    total = stages.get('total', {}).get('totalSeconds', 0)
-    for stage, values in stages.items():
-        values['shareOfTotalTime'] = values['totalSeconds']/total if total > 0 else None
-    transport = {key: value-before.get(key, 0) for key, value in after.items()
-                 if key.startswith('queue_platform_transport_total')}
-    client = {key: value for key, value in after.items() if key.startswith('queue_platform_client_total')}
-    return dict(stages=stages, available=bool(stages), platformTransport=transport, platformClient=client,
-                note='Process-wide completed calls, including failures; isolate other registration traffic. '
-                     'total includes child stages. Sums are concurrent request-seconds, not test wall time. '
-                     'Service timing excludes TCP and servlet dispatch queues.')
 
 
 def collect_tomcat(stop, path):
@@ -189,17 +162,16 @@ def collect_tomcat(stop, path):
 
 
 def snapshot(sid, k6name=None):
-    targets = ['tikitaka-ticketing-service', 'tikitaka-platform-service', 'tikitaka-ticketing-redis']
+    targets = ['tikitaka-ticketing-service', 'tikitaka-ticketing-redis']
     if args.target == 'gateway':
-        targets.insert(0, 'tikitaka-gateway')
+        targets.extend(['tikitaka-gateway', 'tikitaka-platform-service'])
     if k6name:
         targets.append(k6name)
-    if args.platform_mode == 'stub':
-        targets.append('tikitaka-queue-platform-stub')
     p = subprocess.run(['docker', 'stats', '--no-stream', '--format', '{{json .}}', *targets],
                        capture_output=True, text=True, encoding='utf-8', timeout=20)
     stats = [json.loads(line) for line in p.stdout.splitlines() if line.startswith('{')]
-    m, platform = metrics(8082), metrics(8081)
+    m = metrics(8082)
+    platform = metrics(8081) if args.target == 'gateway' else {}
     gateway = metrics(8000) if args.target == 'gateway' else {}
     info = redis('INFO', 'stats') + '\n' + redis('INFO', 'memory') + '\n' + redis('INFO', 'commandstats')
     with socket.create_connection(('127.0.0.1', 6381), timeout=3) as connection:
@@ -274,9 +246,6 @@ def verify(sid, ids):
 QUERIES = {
  'up': 'up{job=~"gateway|ticketing-service|platform-service"}',
  'requests': 'sum by(job,uri,method,status)(rate(http_server_requests_seconds_count{job=~"gateway|ticketing-service|platform-service",uri!~"/actuator.*"}[1m]))',
- 'platformSalesStatusRps': 'sum(rate(http_server_requests_seconds_count{job="platform-service",uri="/api/v1/internal/event-sessions/{sessionId}/sales-status"}[1m]))',
- 'platformSalesStatusP95': 'histogram_quantile(0.95,sum by(le)(rate(http_server_requests_seconds_bucket{job="platform-service",uri="/api/v1/internal/event-sessions/{sessionId}/sales-status"}[1m])))',
- 'platformSalesStatusP99': 'histogram_quantile(0.99,sum by(le)(rate(http_server_requests_seconds_bucket{job="platform-service",uri="/api/v1/internal/event-sessions/{sessionId}/sales-status"}[1m])))',
  'waiting': 'queue_waiting_count{job="ticketing-service"}',
  'admission': 'rate(queue_admission_total{job="ticketing-service"}[1m])',
  'scheduler': 'rate(queue_scheduler_duration_seconds_sum{job="ticketing-service"}[1m])/rate(queue_scheduler_duration_seconds_count{job="ticketing-service"}[1m])',
@@ -354,12 +323,8 @@ ticketing_container = container_by_name['tikitaka-ticketing-service']
 platform_container = container_by_name['tikitaka-platform-service']
 ticketing_environment = env(ticketing_container)
 platform_route = ticketing_environment.get('CLIENTS_PLATFORM_SERVICE_URL', 'http://platform-service:8081')
-expected_route = 'http://queue-platform-stub:8081' if args.platform_mode == 'stub' else 'http://platform-service:8081'
-if args.target == 'ticketing' and platform_route != expected_route:
-    raise RuntimeError('Platform route and measurement mode do not match')
-if args.platform_mode == 'stub':
-    stub = json.loads(cmd(['docker','inspect','tikitaka-queue-platform-stub']))[0]
-    save(OUT/'platform-stub-environment.json', {'image':stub['Image'],'startedAt':stub['State']['StartedAt']})
+if args.target == 'ticketing' and platform_route != 'http://platform-service:8081':
+    raise RuntimeError('Direct registration requires the real Platform service; restore its route before running')
 platform_environment = env(platform_container)
 if ticketing_environment.get('INTERNAL_SERVICE_KEY') != platform_environment.get('INTERNAL_SERVICE_KEY'):
     raise RuntimeError('Ticketing/Platform INTERNAL_SERVICE_KEY mismatch; no fixtures or load started')
@@ -376,11 +341,11 @@ if args.target == 'gateway':
 else:
     secret_key = None
 save(OUT/'environment.json', {'branch':cmd(['git','branch','--show-current']), 'commit':cmd(['git','rev-parse','HEAD']),
+ 'mode':args.mode,'target':args.target,'registrationOnly':args.registration_only,
  'authentication':('Local fixture JWT through real Gateway' if args.target == 'gateway'
                    else 'Trusted X-User-Id/X-User-Role test headers; Gateway intentionally bypassed'),
  'images':[{'name':c['Name'],'image':c['Image'],'labels':c['Config'].get('Labels'),'restartCount':c['RestartCount'], 'startedAt':c['State']['StartedAt']} for c in containers],
  'restart':args.restart,'healthReadyAt':startup['readyAt'],
- 'mode':args.mode,'target':args.target,'registrationOnly':args.registration_only,'platformMode':args.platform_mode,
  'vus':args.vus,'seconds':args.seconds,'pollSeconds':args.poll_seconds,
  'startupSpreadSeconds':args.startup_spread_seconds,'heartbeatSeconds':15,'thinkSeconds':0.2,'k6':K6,
  'queueAdmissionsPerSecond':ticketing_environment.get('QUEUE_ADMISSIONS_PER_SECOND','application-default'),
@@ -406,17 +371,6 @@ for vus in args.vus:
     sid, seat = fixture()
     save(folder/'fixture.json',dict(sessionId=sid,seatId=seat))
     try:
-        if args.platform_mode == 'stub':
-            fixture_json = sql('tikitaka-platform-postgres', f"""SELECT json_build_object(
-                'sessionId',id,'sessionStatus',status,'salesOpenAt',sales_open_at,
-                'salesCloseAt',sales_close_at,'queueEnabled',queue_enabled)
-                FROM p_event_session WHERE id='{sid}';""")
-            cmd(['docker','exec','-i','tikitaka-queue-platform-stub','python','-c',
-                 "import sys,urllib.request; print(urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:8081/fixtures',data=sys.stdin.buffer.read(),headers={'Content-Type':'application/json'})).read().decode())"],fixture_json)
-            save(folder/'platform-stub-fixture.json',json.loads(fixture_json))
-            fault = json.loads(cmd(['docker','exec','tikitaka-queue-platform-stub','python','-c',
-                "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8081/fault').read().decode())"]))
-            save(folder/'platform-stub-fault.json', fault)
         # Verify the new offline fixture auth path once before any load; no fake user headers.
         fixture_token = token(user_ids[0], secret_key) if secret_key else None
         queue_port = 8082 if args.target == 'ticketing' else 8000
@@ -451,8 +405,6 @@ for vus in args.vus:
         before = snapshot(sid)
         save(folder/'baseline.json', before)
         if args.registration_only:
-            stage_before = registration_metrics()
-            save(folder/'registration-stages-before.json', stage_before)
             tcp_before = tcp_snapshot()
             save(folder/'tcp-before.json', tcp_before)
         with tempfile.TemporaryDirectory(prefix='private-',dir=folder) as private:
@@ -511,16 +463,6 @@ for vus in args.vus:
                         valid = valid and all(v >= 0 for v in delta.values())
                         deltas[name] = dict(valid=valid, delta=delta if valid else None)
                     save(folder/'tcp-delta.json', deltas)
-                    stage_after = registration_metrics()
-                    save(folder/'registration-stages-after.json', stage_after)
-                    breakdown = registration_breakdown(stage_before, stage_after)
-                    breakdown['sameProcess'] = deltas['tikitaka-ticketing-service']['valid']
-                    save(folder/'registration-breakdown.json', breakdown)
-                    if args.platform_mode == 'stub':
-                        counts = json.loads(cmd(['docker','exec','tikitaka-queue-platform-stub','python','-c',
-                            "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8081/counts').read().decode())"]))
-                        save(folder/'platform-stub-counts.json', {'sessionId':sid,'includingPreflight':counts.get(sid,0)})
-                    print('Registration stages:', json.dumps(breakdown), flush=True)
                 capture_observation(folder, 'registration-final-evidence', collect_registration_evidence)
             save(folder/'timing.json',dict(launch=start,processEnd=end,healthReadyAt=startup['readyAt'],readyToLoadSeconds=start-startup['readyAt']))
             if process.returncode != 0 and not args.registration_only:

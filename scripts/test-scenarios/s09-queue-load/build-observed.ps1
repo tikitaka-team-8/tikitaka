@@ -1,12 +1,5 @@
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '../../..')).Path
-$running = docker inspect tikitaka-ticketing-service | ConvertFrom-Json
-if ($LASTEXITCODE -ne 0) { throw 'Cannot preserve current Ticketing environment' }
-$preservedEnvironment = @{}
-foreach ($entry in @($running)[0].Config.Env) {
-    $parts = $entry.Split('=', 2)
-    $preservedEnvironment[$parts[0]] = $parts[1].Replace('$', '$$')
-}
 $revision = git -C $repo rev-parse HEAD
 if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve HEAD' }
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
@@ -22,13 +15,6 @@ foreach ($relative in $paths) {
     New-Item -ItemType Directory -Path (Split-Path $target) -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $repo $relative) -Destination $target -Recurse
 }
-# Instrument only the disposable source snapshot. Normal bootJar/production sources stay unchanged.
-$diagnosticPatch = Join-Path $PSScriptRoot 'diagnostics.patch'
-$snapshotRelative = "artifacts/queue-build/$stamp"
-git -C $repo apply --check --directory=$snapshotRelative -- $diagnosticPatch
-if ($LASTEXITCODE -ne 0) { throw 'Diagnostic patch does not match source; review instrumentation before building' }
-git -C $repo apply --directory=$snapshotRelative -- $diagnosticPatch
-if ($LASTEXITCODE -ne 0) { throw 'Diagnostic patch failed' }
 # All files come from this directory; prefix removal also works on Windows PowerShell 5.1.
 $snapshotPrefix = [IO.Path]::GetFullPath($snapshot).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
 $manifest = @(Get-ChildItem -LiteralPath $snapshot -File -Recurse | Sort-Object FullName | ForEach-Object {
@@ -50,18 +36,11 @@ services:
   ticketing-service:
     image: $image
 "@ | Set-Content -LiteralPath $override -Encoding utf8
-$environmentOverride = Join-Path ([IO.Path]::GetTempPath()) ('queue-build-env-' + [guid]::NewGuid().ToString() + '.json')
-try {
-@{services=@{'ticketing-service'=@{environment=$preservedEnvironment}}} |
-    ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $environmentOverride -Encoding UTF8
 docker compose --project-directory $repo `
     -f (Join-Path $repo 'docker-compose.yml') `
     -f (Join-Path $repo 'docker-compose.test.yml') `
-    -f $override -f $environmentOverride up -d --no-deps --no-build --wait --wait-timeout 120 ticketing-service
+    -f $override up -d --no-deps --no-build --wait --wait-timeout 120 ticketing-service
 if ($LASTEXITCODE -ne 0) { throw 'Observed Ticketing did not become healthy' }
-} finally {
-    if (Test-Path -LiteralPath $environmentOverride) { Remove-Item -LiteralPath $environmentOverride }
-}
 [ordered]@{ baseRevision = $revision; workingTree = $true; sourceSha256 = $hash; image = $image; snapshot = $snapshot } |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $snapshot 'build.json') -Encoding utf8
 Write-Host "Observed source snapshot: $snapshot"
