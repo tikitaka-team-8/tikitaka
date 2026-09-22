@@ -27,6 +27,7 @@ services:
 
   ticketing-service:
     environment:
+      SERVER_TOMCAT_MBEANREGISTRY_ENABLED: "true"
       # HTTP Histogram은 항상 활성화하고, S05 환경변수가 있을 때만 Payment 주소·Feign Timeout이 테스트 값으로 바뀐
       # JSON으로 paymentCreationClient Map key를 보존함
       SPRING_APPLICATION_JSON: >-
