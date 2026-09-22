@@ -1,0 +1,12 @@
+apiVersion: 1
+
+datasources:
+  # Grafana 시작 시 Loki 데이터소스 자동 등록
+  - name: Loki
+    uid: tikitaka-loki
+    type: loki
+    access: proxy
+    # Grafana와 Loki는 같은 Compose 네트워크(tikitaka-network)에 있으므로 서비스 이름을 사용
+    url: http://loki:3100
+    isDefault: false
+    editable: true

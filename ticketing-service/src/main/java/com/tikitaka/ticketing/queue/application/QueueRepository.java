@@ -42,6 +42,7 @@ public interface QueueRepository {
 
     Optional<String> findAdmissionTokenReference(UUID sessionId, long userId);
 
+    /** Creates WAITING state and registers the session for scheduling in one atomic operation. */
     Optional<QueueEntry> createWaitingEntryIfAbsent(
             UUID sessionId,
             long userId,

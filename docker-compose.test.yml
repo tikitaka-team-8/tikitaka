@@ -27,6 +27,7 @@ services:
 
   ticketing-service:
     environment:
+      SERVER_TOMCAT_MBEANREGISTRY_ENABLED: "true"
       # HTTP Histogram은 항상 활성화하고, S05 환경변수가 있을 때만 Payment 주소·Feign Timeout이 테스트 값으로 바뀐
       # JSON으로 paymentCreationClient Map key를 보존함
       SPRING_APPLICATION_JSON: >-
@@ -39,6 +40,12 @@ services:
 
       # S08 Reservation Consumer 장애·복구 테스트용 Listener 실행 여부
       RESERVATION_KAFKA_CONSUMER_AUTO_STARTUP: ${RESERVATION_KAFKA_CONSUMER_AUTO_STARTUP:-true}
+      # 좌석 목록 조회 캐시(seat.list.cache.*)의 on/off·TTL을 재빌드 없이 바꿔가며
+      # 성능 개선 전/후를 재현하기 위한 오버라이드 설정
+      #
+      # 환경변수를 안 주면 application.yaml의 기본값(enabled=true, ttl-seconds=2)이 그대로 적용됩니다.
+      SEAT_LIST_CACHE_ENABLED: ${SEAT_LIST_CACHE_ENABLED:-true}
+      SEAT_LIST_CACHE_TTL_SECONDS: ${SEAT_LIST_CACHE_TTL_SECONDS:-2}
 
   payment-notification-service:
     environment:
@@ -52,3 +59,5 @@ services:
 
       # S08 Notification Consumer 장애·복구 테스트용 Listener 실행 여부
       NOTIFICATION_KAFKA_CONSUMER_AUTO_STARTUP: ${NOTIFICATION_KAFKA_CONSUMER_AUTO_STARTUP:-true}
+
+
