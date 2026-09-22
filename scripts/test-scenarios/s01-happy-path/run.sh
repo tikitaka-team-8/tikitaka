@@ -209,7 +209,7 @@ EXTRA_HEADERS=(
 http GET "/api/v1/schedules/${SESSION_ID}/seats"
 assert_status 200 "좌석 목록 조회"
 SEAT_ID="$(jq --raw-output --argjson expectedPrice "$EXPECTED_PRICE" \
-  'first(.data.seats[]? | select(.price == $expectedPrice and .seatStatus == "AVAILABLE") | .scheduleSeatId) // empty' \
+  'first(.data[]? | select(.price == $expectedPrice and .seatStatus == "AVAILABLE") | .scheduleSeatId) // empty' \
   <<<"$HTTP_BODY")"
 if [[ -z "$SEAT_ID" ]]; then
   log_fail "좌석 목록에서 가격 ${EXPECTED_PRICE}원의 예매 가능한 좌석을 찾지 못했습니다."
@@ -229,7 +229,7 @@ EXTRA_HEADERS=(
   --header "Idempotency-Key: ${SEAT_HOLD_IDEMPOTENCY_KEY}"
 )
 http POST "/api/v1/schedules/${SESSION_ID}/seats/${SEAT_ID}/hold"
-assert_status 200 "좌석 선점"
+assert_status 201 "좌석 선점"
 SEAT_HOLD_ID="$(jq --raw-output '.data.seatHoldId // empty' <<<"$HTTP_BODY")"
 if [[ -z "$SEAT_HOLD_ID" ]]; then
   log_fail "좌석 선점 응답에서 seatHoldId를 찾지 못했습니다."
