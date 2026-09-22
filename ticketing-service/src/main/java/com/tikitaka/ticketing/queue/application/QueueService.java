@@ -87,7 +87,6 @@ public class QueueService implements QueueAdmissionValidator {
                 Duration.between(now, queueExpiresAt)
         );
         if (createdEntry.isPresent()) {
-            queueRepository.registerWaitingSession(sessionId);
             return createdEntry.get();
         }
 

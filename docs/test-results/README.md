@@ -18,7 +18,7 @@
 | S06 | 인증·인가·헤더 위조 | Gateway·Auth·User | 미작성 | 미실행 |
 | S07 | 공연 변경 정합성 | Event·Session | 미작성 | 미실행 |
 | S08 | Kafka·Consumer 장애 복구 | Reservation·Notification | [PASS · 완료](./S08-kafka-recovery/local-result.md) | 미실행 |
-| S09 | Queue 집중 부하 | Queue | [PASS · 완료](./S09-queue-load/local-result.md) | 미실행 |
+| S09 | Queue 집중 부하 | Queue | [PASS · 완료](./S09-queue-load/local-result.md) / [직접 호출·추가 진단](./S09-queue-load/direct-result.md) | 미실행 |
 | S10 | 전체 E2E 부하 | Infra | 미작성 | 미실행 |
 
 ## 결과 상태

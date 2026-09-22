@@ -324,7 +324,16 @@ Ticketing의 모든 공개 API는 Bearer 인증이 필요합니다.
 
 ### Seat와 Seat Hold
 
-좌석 목록 선택 Query: `section`, `grade`.
+좌석 목록 Query:
+
+| 파라미터 | 필수 | 기본값/검증 |
+| --- | --- | --- |
+| `section` | X | 구역 필터 |
+| `grade` | X | 좌석 등급 필터 |
+| `page` | X | 0 |
+| `size` | X | 50 |
+
+응답의 `data`에는 좌석 목록이, `meta`에는 페이지 정보가 포함됩니다.
 
 ```json
 {
