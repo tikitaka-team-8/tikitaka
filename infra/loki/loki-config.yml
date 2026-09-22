@@ -1,0 +1,34 @@
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  # 기본 gRPC 수신 한도(4MiB)보다 여유를 둬서, 부하테스트처럼 로그량이 몰릴 때
+  # loki4j 배치가 "message larger than max" 500 에러로 거절되는 것을 방지
+  grpc_server_max_recv_msg_size: 16777216
+  grpc_server_max_send_msg_size: 16777216
+
+limits_config:
+  # 위와 같은 이유로 ingestion 처리량 한도도 같이 넉넉하게
+  ingestion_rate_mb: 16
+  ingestion_burst_size_mb: 32
+
+common:
+  path_prefix: /loki
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+storage_config:
+  filesystem:
+    directory: /loki/chunks

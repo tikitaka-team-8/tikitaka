@@ -1,0 +1,34 @@
+<configuration>
+
+    <appender name="LOKI"
+              class="com.github.loki4j.logback.Loki4jAppender">
+
+        <http>
+            <url>http://loki:3100/loki/api/v1/push</url>
+        </http>
+
+        <!-- 배치가 Loki의 gRPC 수신 한도(기본 4MiB)를 넘지 않도록 여유있게 제한.
+             부하테스트처럼 로그량이 급증하는 상황에서 500 ResourceExhausted 방지 -->
+        <batch>
+            <maxItems>1000</maxItems>
+            <maxBytes>2097152</maxBytes>
+            <timeoutMs>5000</timeoutMs>
+        </batch>
+
+        <format>
+            <label>
+                <pattern>
+                    app=ticketing-service,host=${HOSTNAME}
+                </pattern>
+            </label>
+
+            <message class="com.github.loki4j.logback.JsonLayout"/>
+        </format>
+
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="LOKI"/>
+    </root>
+
+</configuration>
