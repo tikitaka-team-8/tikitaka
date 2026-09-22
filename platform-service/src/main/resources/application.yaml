@@ -1,6 +1,13 @@
 server:
   port: 8081
 
+springdoc:
+  paths-to-exclude: /api/v1/internal/**
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
 spring:
   application:
     name: platform-service

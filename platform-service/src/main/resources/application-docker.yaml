@@ -16,3 +16,7 @@ spring:
 clients:
   ticketing-service:
     url: http://ticketing-service:8082
+
+springdoc:
+  api-docs:
+    enabled: true

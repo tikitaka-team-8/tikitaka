@@ -18,3 +18,7 @@ clients:
     url: http://platform-service:8081
   payment-notification-service:
     url: http://payment-notification-service:8083
+
+springdoc:
+  api-docs:
+    enabled: true
