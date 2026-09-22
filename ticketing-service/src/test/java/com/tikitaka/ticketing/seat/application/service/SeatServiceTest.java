@@ -522,6 +522,67 @@ class SeatServiceTest {
     }
 
     @Test
+    void 만료된_HOLDING_선점을_처리하면_선점과_좌석을_해제한다() {
+
+        SeatHold seatHold = SeatHold.hold(
+                userId, scheduleSeatId, idempotencyKey,
+                Instant.parse("2026-09-04T03:00:00Z"),
+                Instant.parse("2026-09-04T03:10:00Z")
+        );
+        ScheduleSeat seat = mock(ScheduleSeat.class);
+        Instant expiredAt = Instant.parse("2026-09-04T03:11:00Z");
+
+        given(seatHoldRepository.findByIdForUpdate(seatHoldId)).willReturn(Optional.of(seatHold));
+        given(scheduleSeatRepository.findByIdForUpdate(scheduleSeatId)).willReturn(Optional.of(seat));
+        given(clock.instant()).willReturn(expiredAt);
+
+        seatService.expireHold(seatHoldId);
+
+        assertThat(seatHold.getHoldStatus()).isEqualTo(HoldStatus.RELEASED);
+        assertThat(seatHold.getReleaseReason()).isEqualTo(ReleaseReason.EXPIRED);
+        assertThat(seatHold.getReleasedAt()).isEqualTo(expiredAt);
+        then(seat).should().release();
+    }
+
+    @Test
+    void RESERVED_선점은_만료_처리해도_상태와_좌석을_유지한다() {
+
+        SeatHold seatHold = SeatHold.hold(
+                userId, scheduleSeatId, idempotencyKey,
+                Instant.parse("2026-09-04T03:00:00Z"),
+                Instant.parse("2026-09-04T03:10:00Z")
+        );
+        seatHold.reserve(Instant.parse("2026-09-04T03:09:59Z"));
+
+        given(seatHoldRepository.findByIdForUpdate(seatHoldId)).willReturn(Optional.of(seatHold));
+
+        seatService.expireHold(seatHoldId);
+
+        assertThat(seatHold.getHoldStatus()).isEqualTo(HoldStatus.RESERVED);
+        assertThat(seatHold.getReleaseReason()).isNull();
+        then(scheduleSeatRepository).should(never()).findByIdForUpdate(any());
+    }
+
+    @Test
+    void 만료되지_않은_HOLDING_선점은_만료_처리해도_상태와_좌석을_유지한다() {
+
+        SeatHold seatHold = SeatHold.hold(
+                userId, scheduleSeatId, idempotencyKey,
+                Instant.parse("2026-09-04T03:00:00Z"),
+                Instant.parse("2026-09-04T03:10:00Z")
+        );
+        Instant beforeExpiry = Instant.parse("2026-09-04T03:09:59Z");
+
+        given(seatHoldRepository.findByIdForUpdate(seatHoldId)).willReturn(Optional.of(seatHold));
+        given(clock.instant()).willReturn(beforeExpiry);
+
+        seatService.expireHold(seatHoldId);
+
+        assertThat(seatHold.getHoldStatus()).isEqualTo(HoldStatus.HOLDING);
+        then(scheduleSeatRepository).should(never()).findByIdForUpdate(any());
+    }
+
+    @Test
     void RESERVED_상태의_선점을_확정하면_판매완료로_전이된다() {
 
         SeatHold seatHold = SeatHold.hold(
