@@ -1,5 +1,6 @@
 package com.tikitaka.platform.event.presentation.dto.query;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
@@ -7,6 +8,7 @@ import org.springframework.data.domain.PageRequest;
 
 import java.util.UUID;
 
+@Schema(description = "공개 공연 목록 조회 조건")
 public record PublicEventListRequest(
 
     @Size(max = 200)
