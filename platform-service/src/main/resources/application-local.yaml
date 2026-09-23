@@ -16,3 +16,7 @@ spring:
 clients:
   ticketing-service:
     url: http://localhost:8082
+
+springdoc:
+  api-docs:
+    enabled: true

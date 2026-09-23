@@ -1,9 +1,11 @@
 package com.tikitaka.platform.user.presentation.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
+@Schema(description = "비밀번호 변경 요청")
 public record UserPasswordUpdateRequest(
         @NotBlank(message = "현재 비밀번호는 필수입니다.")
         String currentPassword,

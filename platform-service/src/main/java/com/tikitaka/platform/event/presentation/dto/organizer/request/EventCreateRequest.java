@@ -1,5 +1,6 @@
 package com.tikitaka.platform.event.presentation.dto.organizer.request;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -7,6 +8,7 @@ import jakarta.validation.constraints.Size;
 
 import java.util.UUID;
 
+@Schema(description = "공연 등록 요청")
 public record EventCreateRequest(
     @NotNull(message = "공연장 ID는 필수입니다.")
     UUID venueId,

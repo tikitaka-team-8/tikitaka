@@ -6,6 +6,10 @@ import com.tikitaka.paymentnotification.payment.application.PaymentService;
 import com.tikitaka.paymentnotification.payment.application.result.PaymentApproveResult;
 import com.tikitaka.paymentnotification.payment.application.result.PaymentDetailResult;
 import com.tikitaka.paymentnotification.payment.presentation.dto.*;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +24,8 @@ import java.util.UUID;
 @Validated
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/payments")
+@Tag(name = "Payment", description = "결제 API")
+@SecurityRequirement(name = "bearerAuth")
 public class PaymentController {
 
     private static final String USER_ID_HEADER = "X-User-Id";
@@ -31,9 +37,10 @@ public class PaymentController {
 
 
     @GetMapping("/{paymentId}")
+    @Operation(summary = "결제 상세 조회")
     public ResponseEntity<ApiResponse<PaymentDetailResponse>> getPaymentById(
             @PathVariable UUID paymentId,
-            @RequestHeader(USER_ID_HEADER) @Positive Long loginUserId
+            @Parameter(hidden = true) @RequestHeader(USER_ID_HEADER) @Positive Long loginUserId
     ) {
 
         PaymentDetailResult result = paymentService.getPaymentById(paymentId, loginUserId);
@@ -53,9 +60,10 @@ public class PaymentController {
 
 
     @PostMapping("/{paymentId}/approve")
+    @Operation(summary = "결제 승인")
     public ResponseEntity<ApiResponse<PaymentApproveResponse>> approvePayment(
             @PathVariable UUID paymentId,
-            @RequestHeader(USER_ID_HEADER) @Positive Long loginUserId,
+            @Parameter(hidden = true) @RequestHeader(USER_ID_HEADER) @Positive Long loginUserId,
             @Valid @RequestBody PaymentApproveRequest request
     ) {
         PaymentApproveResult result =
