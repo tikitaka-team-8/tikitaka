@@ -57,6 +57,7 @@ jobs:
           [[ "${bucket}" =~ ^[a-z0-9.-]+$ ]] || { echo 'S3 버킷 이름 형식이 올바르지 않습니다.' >&2; exit 1; }
 
           s3_prefix="s3://${bucket}/staging-data/releases/${DEPLOY_SHA}"
+          aws s3 cp scripts/deployment/staging-data/bootstrap.sh "${s3_prefix}/bootstrap.sh"
           aws s3 cp docker-compose.staging-data.yml "${s3_prefix}/docker-compose.staging-data.yml"
           aws s3 cp scripts/deployment/staging-data/deploy.sh "${s3_prefix}/deploy.sh"
 
@@ -68,8 +69,10 @@ jobs:
             '{commands:[
               "set -Eeuo pipefail",
               "install -d -m 0700 " + $directory,
+              "aws s3 cp " + $prefix + "/bootstrap.sh " + $directory + "/",
               "aws s3 cp " + $prefix + "/docker-compose.staging-data.yml " + $directory + "/",
               "aws s3 cp " + $prefix + "/deploy.sh " + $directory + "/",
+              "bash " + $directory + "/bootstrap.sh",
               "bash " + $directory + "/deploy.sh"
             ]}')"
 
