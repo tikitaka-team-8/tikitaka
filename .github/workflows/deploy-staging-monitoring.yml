@@ -1,0 +1,128 @@
+name: Deploy Staging Monitoring
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    concurrency:
+      group: staging-monitoring-deploy
+      cancel-in-progress: false
+    env:
+      AWS_REGION: ap-northeast-2
+      STAGING_DATA_STACK_NAME: tikitaka-staging-data
+      STAGING_MONITORING_STACK_NAME: tikitaka-staging-monitoring
+      DEPLOY_SHA: ${{ github.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Check deployer role configuration
+        env:
+          DEPLOYER_ROLE_ARN: ${{ vars.STAGING_MONITORING_DEPLOYER_ROLE_ARN }}
+        run: |
+          test -n "$DEPLOYER_ROLE_ARN" || { echo 'Set the STAGING_MONITORING_DEPLOYER_ROLE_ARN repository variable.' >&2; exit 1; }
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.STAGING_MONITORING_DEPLOYER_ROLE_ARN }}
+          role-session-name: staging-monitoring-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy monitoring containers
+        run: |
+          set -Eeuo pipefail
+
+          [[ "${DEPLOY_SHA}" =~ ^[0-9a-f]{40}$ ]] || { echo '배포 커밋 SHA 형식이 올바르지 않습니다.' >&2; exit 1; }
+
+          data_outputs="$(aws cloudformation describe-stacks \
+            --stack-name "${STAGING_DATA_STACK_NAME}" \
+            --query 'Stacks[0].Outputs' --output json)"
+          monitoring_outputs="$(aws cloudformation describe-stacks \
+            --stack-name "${STAGING_MONITORING_STACK_NAME}" \
+            --query 'Stacks[0].Outputs' --output json)"
+          output_value() {
+            local outputs="$1"
+            local key="$2"
+            jq -er --arg key "$key" '.[] | select(.OutputKey == $key) | .OutputValue' <<<"${outputs}"
+          }
+
+          bucket="$(output_value "${data_outputs}" StagingArtifactBucketName)"
+          instance_id="$(output_value "${monitoring_outputs}" MonitoringInstanceId)"
+          volume_id="$(output_value "${monitoring_outputs}" MonitoringDataVolumeId)"
+          [[ "${bucket}" =~ ^[a-z0-9.-]+$ ]] || { echo 'S3 버킷 이름 형식이 올바르지 않습니다.' >&2; exit 1; }
+          [[ "${instance_id}" =~ ^i-[0-9a-f]+$ ]] || { echo 'MonitoringInstanceId 형식이 올바르지 않습니다.' >&2; exit 1; }
+          [[ "${volume_id}" =~ ^vol-[0-9a-f]+$ ]] || { echo 'MonitoringDataVolumeId 형식이 올바르지 않습니다.' >&2; exit 1; }
+
+          s3_prefix="s3://${bucket}/staging-monitoring/releases/${DEPLOY_SHA}"
+          aws s3 cp scripts/deployment/staging-monitoring/bootstrap.sh "${s3_prefix}/bootstrap.sh"
+          aws s3 cp docker-compose.staging-monitoring.yml "${s3_prefix}/docker-compose.staging-monitoring.yml"
+          aws s3 cp infra/prometheus/prometheus-staging.yml "${s3_prefix}/infra/prometheus/prometheus-staging.yml"
+          aws s3 cp infra/grafana/staging-provisioning "${s3_prefix}/infra/grafana/staging-provisioning" --recursive
+          aws s3 cp infra/grafana/provisioning/dashboards/json "${s3_prefix}/infra/grafana/provisioning/dashboards/json" --recursive
+          aws s3 cp infra/grafana/alerting "${s3_prefix}/infra/grafana/alerting" --recursive
+          aws s3 cp scripts/deployment/staging-monitoring/deploy.sh "${s3_prefix}/deploy.sh"
+
+          remote_dir="/opt/tikitaka/staging-monitoring/releases/${DEPLOY_SHA}"
+          command_json="$(jq -nc \
+            --arg prefix "${s3_prefix}" \
+            --arg directory "${remote_dir}" \
+             --arg volume "${volume_id}" \
+            '{commands:[
+              "set -Eeuo pipefail",
+              "install -d -m 0700 " + $directory,
+              "aws s3 cp " + $prefix + "/ " + $directory + "/ --recursive",
+               "bash " + $directory + "/bootstrap.sh " + $volume,
+              "bash " + $directory + "/deploy.sh"
+            ]}')"
+
+          command_id="$(aws ssm send-command \
+            --instance-ids "${instance_id}" \
+            --document-name AWS-RunShellScript \
+            --comment "Staging monitoring deployment ${DEPLOY_SHA}" \
+            --parameters "${command_json}" \
+            --timeout-seconds 900 \
+            --query 'Command.CommandId' --output text)"
+          echo "SSM command: ${command_id}"
+
+          error_file="$(mktemp)"
+          trap 'rm -f "${error_file}"' EXIT
+          for ((attempt=1; attempt<=180; attempt++)); do
+            invocation="$(aws ssm get-command-invocation \
+              --command-id "${command_id}" --instance-id "${instance_id}" \
+              --output json 2>"${error_file}")" || {
+                if ! grep -q 'InvocationDoesNotExist' "${error_file}"; then
+                  cat "${error_file}" >&2
+                  exit 1
+                fi
+                sleep 10
+                continue
+              }
+            status="$(jq -r '.Status' <<<"${invocation}")"
+            case "${status}" in
+              Success)
+                jq -r '.StandardOutputContent' <<<"${invocation}"
+                echo "스테이징 모니터링 배포 완료: ${DEPLOY_SHA}" >> "$GITHUB_STEP_SUMMARY"
+                exit 0
+                ;;
+              Pending|InProgress|Delayed)
+                sleep 10
+                ;;
+              *)
+                jq -r '.StandardOutputContent, .StandardErrorContent' <<<"${invocation}" >&2
+                echo "SSM 배포 실패: ${status}" >&2
+                exit 1
+                ;;
+            esac
+          done
+
+          echo "SSM 배포 결과 확인 시간이 초과됐습니다. Command ID: ${command_id}" >&2
+          exit 1
