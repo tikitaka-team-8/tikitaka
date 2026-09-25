@@ -1,0 +1,178 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Tikitaka staging Prometheus and Grafana monitoring EC2
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC ID from the staging data stack
+  VpcCidr:
+    Type: String
+    Default: 10.92.0.0/16
+    AllowedPattern: '^(?:[0-9]{1,3}\.){3}[0-9]{1,3}/(?:[0-9]|[12][0-9]|3[0-2])$'
+    Description: Staging VPC CIDR used to restrict DNS and metric scrape egress
+  PublicSubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Public subnet ID from the staging data stack
+  StagingArtifactBucketName:
+    Type: String
+    MinLength: 1
+    AllowedPattern: '[a-z0-9][a-z0-9.-]+'
+    Description: StagingArtifactBucketName output from the staging data stack
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: Amazon Linux 2023 x86_64 AMI
+  MonitoringInstanceType:
+    Type: String
+    Default: t3.small
+    AllowedValues:
+      - t3.small
+      - t3.medium
+    Description: Start with t3.small and change to t3.medium if measured memory is insufficient
+  RootVolumeGiB:
+    Type: Number
+    Default: 12
+    MinValue: 8
+    MaxValue: 30
+    Description: Encrypted root volume for the operating system and Docker runtime
+  MonitoringDataVolumeGiB:
+    Type: Number
+    Default: 30
+    MinValue: 20
+    MaxValue: 200
+    Description: Retained encrypted gp3 volume for Prometheus and Grafana data
+
+Resources:
+  MonitoringSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Staging monitoring EC2 with no inbound access
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - Description: HTTPS for SSM, S3, package repositories, and container registries
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - Description: DNS over UDP to the staging VPC resolver
+          IpProtocol: udp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: !Ref VpcCidr
+        - Description: DNS over TCP to the staging VPC resolver
+          IpProtocol: tcp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: !Ref VpcCidr
+        - Description: Scrape the private Spring Boot management port
+          IpProtocol: tcp
+          FromPort: 9000
+          ToPort: 9000
+          CidrIp: !Ref VpcCidr
+      Tags:
+        - Key: Name
+          Value: tikitaka-staging-monitoring
+
+  MonitoringInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: ReadStagingMonitoringArtifactsAndSecrets
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: ListStagingMonitoringFiles
+                Effect: Allow
+                Action: s3:ListBucket
+                Resource: !Sub 'arn:${AWS::Partition}:s3:::${StagingArtifactBucketName}'
+                Condition:
+                  StringLike:
+                    s3:prefix: staging-monitoring/*
+              - Sid: ReadStagingMonitoringFiles
+                Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub 'arn:${AWS::Partition}:s3:::${StagingArtifactBucketName}/staging-monitoring/*'
+              - Sid: ReadStagingMonitoringSecrets
+                Effect: Allow
+                Action: ssm:GetParameter
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/monitoring/grafana-admin-username'
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/monitoring/grafana-admin-password'
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/monitoring/slack-webhook'
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/monitoring/slack-recipient'
+      Tags:
+        - Key: Name
+          Value: tikitaka-staging-monitoring
+
+  MonitoringInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref MonitoringInstanceRole
+
+  MonitoringInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: !Ref MonitoringInstanceType
+      IamInstanceProfile: !Ref MonitoringInstanceProfile
+      MetadataOptions:
+        HttpEndpoint: enabled
+        HttpTokens: required
+        HttpPutResponseHopLimit: 1
+      NetworkInterfaces:
+        - DeviceIndex: '0'
+          AssociatePublicIpAddress: true
+          DeleteOnTermination: true
+          GroupSet:
+            - !Ref MonitoringSecurityGroup
+          SubnetId: !Ref PublicSubnetId
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: !Ref RootVolumeGiB
+            VolumeType: gp3
+            Encrypted: true
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: tikitaka-staging-monitoring
+
+  MonitoringDataVolume:
+    Type: AWS::EC2::Volume
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      AvailabilityZone: !GetAtt MonitoringInstance.AvailabilityZone
+      Encrypted: true
+      Size: !Ref MonitoringDataVolumeGiB
+      Type: gp3
+      Tags:
+        - Key: Name
+          Value: tikitaka-staging-monitoring-data
+
+  MonitoringDataVolumeAttachment:
+    Type: AWS::EC2::VolumeAttachment
+    Properties:
+      Device: /dev/sdf
+      InstanceId: !Ref MonitoringInstance
+      VolumeId: !Ref MonitoringDataVolume
+
+Outputs:
+  MonitoringInstanceId:
+    Value: !Ref MonitoringInstance
+  MonitoringPrivateIp:
+    Value: !GetAtt MonitoringInstance.PrivateIp
+  MonitoringSecurityGroupId:
+    Value: !Ref MonitoringSecurityGroup
+  MonitoringDataVolumeId:
+    Value: !Ref MonitoringDataVolume
