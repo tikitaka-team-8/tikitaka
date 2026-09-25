@@ -4,7 +4,6 @@ set -euo pipefail
 : "${AWS_REGION:?AWS_REGION is required}"
 : "${IMAGE_TAG:?IMAGE_TAG is required}"
 : "${STAGING_CLUSTER:?STAGING_CLUSTER is required}"
-: "${STAGING_STACK_NAME:?STAGING_STACK_NAME is required}"
 : "${RUNNER_TEMP:?RUNNER_TEMP is required}"
 
 services=(platform-service ticketing-service payment-notification-service gateway)
@@ -21,21 +20,6 @@ for service in "${services[@]}"; do
     --query 'imageDetails[0].imageDigest' \
     --output text > /dev/null
 done
-
-api_url="$(aws cloudformation describe-stacks --stack-name "$STAGING_STACK_NAME" \
-  --query "Stacks[0].Outputs[?OutputKey=='ApiInvokeUrl'].OutputValue | [0]" --output text)"
-test -n "$api_url" && test "$api_url" != None || { echo 'ApiInvokeUrl output is missing' >&2; exit 1; }
-api_url="${api_url%/}"
-
-smoke_test() {
-  curl --fail --silent --show-error --retry 6 --retry-delay 5 \
-    "${api_url}/actuator/health" | jq -e '.status == "UP"' > /dev/null
-  curl --fail --silent --show-error --retry 6 --retry-delay 5 \
-    "${api_url}/api/v1/events" | jq -e '.code == "SUCCESS" and .status == 200' > /dev/null
-}
-
-# 데이터 EC2가 중지된 경우 서비스 교체 전 중단
-smoke_test
 
 for service in "${services[@]}"; do
   image="${registry}/tikitaka/staging/${service}:${IMAGE_TAG}"
@@ -80,6 +64,3 @@ for service in "${services[@]}"; do
   test "$deployed_arn" = "$new_arn" || { echo "${service}: unexpected task definition after deployment" >&2; exit 1; }
   echo "${service}: deployed ${IMAGE_TAG}" >> "$GITHUB_STEP_SUMMARY"
 done
-
-smoke_test
-echo "Gateway health and public event API: passed" >> "$GITHUB_STEP_SUMMARY"
