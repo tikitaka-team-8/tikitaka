@@ -3,6 +3,8 @@ package com.tikitaka.ticketing.queue.infrastructure;
 import com.tikitaka.ticketing.queue.application.QueueRepository;
 import com.tikitaka.ticketing.queue.application.QueueLeaveResult;
 import com.tikitaka.ticketing.queue.application.HeartbeatRefreshResult;
+import com.tikitaka.ticketing.queue.application.QueueReservationBindResult;
+import com.tikitaka.ticketing.queue.application.QueueReservationCompleteResult;
 import com.tikitaka.ticketing.queue.domain.AdmissionToken;
 import com.tikitaka.ticketing.queue.domain.AdmissionTokenStatus;
 import com.tikitaka.ticketing.queue.domain.QueueEntry;
@@ -533,6 +535,180 @@ class RedisQueueRepositoryTest {
         assertThat(queueRepository.findAdmissionToken(expiredToken.sessionId(), expiredToken.token())).isEmpty();
     }
 
+    @Test
+    void ENTERED_Entry에_예매를_최초_연결하고_같은_예매의_재호출은_멱등적으로_성공한다() {
+        UUID sessionId = UUID.randomUUID();
+        QueueEntry enteredEntry = createEnteredEntry(sessionId, 100L);
+        UUID reservationId = UUID.randomUUID();
+
+        assertThat(queueRepository.bindReservationFlow(sessionId, enteredEntry.userId(), reservationId))
+                .isEqualTo(QueueReservationBindResult.BOUND);
+        assertThat(queueRepository.bindReservationFlow(sessionId, enteredEntry.userId(), reservationId))
+                .isEqualTo(QueueReservationBindResult.BOUND);
+        assertThat(queueRepository.findEntry(sessionId, enteredEntry.userId()))
+                .get()
+                .extracting(QueueEntry::reservationId)
+                .isEqualTo(reservationId);
+    }
+
+    @Test
+    void 다른_예매가_연결된_Entry에는_예매를_중복_연결할_수_없다() {
+        UUID sessionId = UUID.randomUUID();
+        QueueEntry enteredEntry = createEnteredEntry(sessionId, 100L);
+        UUID reservationId = UUID.randomUUID();
+        UUID otherReservationId = UUID.randomUUID();
+
+        queueRepository.bindReservationFlow(sessionId, enteredEntry.userId(), reservationId);
+
+        assertThat(queueRepository.bindReservationFlow(sessionId, enteredEntry.userId(), otherReservationId))
+                .isEqualTo(QueueReservationBindResult.RESERVATION_CONFLICT);
+        assertThat(queueRepository.findEntry(sessionId, enteredEntry.userId()))
+                .get()
+                .extracting(QueueEntry::reservationId)
+                .isEqualTo(reservationId);
+    }
+
+    @Test
+    void ENTERED가_아닌_Entry에는_예매를_연결할_수_없다() {
+        UUID sessionId = UUID.randomUUID();
+        QueueEntry waitingEntry = createWaitingEntry(sessionId, 100L);
+
+        assertThat(queueRepository.bindReservationFlow(sessionId, waitingEntry.userId(), UUID.randomUUID()))
+                .isEqualTo(QueueReservationBindResult.NOT_ENTERED);
+    }
+
+    @Test
+    void 일치하는_예매로_완료하면_Entry를_EXPIRED로_전환하고_연결을_제거한다() {
+        UUID sessionId = UUID.randomUUID();
+        QueueEntry enteredEntry = createEnteredEntry(sessionId, 100L);
+        UUID reservationId = UUID.randomUUID();
+        Instant completedAt = Instant.parse("2026-09-01T01:20:00Z");
+        queueRepository.bindReservationFlow(sessionId, enteredEntry.userId(), reservationId);
+
+        assertThat(queueRepository.complete(sessionId, enteredEntry.userId(), reservationId, completedAt))
+                .isEqualTo(QueueReservationCompleteResult.COMPLETED);
+        assertThat(queueRepository.complete(sessionId, enteredEntry.userId(), reservationId, completedAt))
+                .isEqualTo(QueueReservationCompleteResult.ALREADY_COMPLETED);
+        assertThat(queueRepository.findEntry(sessionId, enteredEntry.userId()))
+                .get()
+                .satisfies(entry -> {
+                    assertThat(entry.status()).isEqualTo(QueueStatus.EXPIRED);
+                    assertThat(entry.reservationId()).isNull();
+                });
+    }
+
+    @Test
+    void 다른_예매의_완료는_현재_Entry를_변경하지_않는다() {
+        UUID sessionId = UUID.randomUUID();
+        QueueEntry enteredEntry = createEnteredEntry(sessionId, 100L);
+        UUID reservationId = UUID.randomUUID();
+        queueRepository.bindReservationFlow(sessionId, enteredEntry.userId(), reservationId);
+
+        assertThat(queueRepository.complete(sessionId, enteredEntry.userId(), UUID.randomUUID(), Instant.now()))
+                .isEqualTo(QueueReservationCompleteResult.CURRENT_RESERVATION_MISMATCH);
+        assertThat(queueRepository.findEntry(sessionId, enteredEntry.userId()))
+                .get()
+                .extracting(QueueEntry::status)
+                .isEqualTo(QueueStatus.ENTERED);
+    }
+
+    @Test
+    void 완료_후_재등록하면_새_SEQUENCE와_비어_있는_예매_연결로_WAITING을_생성한다() {
+        UUID sessionId = UUID.randomUUID();
+        QueueEntry enteredEntry = createEnteredEntry(sessionId, 100L);
+        UUID reservationId = UUID.randomUUID();
+        queueRepository.bindReservationFlow(sessionId, enteredEntry.userId(), reservationId);
+        queueRepository.complete(sessionId, enteredEntry.userId(), reservationId, Instant.now());
+
+        QueueEntry reenteredEntry = queueRepository.createWaitingEntryIfAbsent(
+                        sessionId,
+                        enteredEntry.userId(),
+                        Instant.parse("2026-09-01T01:21:00Z"),
+                        Instant.parse("2026-09-01T03:21:00Z"),
+                        SESSION_TTL
+                )
+                .orElseThrow();
+
+        assertThat(reenteredEntry.status()).isEqualTo(QueueStatus.WAITING);
+        assertThat(reenteredEntry.sequence()).isGreaterThan(enteredEntry.sequence());
+        assertThat(queueRepository.findEntry(sessionId, enteredEntry.userId()))
+                .get()
+                .satisfies(entry -> {
+                    assertThat(entry.status()).isEqualTo(QueueStatus.WAITING);
+                    assertThat(entry.admittedAt()).isNull();
+                    assertThat(entry.reservationId()).isNull();
+                });
+    }
+
+    @Test
+    void 이전_예매의_지연된_완료는_재등록된_새_Queue_흐름을_변경하지_않는다() {
+        UUID sessionId = UUID.randomUUID();
+        QueueEntry enteredEntry = createEnteredEntry(sessionId, 100L);
+        UUID reservationId = UUID.randomUUID();
+        queueRepository.bindReservationFlow(sessionId, enteredEntry.userId(), reservationId);
+        queueRepository.complete(sessionId, enteredEntry.userId(), reservationId, Instant.now());
+        QueueEntry reenteredEntry = queueRepository.createWaitingEntryIfAbsent(
+                        sessionId,
+                        enteredEntry.userId(),
+                        Instant.parse("2026-09-01T01:21:00Z"),
+                        Instant.parse("2026-09-01T03:21:00Z"),
+                        SESSION_TTL
+                )
+                .orElseThrow();
+
+        assertThat(queueRepository.complete(sessionId, reenteredEntry.userId(), reservationId, Instant.now()))
+                .isEqualTo(QueueReservationCompleteResult.STALE_FLOW);
+        assertThat(queueRepository.findEntry(sessionId, reenteredEntry.userId()))
+                .get()
+                .extracting(QueueEntry::status)
+                .isEqualTo(QueueStatus.WAITING);
+    }
+
+    @Test
+    void 이전_예매의_지연된_bind는_재등록된_새_ENTERED_흐름에_연결되지_않는다() {
+        UUID sessionId = UUID.randomUUID();
+        QueueEntry firstEnteredEntry = createEnteredEntry(sessionId, 100L);
+        UUID oldReservationId = UUID.randomUUID();
+        queueRepository.bindReservationFlow(sessionId, firstEnteredEntry.userId(), oldReservationId);
+        queueRepository.complete(sessionId, firstEnteredEntry.userId(), oldReservationId, Instant.now());
+
+        QueueEntry reenteredEntry = queueRepository.createWaitingEntryIfAbsent(
+                        sessionId,
+                        firstEnteredEntry.userId(),
+                        Instant.parse("2026-09-01T01:21:00Z"),
+                        Instant.parse("2026-09-01T03:21:00Z"),
+                        SESSION_TTL
+                )
+                .orElseThrow();
+        QueueEntry admittedEntry = reenteredEntry.admit(Instant.parse("2026-09-01T01:22:00Z"));
+        AdmissionToken newToken = admissionToken(sessionId, "new-token-100", reenteredEntry.userId());
+        assertThat(queueRepository.admitIfWaiting(admittedEntry, newToken, SESSION_TTL, Duration.ofMinutes(3)))
+                .isTrue();
+        assertThat(queueRepository.enterIfAdmissionTokenActive(admittedEntry.enter(), newToken)).isTrue();
+
+        assertThat(queueRepository.bindReservationFlow(sessionId, reenteredEntry.userId(), oldReservationId))
+                .isEqualTo(QueueReservationBindResult.STALE_FLOW);
+        assertThat(queueRepository.findEntry(sessionId, reenteredEntry.userId()))
+                .get()
+                .satisfies(entry -> {
+                    assertThat(entry.status()).isEqualTo(QueueStatus.ENTERED);
+                    assertThat(entry.reservationId()).isNull();
+                });
+    }
+
+    @Test
+    void reservation_연결이_없는_현재_ENTERED_Entry의_완료는_상태를_변경하지_않고_원인을_구분한다() {
+        UUID sessionId = UUID.randomUUID();
+        QueueEntry enteredEntry = createEnteredEntry(sessionId, 100L);
+
+        assertThat(queueRepository.complete(sessionId, enteredEntry.userId(), UUID.randomUUID(), Instant.now()))
+                .isEqualTo(QueueReservationCompleteResult.UNBOUND_CURRENT_ENTRY);
+        assertThat(queueRepository.findEntry(sessionId, enteredEntry.userId()))
+                .get()
+                .extracting(QueueEntry::status)
+                .isEqualTo(QueueStatus.ENTERED);
+    }
+
     private QueueEntry createWaitingEntry(UUID sessionId, long userId) {
         return queueRepository.createWaitingEntryIfAbsent(
                         sessionId,
@@ -542,6 +718,17 @@ class RedisQueueRepositoryTest {
                         SESSION_TTL
                 )
                 .orElseThrow();
+    }
+
+    private QueueEntry createEnteredEntry(UUID sessionId, long userId) {
+        QueueEntry waitingEntry = createWaitingEntry(sessionId, userId);
+        Instant admittedAt = Instant.parse("2026-09-01T01:01:00Z");
+        AdmissionToken token = admissionToken(sessionId, "token-" + userId, userId);
+        QueueEntry admittedEntry = waitingEntry.admit(admittedAt);
+        assertThat(queueRepository.admitIfWaiting(admittedEntry, token, SESSION_TTL, Duration.ofMinutes(3)))
+                .isTrue();
+        assertThat(queueRepository.enterIfAdmissionTokenActive(admittedEntry.enter(), token)).isTrue();
+        return admittedEntry.enter();
     }
 
     private AdmissionToken admissionToken(UUID sessionId, String token, long userId) {

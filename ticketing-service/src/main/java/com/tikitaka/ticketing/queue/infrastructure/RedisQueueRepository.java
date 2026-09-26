@@ -3,6 +3,8 @@ package com.tikitaka.ticketing.queue.infrastructure;
 import com.tikitaka.ticketing.queue.application.QueueRepository;
 import com.tikitaka.ticketing.queue.application.QueueLeaveResult;
 import com.tikitaka.ticketing.queue.application.HeartbeatRefreshResult;
+import com.tikitaka.ticketing.queue.application.QueueReservationBindResult;
+import com.tikitaka.ticketing.queue.application.QueueReservationCompleteResult;
 import com.tikitaka.ticketing.queue.domain.AdmissionToken;
 import com.tikitaka.ticketing.queue.domain.AdmissionTokenStatus;
 import com.tikitaka.ticketing.queue.domain.QueueEntry;
@@ -29,6 +31,7 @@ public class RedisQueueRepository implements QueueRepository {
     private static final String EXPIRES_AT_FIELD = "expiresAt";
     private static final String SESSION_ID_FIELD = "sessionId";
     private static final String USER_ID_FIELD = "userId";
+    private static final String RESERVATION_ID_FIELD = "reservationId";
     private static final String TOKEN_STATUS_FIELD = "status";
     // Per-session aggregate policy, independent of the scheduler's per-cycle batch size.
     private static final int ADMISSIONS_PER_SECOND = 50;
@@ -45,6 +48,7 @@ public class RedisQueueRepository implements QueueRepository {
                         'sequence', sequence,
                         'joinedAt', ARGV[2],
                         'expiresAt', ARGV[3])
+                    redis.call('HDEL', KEYS[1], 'admittedAt', 'reservationId')
                     redis.call('PEXPIRE', KEYS[1], ARGV[4])
                     redis.call('ZADD', KEYS[2], sequence, ARGV[1])
                     redis.call('PEXPIRE', KEYS[2], ARGV[4])
@@ -270,6 +274,82 @@ public class RedisQueueRepository implements QueueRepository {
                     """,
             Long.class
     );
+    private static final DefaultRedisScript<Long> BIND_RESERVATION_FLOW_SCRIPT = new DefaultRedisScript<>(
+            """
+                    if redis.call('EXISTS', KEYS[1]) == 0 then
+                        return 0
+                    end
+
+                    local currentSequence = redis.call('HGET', KEYS[1], 'sequence')
+                    local boundSequence = redis.call('HGET', KEYS[2], ARGV[1])
+                    if boundSequence and boundSequence ~= currentSequence then
+                        return 4
+                    end
+
+                    if redis.call('HGET', KEYS[1], 'status') ~= 'ENTERED' then
+                        return 2
+                    end
+
+                    local existingReservationId = redis.call('HGET', KEYS[1], 'reservationId')
+                    if not existingReservationId or existingReservationId == ARGV[1] then
+                        redis.call('HSET', KEYS[1], 'reservationId', ARGV[1])
+                        redis.call('HSET', KEYS[2], ARGV[1], currentSequence)
+                        local entryTtl = redis.call('PTTL', KEYS[1])
+                        if entryTtl > 0 then
+                            redis.call('PEXPIRE', KEYS[2], entryTtl)
+                        end
+                        return 1
+                    end
+
+                    return 3
+                    """,
+            Long.class
+    );
+    private static final DefaultRedisScript<Long> COMPLETE_RESERVATION_FLOW_SCRIPT = new DefaultRedisScript<>(
+            """
+                    if redis.call('EXISTS', KEYS[1]) == 0 then
+                        return 2
+                    end
+
+                    local currentSequence = redis.call('HGET', KEYS[1], 'sequence')
+                    local boundSequence = redis.call('HGET', KEYS[2], ARGV[1])
+                    if not boundSequence or boundSequence ~= currentSequence then
+                        local status = redis.call('HGET', KEYS[1], 'status')
+                        local currentReservationId = redis.call('HGET', KEYS[1], 'reservationId')
+                        if boundSequence and boundSequence ~= currentSequence then
+                            return 3
+                        end
+                        if status == 'ENTERED' and not currentReservationId then
+                            return 5
+                        end
+                        if status == 'ENTERED' and currentReservationId ~= ARGV[1] then
+                            return 6
+                        end
+                        return 2
+                    end
+
+                    local status = redis.call('HGET', KEYS[1], 'status')
+                    if status == 'EXPIRED' then
+                        return 4
+                    end
+                    if status ~= 'ENTERED' then
+                        return 2
+                    end
+                    if not redis.call('HGET', KEYS[1], 'reservationId') then
+                        return 5
+                    end
+                    if redis.call('HGET', KEYS[1], 'reservationId') ~= ARGV[1] then
+                        return 6
+                    end
+
+                    redis.call('HSET', KEYS[1],
+                        'status', 'EXPIRED',
+                        'expiresAt', ARGV[2])
+                    redis.call('HDEL', KEYS[1], 'reservationId')
+                    return 1
+                    """,
+            Long.class
+    );
 
     private final StringRedisTemplate redisTemplate;
 
@@ -295,7 +375,8 @@ public class RedisQueueRepository implements QueueRepository {
                 Long.parseLong(requiredValue(values, SEQUENCE_FIELD)),
                 Instant.parse(requiredValue(values, JOINED_AT_FIELD)),
                 optionalInstant(values.get(ADMITTED_AT_FIELD)),
-                optionalInstant(values.get(EXPIRES_AT_FIELD))
+                optionalInstant(values.get(EXPIRES_AT_FIELD)),
+                optionalUuid(values.get(RESERVATION_ID_FIELD))
         ));
     }
 
@@ -622,6 +703,53 @@ public class RedisQueueRepository implements QueueRepository {
     }
 
     @Override
+    public QueueReservationBindResult bindReservationFlow(UUID eventSessionId, long userId, UUID reservationId) {
+        Long result = redisTemplate.execute(
+                BIND_RESERVATION_FLOW_SCRIPT,
+                List.of(entryKey(eventSessionId, userId), reservationFlowKey(eventSessionId)),
+                reservationId.toString()
+        );
+        if (result == null) {
+            return QueueReservationBindResult.FAILED;
+        }
+        return switch (result.intValue()) {
+            case 1 -> QueueReservationBindResult.BOUND;
+            case 0 -> QueueReservationBindResult.ENTRY_NOT_FOUND;
+            case 2 -> QueueReservationBindResult.NOT_ENTERED;
+            case 3 -> QueueReservationBindResult.RESERVATION_CONFLICT;
+            case 4 -> QueueReservationBindResult.STALE_FLOW;
+            default -> QueueReservationBindResult.FAILED;
+        };
+    }
+
+    @Override
+    public QueueReservationCompleteResult complete(
+            UUID eventSessionId,
+            long userId,
+            UUID reservationId,
+            Instant completedAt
+    ) {
+        Long result = redisTemplate.execute(
+                COMPLETE_RESERVATION_FLOW_SCRIPT,
+                List.of(entryKey(eventSessionId, userId), reservationFlowKey(eventSessionId)),
+                reservationId.toString(),
+                completedAt.toString()
+        );
+        if (result == null) {
+            return QueueReservationCompleteResult.FAILED;
+        }
+        return switch (result.intValue()) {
+            case 1 -> QueueReservationCompleteResult.COMPLETED;
+            case 2 -> QueueReservationCompleteResult.NO_OP;
+            case 3 -> QueueReservationCompleteResult.STALE_FLOW;
+            case 4 -> QueueReservationCompleteResult.ALREADY_COMPLETED;
+            case 5 -> QueueReservationCompleteResult.UNBOUND_CURRENT_ENTRY;
+            case 6 -> QueueReservationCompleteResult.CURRENT_RESERVATION_MISMATCH;
+            default -> QueueReservationCompleteResult.FAILED;
+        };
+    }
+
+    @Override
     public void removeWaitingUser(UUID sessionId, long userId) {
         redisTemplate.opsForZSet().remove(waitingKey(sessionId), String.valueOf(userId));
         redisTemplate.opsForZSet().remove(waitingHeartbeatKey(sessionId), String.valueOf(userId));
@@ -674,6 +802,10 @@ public class RedisQueueRepository implements QueueRepository {
         return value == null ? null : Instant.parse(value.toString());
     }
 
+    private UUID optionalUuid(Object value) {
+        return value == null ? null : UUID.fromString(value.toString());
+    }
+
     private String optionalInstantValue(Instant value) {
         return value == null ? "" : value.toString();
     }
@@ -704,6 +836,10 @@ public class RedisQueueRepository implements QueueRepository {
 
     private String activeKey(UUID sessionId) {
         return "queue:active:{" + sessionId + "}";
+    }
+
+    private String reservationFlowKey(UUID sessionId) {
+        return "queue:reservation-flow:{" + sessionId + "}";
     }
 
     private String admissionTokenKey(UUID sessionId, String token) {
