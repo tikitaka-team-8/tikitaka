@@ -10,6 +10,10 @@ import com.tikitaka.platform.auth.presentation.dto.AuthReissueResponse;
 import com.tikitaka.platform.auth.presentation.dto.AuthSignupRequest;
 import com.tikitaka.platform.auth.presentation.dto.AuthSignupResponse;
 import com.tikitaka.platform.global.response.ApiResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -23,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/auth")
+@Tag(name = "Auth", description = "회원 인증 API")
 public class AuthController {
 
     private static final String SIGNUP_SUCCESS_MESSAGE = "회원가입이 완료되었습니다.";
@@ -32,6 +37,8 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/signup")
+    @Operation(summary = "회원가입")
+    @ApiResponses(@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "회원가입 성공"))
     public ResponseEntity<ApiResponse<AuthSignupResponse>> signUp(
             @Valid @RequestBody AuthSignupRequest request
     ) {
@@ -47,6 +54,7 @@ public class AuthController {
     }
 
     @PostMapping("/login")
+    @Operation(summary = "로그인")
     public ResponseEntity<ApiResponse<AuthLoginResponse>> login(
             @Valid @RequestBody AuthLoginRequest request
     ) {
@@ -60,6 +68,7 @@ public class AuthController {
     }
 
     @PostMapping("/reissue")
+    @Operation(summary = "인증 토큰 재발급")
     public ResponseEntity<ApiResponse<AuthReissueResponse>> reissue(
             @Valid @RequestBody AuthReissueRequest request
     ) {
@@ -73,6 +82,8 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
+    @Operation(summary = "로그아웃", security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses(@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "로그아웃 성공"))
     public ResponseEntity<Void> logout(
             @AuthenticationPrincipal AuthenticatedUser authenticatedUser,
             @Valid @RequestBody AuthLogoutRequest request

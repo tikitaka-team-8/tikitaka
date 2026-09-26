@@ -2,6 +2,9 @@ package com.tikitaka.platform.user.presentation;
 
 import com.tikitaka.platform.auth.infrastructure.security.AuthenticatedUser;
 import com.tikitaka.platform.global.response.ApiResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import com.tikitaka.platform.user.application.UserService;
 import com.tikitaka.platform.user.presentation.dto.UserPasswordUpdateRequest;
 import com.tikitaka.platform.user.presentation.dto.UserProfileResponse;
@@ -17,6 +20,8 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/users")
+@Tag(name = "User", description = "회원 정보 API")
+@SecurityRequirement(name = "bearerAuth")
 public class UserController {
 
     private static final String PROFILE_READ_SUCCESS_MESSAGE = "회원 정보를 조회했습니다.";
@@ -25,6 +30,7 @@ public class UserController {
     private final UserService userService;
 
     @GetMapping("/me")
+    @Operation(summary = "내 정보 조회")
     public ResponseEntity<ApiResponse<UserProfileResponse>> getMyProfile(
             @AuthenticationPrincipal AuthenticatedUser authenticatedUser
     ) {
@@ -38,6 +44,7 @@ public class UserController {
     }
 
     @PatchMapping("/me")
+    @Operation(summary = "내 정보 수정")
     public ResponseEntity<ApiResponse<UserProfileUpdateResponse>> updateProfile(
             @AuthenticationPrincipal AuthenticatedUser authenticatedUser,
             @Valid @RequestBody UserProfileUpdateRequest request
@@ -52,6 +59,7 @@ public class UserController {
     }
 
     @PutMapping("/me/password")
+    @Operation(summary = "비밀번호 변경")
     public ResponseEntity<Void> changePassword(
             @AuthenticationPrincipal AuthenticatedUser authenticatedUser,
             @Valid @RequestBody UserPasswordUpdateRequest request

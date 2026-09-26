@@ -4,6 +4,8 @@ import com.tikitaka.platform.event.application.EventSessionService;
 import com.tikitaka.platform.event.presentation.dto.query.PublicEventSessionDetailResponse;
 import com.tikitaka.platform.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,11 +18,13 @@ import java.util.UUID;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/events")
+@Tag(name = "Event Session", description = "공개 공연 회차 조회 API")
 public class EventSessionController {
 
   private final EventSessionService eventSessionService;
 
   @GetMapping("/{eventId}/sessions/{sessionId}")
+  @Operation(summary = "공개 공연 회차 상세 조회")
   public ResponseEntity<ApiResponse<PublicEventSessionDetailResponse>> getPublicEventSession(
       @PathVariable UUID eventId,
       @PathVariable UUID sessionId

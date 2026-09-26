@@ -3,6 +3,7 @@ package com.tikitaka.paymentnotification.payment.infrastructure;
 import com.tikitaka.paymentnotification.payment.application.gateway.PaymentQueryGateway;
 import com.tikitaka.paymentnotification.payment.application.gateway.PaymentQueryResult;
 import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -10,6 +11,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import static org.assertj.core.api.Assertions.assertThat;
 @Disabled("실제 Toss API 및 로컬 환경변수가 필요한 수동 통합 테스트")
+@Tag("integration")
 @SpringBootTest
 @ActiveProfiles("local")
 class TossPaymentGatewayIntegrationTest {

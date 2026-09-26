@@ -10,3 +10,16 @@ services:
     url: http://localhost:8082
   payment-notification:
     url: http://localhost:8083
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+    urls:
+      - name: Platform Service
+        url: /openapi/platform
+      - name: Ticketing Service
+        url: /openapi/ticketing
+      - name: Payment & Notification Service
+        url: /openapi/payment-notification

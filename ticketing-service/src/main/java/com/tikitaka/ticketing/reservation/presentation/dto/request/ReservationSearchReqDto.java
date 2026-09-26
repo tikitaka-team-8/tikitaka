@@ -1,5 +1,6 @@
 package com.tikitaka.ticketing.reservation.presentation.dto.request;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -8,6 +9,7 @@ import lombok.Setter;
 
 @Getter
 @Setter
+@Schema(description = "예매 목록 조회 조건")
 public class ReservationSearchReqDto {
 
     @Size(max = 200)

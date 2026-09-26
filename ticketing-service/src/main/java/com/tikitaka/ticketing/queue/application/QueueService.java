@@ -21,13 +21,16 @@ import java.net.SocketTimeoutException;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeoutException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.stereotype.Service;
 
 @Service
-public class QueueService implements QueueAdmissionValidator {
+public class QueueService implements QueueAdmissionValidator, QueueReservationFlow {
+    private static final Logger log = LoggerFactory.getLogger(QueueService.class);
     private final QueueRepository queueRepository;
     private final PlatformSalesStatusClient platformSalesStatusClient;
     private final QueueProperties queueProperties;
@@ -154,6 +157,61 @@ public class QueueService implements QueueAdmissionValidator {
                     .orElse(null)
                     : null;
             return new QueueStatusResult(entry, position, admissionToken);
+        } catch (RedisConnectionFailureException exception) {
+            throw new BusinessException(QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE);
+        }
+    }
+
+    @Override
+    public void bindReservationFlow(UUID eventSessionId, long userId, UUID reservationId) {
+        try {
+            QueueReservationBindResult result = queueRepository.bindReservationFlow(
+                    eventSessionId,
+                    userId,
+                    reservationId
+            );
+            switch (result) {
+                case BOUND -> {
+                    return;
+                }
+                case ENTRY_NOT_FOUND -> throw new BusinessException(QueueErrorCode.QUEUE_ENTRY_NOT_FOUND);
+                case NOT_ENTERED, RESERVATION_CONFLICT ->
+                        throw new BusinessException(QueueErrorCode.QUEUE_ENTRY_STATE_CONFLICT);
+                case STALE_FLOW -> log.debug(
+                        "이전 Queue 흐름의 예매 bind를 무시했습니다. sessionId={}, userId={}, reservationId={}",
+                        eventSessionId,
+                        userId,
+                        reservationId
+                );
+                case FAILED -> throw new BusinessException(QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE);
+            }
+        } catch (RedisConnectionFailureException exception) {
+            throw new BusinessException(QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE);
+        }
+    }
+
+    @Override
+    public void complete(UUID eventSessionId, long userId, UUID reservationId) {
+        try {
+            QueueReservationCompleteResult result = queueRepository.complete(
+                    eventSessionId,
+                    userId,
+                    reservationId,
+                    Instant.now(clock)
+            );
+            if (result == QueueReservationCompleteResult.FAILED) {
+                throw new BusinessException(QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE);
+            }
+            if (result == QueueReservationCompleteResult.UNBOUND_CURRENT_ENTRY
+                    || result == QueueReservationCompleteResult.CURRENT_RESERVATION_MISMATCH) {
+                log.warn(
+                        "현재 ENTERED Queue Entry와 예매 연결이 일치하지 않습니다. sessionId={}, userId={}, reservationId={}, result={}",
+                        eventSessionId,
+                        userId,
+                        reservationId,
+                        result
+                );
+            }
         } catch (RedisConnectionFailureException exception) {
             throw new BusinessException(QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE);
         }

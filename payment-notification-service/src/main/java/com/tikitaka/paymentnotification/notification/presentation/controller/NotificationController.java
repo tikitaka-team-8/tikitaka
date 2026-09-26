@@ -10,6 +10,10 @@ import com.tikitaka.paymentnotification.notification.application.service.Notific
 import com.tikitaka.paymentnotification.notification.presentation.dto.request.NotificationSearchReqDto;
 import com.tikitaka.paymentnotification.notification.presentation.dto.response.NotificationDetailResDto;
 import com.tikitaka.paymentnotification.notification.presentation.dto.response.NotificationSearchResDto;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import org.springframework.data.domain.Page;
@@ -31,6 +35,8 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/notifications")
+@Tag(name = "Notification", description = "사용자 알림 API")
+@SecurityRequirement(name = "bearerAuth")
 public class NotificationController {
     // TODO: 헤더 상수 사용으로 중복 코드 삭제
     private static final String USER_ID_HEADER = "X-User-Id";
@@ -43,9 +49,10 @@ public class NotificationController {
     }
 
     @GetMapping
+    @Operation(summary = "알림 목록 조회")
     public ResponseEntity<ApiResponse<List<NotificationSearchResDto>>> searchNotifications(
-            @RequestHeader(USER_ID_HEADER) Long loginUserId,
-            @RequestHeader(USER_ROLE_HEADER) @Pattern(regexp = "USER|ADMIN") String userRole,
+            @Parameter(hidden = true) @RequestHeader(USER_ID_HEADER) Long loginUserId,
+            @Parameter(hidden = true) @RequestHeader(USER_ROLE_HEADER) @Pattern(regexp = "USER|ADMIN") String userRole,
             @ModelAttribute NotificationSearchReqDto requestDto,
             @PageableDefault(page = 0, size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
 
@@ -69,9 +76,10 @@ public class NotificationController {
     }
 
     @PatchMapping("/{notificationId}/read")
+    @Operation(summary = "알림 읽음 처리")
     public ResponseEntity<ApiResponse<NotificationDetailResDto>> readNotification(
-            @RequestHeader(USER_ID_HEADER) @Positive Long loginUserId,
-            @RequestHeader(USER_ROLE_HEADER) @Pattern(regexp = "USER|ADMIN") String userRole,
+            @Parameter(hidden = true) @RequestHeader(USER_ID_HEADER) @Positive Long loginUserId,
+            @Parameter(hidden = true) @RequestHeader(USER_ROLE_HEADER) @Pattern(regexp = "USER|ADMIN") String userRole,
             @PathVariable UUID notificationId) {
 
         ReadNotificationCommand command = new ReadNotificationCommand(loginUserId, userRole, notificationId);

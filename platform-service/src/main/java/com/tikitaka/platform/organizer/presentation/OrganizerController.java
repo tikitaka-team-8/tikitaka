@@ -8,6 +8,10 @@ import com.tikitaka.platform.organizer.presentation.dto.OrganizerCreateResponse;
 import com.tikitaka.platform.organizer.presentation.dto.OrganizerDetailResponse;
 import com.tikitaka.platform.organizer.presentation.dto.OrganizerUpdateRequest;
 import jakarta.validation.Valid;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,11 +21,15 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/organizers")
+@Tag(name = "Organizer", description = "주최자 정보 API")
+@SecurityRequirement(name = "bearerAuth")
 public class OrganizerController {
 
   private final OrganizerService organizerService;
 
   @PostMapping
+  @Operation(summary = "주최자 등록")
+  @ApiResponses(@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "주최자 등록 성공"))
   public ResponseEntity<ApiResponse<OrganizerCreateResponse>> create(
       @AuthenticationPrincipal AuthenticatedUser user,
       @Valid @RequestBody OrganizerCreateRequest request
@@ -40,6 +48,7 @@ public class OrganizerController {
   }
 
   @GetMapping("/me")
+  @Operation(summary = "내 주최자 정보 조회")
   public ResponseEntity<ApiResponse<OrganizerDetailResponse>> getMyOrganizer(
       @AuthenticationPrincipal AuthenticatedUser user
   ) {
@@ -55,6 +64,7 @@ public class OrganizerController {
   }
 
   @PatchMapping("/me")
+  @Operation(summary = "내 주최자 정보 수정")
   public ResponseEntity<ApiResponse<OrganizerDetailResponse>> updateMyOrganizer(
       @AuthenticationPrincipal AuthenticatedUser user,
       @Valid @RequestBody OrganizerUpdateRequest request

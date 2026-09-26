@@ -60,6 +60,13 @@ public class GatewaySecurityConfig {
                                 "/actuator/health/**",
                                 "/actuator/prometheus"
                         ).permitAll()
+                        // Swagger UI - local, docker 프로파일 환경에서만 활성화
+                        .requestMatchers(
+                                "/swagger-ui.html",
+                                "/swagger-ui/**",
+                                "/v3/api-docs/**",
+                                "/openapi/**"
+                        ).permitAll()
                         // Auth API - 비로그인 사용자 접근 허용
                         .requestMatchers(HttpMethod.POST,
                                 "/api/v1/auth/signup",

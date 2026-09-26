@@ -90,6 +90,14 @@ class GatewaySecurityTest {
     }
 
     @Test
+    void 공개_OpenAPI_프록시는_토큰_없이_접근할_수_있다() {
+        ResponseEntity<String> response = restTemplate.getForEntity("/openapi/platform", String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(DOWNSTREAM_HEADERS.get()).isNotNull();
+    }
+
+    @Test
     void 보호_API에_유효하지_않은_JWT를_전달하면_접근을_거부한다() throws Exception {
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth("invalid-jwt");

@@ -14,6 +14,11 @@ import com.tikitaka.ticketing.reservation.presentation.dto.request.ReservationSe
 import com.tikitaka.ticketing.reservation.presentation.dto.response.CreateReservationResDto;
 import com.tikitaka.ticketing.reservation.presentation.dto.response.ReservationResDto;
 import com.tikitaka.ticketing.reservation.presentation.dto.response.ReservationSearchResDto;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -39,6 +44,8 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/reservations")
+@Tag(name = "Reservation", description = "예매 API")
+@SecurityRequirement(name = "bearerAuth")
 public class ReservationController {
     private static final String USER_ID_HEADER = "X-User-Id";
     private static final String USER_ROLE_HEADER = "X-User-Role";
@@ -50,9 +57,14 @@ public class ReservationController {
     }
 
     @PostMapping
+    @Operation(summary = "예매 생성")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "예매 생성 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "멱등 요청의 기존 예매 반환")
+    })
     public ResponseEntity<ApiResponse<CreateReservationResDto>> createReservation(
-            @RequestHeader(USER_ID_HEADER) Long loginUserId,
-            @RequestHeader(USER_ROLE_HEADER) @Pattern(regexp = "USER") String userRole,
+            @Parameter(hidden = true) @RequestHeader(USER_ID_HEADER) Long loginUserId,
+            @Parameter(hidden = true) @RequestHeader(USER_ROLE_HEADER) @Pattern(regexp = "USER") String userRole,
             @RequestHeader("Idempotency-Key") @NotBlank String idempotencyKey,
             @Valid @RequestBody CreateReservationReqDto requestDto) {
 
@@ -69,9 +81,10 @@ public class ReservationController {
     }
 
     @GetMapping
+    @Operation(summary = "예매 목록 조회")
     public ResponseEntity<ApiResponse<List<ReservationSearchResDto>>> searchReservations(
-            @RequestHeader(USER_ID_HEADER) @Positive Long loginUserId,
-            @RequestHeader(USER_ROLE_HEADER) @Pattern(regexp = "USER|ADMIN") String userRole,
+            @Parameter(hidden = true) @RequestHeader(USER_ID_HEADER) @Positive Long loginUserId,
+            @Parameter(hidden = true) @RequestHeader(USER_ROLE_HEADER) @Pattern(regexp = "USER|ADMIN") String userRole,
             @Valid @ModelAttribute ReservationSearchReqDto requestDto,
             @PageableDefault(page = 0, size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
 
@@ -93,9 +106,10 @@ public class ReservationController {
     }
 
     @GetMapping("/{reservationId}")
+    @Operation(summary = "예매 상세 조회")
     public ResponseEntity<ApiResponse<ReservationResDto>> getReservation(
-            @RequestHeader(USER_ID_HEADER) @Positive Long loginUserId,
-            @RequestHeader(USER_ROLE_HEADER) @Pattern(regexp = "USER|ADMIN") String userRole,
+            @Parameter(hidden = true) @RequestHeader(USER_ID_HEADER) @Positive Long loginUserId,
+            @Parameter(hidden = true) @RequestHeader(USER_ROLE_HEADER) @Pattern(regexp = "USER|ADMIN") String userRole,
             @PathVariable UUID reservationId) {
 
         GetReservationCommand command = new GetReservationCommand(loginUserId, userRole, reservationId);

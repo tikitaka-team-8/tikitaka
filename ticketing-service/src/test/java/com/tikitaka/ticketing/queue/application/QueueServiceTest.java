@@ -48,6 +48,8 @@ class QueueServiceTest {
     private static final UUID SESSION_ID = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
     private static final long USER_ID = 7L;
     private static final Instant NOW = Instant.parse("2026-09-01T01:00:00Z");
+    private static final UUID RESERVATION_ID = UUID.fromString("650e8400-e29b-41d4-a716-446655440000");
+    private static final UUID OTHER_RESERVATION_ID = UUID.fromString("750e8400-e29b-41d4-a716-446655440000");
 
     @Mock
     private QueueRepository queueRepository;
@@ -545,6 +547,66 @@ class QueueServiceTest {
                 () -> queueService.refreshWaitingHeartbeat(SESSION_ID, USER_ID),
                 QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE
         );
+    }
+
+    @Test
+    void ENTERED_Entry에_예매를_최초_연결한다() {
+        when(queueRepository.bindReservationFlow(SESSION_ID, USER_ID, RESERVATION_ID))
+                .thenReturn(QueueReservationBindResult.BOUND);
+
+        queueService.bindReservationFlow(SESSION_ID, USER_ID, RESERVATION_ID);
+
+        verify(queueRepository).bindReservationFlow(SESSION_ID, USER_ID, RESERVATION_ID);
+    }
+
+    @Test
+    void 다른_예매가_연결된_Entry에는_연결을_거부한다() {
+        when(queueRepository.bindReservationFlow(SESSION_ID, USER_ID, RESERVATION_ID))
+                .thenReturn(QueueReservationBindResult.RESERVATION_CONFLICT);
+
+        assertQueueError(
+                () -> queueService.bindReservationFlow(SESSION_ID, USER_ID, RESERVATION_ID),
+                QueueErrorCode.QUEUE_ENTRY_STATE_CONFLICT
+        );
+    }
+
+    @Test
+    void ENTERED가_아닌_Entry에는_예매_연결을_거부한다() {
+        when(queueRepository.bindReservationFlow(SESSION_ID, USER_ID, RESERVATION_ID))
+                .thenReturn(QueueReservationBindResult.NOT_ENTERED);
+
+        assertQueueError(
+                () -> queueService.bindReservationFlow(SESSION_ID, USER_ID, RESERVATION_ID),
+                QueueErrorCode.QUEUE_ENTRY_STATE_CONFLICT
+        );
+    }
+
+    @Test
+    void 일치하는_예매로_Queue_흐름을_완료한다() {
+        when(queueRepository.complete(SESSION_ID, USER_ID, RESERVATION_ID, NOW))
+                .thenReturn(QueueReservationCompleteResult.COMPLETED);
+
+        queueService.complete(SESSION_ID, USER_ID, RESERVATION_ID);
+
+        verify(queueRepository).complete(SESSION_ID, USER_ID, RESERVATION_ID, NOW);
+    }
+
+    @Test
+    void 이미_완료된_예매의_재호출은_멱등적으로_성공한다() {
+        when(queueRepository.complete(SESSION_ID, USER_ID, RESERVATION_ID, NOW))
+                .thenReturn(QueueReservationCompleteResult.NO_OP);
+
+        queueService.complete(SESSION_ID, USER_ID, RESERVATION_ID);
+    }
+
+    @Test
+    void 다른_예매의_지연된_완료는_현재_Queue_흐름을_변경하지_않고_성공한다() {
+        when(queueRepository.complete(SESSION_ID, USER_ID, OTHER_RESERVATION_ID, NOW))
+                .thenReturn(QueueReservationCompleteResult.NO_OP);
+
+        queueService.complete(SESSION_ID, USER_ID, OTHER_RESERVATION_ID);
+
+        verify(queueRepository).complete(SESSION_ID, USER_ID, OTHER_RESERVATION_ID, NOW);
     }
 
     private QueueEntry waitingEntry(long sequence) {

@@ -7,6 +7,8 @@ import com.tikitaka.platform.event.presentation.dto.query.PublicEventSummaryResp
 import com.tikitaka.platform.global.response.ApiResponse;
 import com.tikitaka.platform.global.response.PageMeta;
 import jakarta.validation.Valid;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
@@ -19,11 +21,13 @@ import java.util.UUID;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/events")
+@Tag(name = "Event", description = "공개 공연 조회 API")
 public class EventController {
 
   private final EventService eventService;
 
   @GetMapping
+  @Operation(summary = "공개 공연 목록 조회")
   public ResponseEntity<ApiResponse<List<PublicEventSummaryResponse>>> getPublicEvents(
       @Valid @ModelAttribute PublicEventListRequest request
   ) {
@@ -41,6 +45,7 @@ public class EventController {
   }
 
   @GetMapping("/{eventId}")
+  @Operation(summary = "공개 공연 상세 조회")
   public ResponseEntity<ApiResponse<PublicEventDetailResponse>> getPublicEvent(
       @PathVariable UUID eventId
   ) {

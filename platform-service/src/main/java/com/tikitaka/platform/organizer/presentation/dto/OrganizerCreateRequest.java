@@ -1,10 +1,12 @@
 package com.tikitaka.platform.organizer.presentation.dto;
 
 import com.tikitaka.platform.organizer.application.command.OrganizerCreateCommand;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+@Schema(description = "주최자 등록 요청")
 public record OrganizerCreateRequest(
     @NotBlank(message = "주최자명은 필수입니다.")
     @Size(max = 100, message = "주최자명은 100자 이하여야 합니다.")

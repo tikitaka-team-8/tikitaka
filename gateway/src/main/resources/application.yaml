@@ -69,6 +69,30 @@ spring:
               uri: ${services.payment-notification.url}
               predicates:
                 - Path=/api/v1/notifications/**
+            - id: platform-openapi
+              uri: ${services.platform.url}
+              predicates:
+                - Path=/openapi/platform
+              filters:
+                - SetPath=/v3/api-docs/platform
+            - id: ticketing-openapi
+              uri: ${services.ticketing.url}
+              predicates:
+                - Path=/openapi/ticketing
+              filters:
+                - SetPath=/v3/api-docs/ticketing
+            - id: payment-notification-openapi
+              uri: ${services.payment-notification.url}
+              predicates:
+                - Path=/openapi/payment-notification
+              filters:
+                - SetPath=/v3/api-docs/payment-notification
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
 
 auth:
   token:

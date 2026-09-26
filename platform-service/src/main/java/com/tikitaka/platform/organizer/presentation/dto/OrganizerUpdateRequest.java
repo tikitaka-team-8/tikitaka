@@ -1,10 +1,12 @@
 package com.tikitaka.platform.organizer.presentation.dto;
 
 import com.tikitaka.platform.organizer.application.command.OrganizerUpdateCommand;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
+@Schema(description = "주최자 정보 수정 요청")
 public record OrganizerUpdateRequest(
     @Size(max = 100)
     @Pattern(regexp = ".*\\S.*", message = "주최자명은 공백일 수 없습니다.")
