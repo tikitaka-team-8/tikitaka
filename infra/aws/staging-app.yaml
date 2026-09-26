@@ -302,7 +302,7 @@ Resources:
             - Name: JWT_SECRET
               ValueFrom: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/app/jwt-secret'
           HealthCheck:
-            Command: [CMD-SHELL, 'wget --spider --quiet http://localhost:9000/actuator/health']
+            Command: [CMD-SHELL, 'wget --spider --quiet http://localhost:9000/actuator/health || wget --spider --quiet http://localhost:8000/actuator/health']
             Interval: 30
             Timeout: 5
             Retries: 3
@@ -355,7 +355,7 @@ Resources:
             - Name: INTERNAL_SERVICE_KEY
               ValueFrom: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/app/internal-service-key'
           HealthCheck:
-            Command: [CMD-SHELL, 'wget --spider --quiet http://localhost:9000/actuator/health']
+            Command: [CMD-SHELL, 'wget --spider --quiet http://localhost:9000/actuator/health || wget --spider --quiet http://localhost:8081/actuator/health']
             Interval: 30
             Timeout: 5
             Retries: 3
@@ -404,7 +404,7 @@ Resources:
             - Name: INTERNAL_SERVICE_KEY
               ValueFrom: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/app/internal-service-key'
           HealthCheck:
-            Command: [CMD-SHELL, 'wget --spider --quiet http://localhost:9000/actuator/health']
+            Command: [CMD-SHELL, 'wget --spider --quiet http://localhost:9000/actuator/health || wget --spider --quiet http://localhost:8082/actuator/health']
             Interval: 30
             Timeout: 5
             Retries: 3
@@ -453,7 +453,7 @@ Resources:
             - Name: INTERNAL_SERVICE_KEY
               ValueFrom: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/app/internal-service-key'
           HealthCheck:
-            Command: [CMD-SHELL, 'wget --spider --quiet http://localhost:9000/actuator/health']
+            Command: [CMD-SHELL, 'wget --spider --quiet http://localhost:9000/actuator/health || wget --spider --quiet http://localhost:8083/actuator/health']
             Interval: 30
             Timeout: 5
             Retries: 3
