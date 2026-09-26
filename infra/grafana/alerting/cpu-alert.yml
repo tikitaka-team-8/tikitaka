@@ -1,0 +1,87 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: Service CPU
+    folder: Tikitaka
+    interval: 1m
+    rules:
+      - uid: tikitaka-service-cpu-high
+        title: Service process CPU usage is above 50 percent
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: tikitaka-prometheus
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: tikitaka-prometheus
+              editorMode: code
+              expr: process_cpu_usage
+              instant: true
+              intervalMs: 15000
+              legendFormat: '{{job}} {{instance}}'
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              conditions:
+                - evaluator:
+                    params: []
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              conditions:
+                - evaluator:
+                    params: [0.5]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [C]
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              refId: C
+              type: threshold
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        annotations:
+          description: '{{ $labels.job }}의 JVM 프로세스 CPU 사용률이 5분 동안 50%를 초과했습니다.'
+          summary: 'TIKITAKA 서비스 CPU 사용률 경고'
+        labels:
+          severity: warning
+          system: tikitaka

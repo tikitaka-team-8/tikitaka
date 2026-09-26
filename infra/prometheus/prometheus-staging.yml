@@ -1,0 +1,45 @@
+# AWS Cloud Map 사설 DNS 레코드를 통한 ECS 작업 자동 발견
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: gateway
+    metrics_path: /actuator/prometheus
+    dns_sd_configs:
+      - names:
+          - gateway.staging.tikitaka.internal
+        type: SRV
+        refresh_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: '(.+):[0-9]+'
+        target_label: __address__
+        replacement: '${1}:9000'
+
+  - job_name: platform-service
+    metrics_path: /actuator/prometheus
+    dns_sd_configs:
+      - names:
+          - platform-service.staging.tikitaka.internal
+        type: A
+        port: 9000
+        refresh_interval: 30s
+
+  - job_name: ticketing-service
+    metrics_path: /actuator/prometheus
+    dns_sd_configs:
+      - names:
+          - ticketing-service.staging.tikitaka.internal
+        type: A
+        port: 9000
+        refresh_interval: 30s
+
+  - job_name: payment-notification-service
+    metrics_path: /actuator/prometheus
+    dns_sd_configs:
+      - names:
+          - payment-notification-service.staging.tikitaka.internal
+        type: A
+        port: 9000
+        refresh_interval: 30s

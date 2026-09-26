@@ -11,8 +11,12 @@ services:
   payment-notification:
     url: ${PAYMENT_NOTIFICATION_SERVICE_URL}
 
+# 일반 API와 분리된 모니터링용 Actuator 관리 포트
+# health 및 Prometheus 메트릭 엔드포인트만 노출
 management:
+  server:
+    port: 9000
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus

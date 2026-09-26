@@ -14,6 +14,9 @@ Parameters:
     Type: AWS::EC2::SecurityGroup::Id
   PaymentTaskSecurityGroupId:
     Type: AWS::EC2::SecurityGroup::Id
+  MonitoringSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: MonitoringSecurityGroupId output from the staging monitoring stack
   DataPrivateIp:
     Type: String
     Description: Private IPv4 address from the staging data stack outputs
@@ -181,6 +184,39 @@ Resources:
       ToPort: 8083
       SourceSecurityGroupId: !Ref TicketingTaskSecurityGroupId
 
+  GatewayMetricsFromMonitoring:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref GatewayTaskSecurityGroup
+      IpProtocol: tcp
+      FromPort: 9000
+      ToPort: 9000
+      SourceSecurityGroupId: !Ref MonitoringSecurityGroupId
+  PlatformMetricsFromMonitoring:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref PlatformTaskSecurityGroupId
+      IpProtocol: tcp
+      FromPort: 9000
+      ToPort: 9000
+      SourceSecurityGroupId: !Ref MonitoringSecurityGroupId
+  TicketingMetricsFromMonitoring:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref TicketingTaskSecurityGroupId
+      IpProtocol: tcp
+      FromPort: 9000
+      ToPort: 9000
+      SourceSecurityGroupId: !Ref MonitoringSecurityGroupId
+  PaymentMetricsFromMonitoring:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref PaymentTaskSecurityGroupId
+      IpProtocol: tcp
+      FromPort: 9000
+      ToPort: 9000
+      SourceSecurityGroupId: !Ref MonitoringSecurityGroupId
+
   DiscoveryNamespace:
     Type: AWS::ServiceDiscovery::PrivateDnsNamespace
     Properties:
@@ -250,6 +286,7 @@ Resources:
           Essential: true
           PortMappings:
             - ContainerPort: 8000
+            - ContainerPort: 9000
           Environment:
             - Name: SPRING_PROFILES_ACTIVE
               Value: staging
@@ -265,7 +302,7 @@ Resources:
             - Name: JWT_SECRET
               ValueFrom: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/app/jwt-secret'
           HealthCheck:
-            Command: [CMD-SHELL, 'wget --spider --quiet http://localhost:8000/actuator/health']
+            Command: [CMD-SHELL, 'wget --spider --quiet http://localhost:9000/actuator/health || wget --spider --quiet http://localhost:8000/actuator/health']
             Interval: 30
             Timeout: 5
             Retries: 3
@@ -292,6 +329,7 @@ Resources:
           Essential: true
           PortMappings:
             - ContainerPort: 8081
+            - ContainerPort: 9000
           Environment:
             - Name: SPRING_PROFILES_ACTIVE
               Value: staging
@@ -317,7 +355,7 @@ Resources:
             - Name: INTERNAL_SERVICE_KEY
               ValueFrom: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/app/internal-service-key'
           HealthCheck:
-            Command: [CMD-SHELL, 'wget --spider --quiet http://localhost:8081/actuator/health']
+            Command: [CMD-SHELL, 'wget --spider --quiet http://localhost:9000/actuator/health || wget --spider --quiet http://localhost:8081/actuator/health']
             Interval: 30
             Timeout: 5
             Retries: 3
@@ -344,6 +382,7 @@ Resources:
           Essential: true
           PortMappings:
             - ContainerPort: 8082
+            - ContainerPort: 9000
           Environment:
             - Name: SPRING_PROFILES_ACTIVE
               Value: staging
@@ -365,7 +404,7 @@ Resources:
             - Name: INTERNAL_SERVICE_KEY
               ValueFrom: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/app/internal-service-key'
           HealthCheck:
-            Command: [CMD-SHELL, 'wget --spider --quiet http://localhost:8082/actuator/health']
+            Command: [CMD-SHELL, 'wget --spider --quiet http://localhost:9000/actuator/health || wget --spider --quiet http://localhost:8082/actuator/health']
             Interval: 30
             Timeout: 5
             Retries: 3
@@ -392,6 +431,7 @@ Resources:
           Essential: true
           PortMappings:
             - ContainerPort: 8083
+            - ContainerPort: 9000
           Environment:
             - Name: SPRING_PROFILES_ACTIVE
               Value: staging
@@ -413,7 +453,7 @@ Resources:
             - Name: INTERNAL_SERVICE_KEY
               ValueFrom: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tikitaka/staging/app/internal-service-key'
           HealthCheck:
-            Command: [CMD-SHELL, 'wget --spider --quiet http://localhost:8083/actuator/health']
+            Command: [CMD-SHELL, 'wget --spider --quiet http://localhost:9000/actuator/health || wget --spider --quiet http://localhost:8083/actuator/health']
             Interval: 30
             Timeout: 5
             Retries: 3

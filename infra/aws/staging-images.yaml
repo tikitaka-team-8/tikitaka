@@ -19,6 +19,10 @@ Parameters:
     Type: String
     AllowedPattern: 'i-[0-9a-f]+'
     Description: DataInstanceId output from the staging data stack
+  StagingMonitoringInstanceId:
+    Type: String
+    AllowedPattern: 'i-[0-9a-f]+'
+    Description: MonitoringInstanceId output from the staging monitoring stack
   StagingArtifactBucketName:
     Type: String
     MinLength: 1
@@ -163,11 +167,6 @@ Resources:
                 Condition:
                   StringEquals:
                     iam:PassedToService: ecs-tasks.amazonaws.com
-              - Sid: ReadStagingApiUrl
-                Effect: Allow
-                Action: cloudformation:DescribeStacks
-                Resource: !Sub 'arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/tikitaka-staging-app/*'
-
   StagingDataDeployerRole:
     Type: AWS::IAM::Role
     Properties:
@@ -209,6 +208,49 @@ Resources:
                 Action: ssm:GetCommandInvocation
                 Resource: '*'
 
+  StagingMonitoringDeployerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If
+                - CreateGitHubOidcProvider
+                - !Ref GitHubOidcProvider
+                - !Ref ExistingGitHubOidcProviderArn
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Ref GitHubOidcSubject
+      Policies:
+        - PolicyName: DeployStagingMonitoring
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: ReadStagingDeploymentStacks
+                Effect: Allow
+                Action: cloudformation:DescribeStacks
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/tikitaka-staging-data/*'
+                  - !Sub 'arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/tikitaka-staging-monitoring/*'
+              - Sid: UploadStagingMonitoringFiles
+                Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub 'arn:${AWS::Partition}:s3:::${StagingArtifactBucketName}/staging-monitoring/releases/*'
+              - Sid: RunStagingMonitoringCommand
+                Effect: Allow
+                Action: ssm:SendCommand
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}::document/AWS-RunShellScript'
+                  - !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/${StagingMonitoringInstanceId}'
+              - Sid: ReadStagingMonitoringCommandResult
+                Effect: Allow
+                Action: ssm:GetCommandInvocation
+                Resource: '*'
+
 Outputs:
   GatewayRepositoryUri:
     Value: !GetAtt GatewayRepository.RepositoryUri
@@ -224,6 +266,8 @@ Outputs:
     Value: !GetAtt StagingDeployerRole.Arn
   StagingDataDeployerRoleArn:
     Value: !GetAtt StagingDataDeployerRole.Arn
+  StagingMonitoringDeployerRoleArn:
+    Value: !GetAtt StagingMonitoringDeployerRole.Arn
   GitHubOidcProviderArn:
     Value: !If
       - CreateGitHubOidcProvider
