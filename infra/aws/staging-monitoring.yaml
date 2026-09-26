@@ -155,7 +155,7 @@ Resources:
       AvailabilityZone: !GetAtt MonitoringInstance.AvailabilityZone
       Encrypted: true
       Size: !Ref MonitoringDataVolumeGiB
-      Type: gp3
+      VolumeType: gp3
       Tags:
         - Key: Name
           Value: tikitaka-staging-monitoring-data
