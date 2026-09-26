@@ -65,6 +65,15 @@ public interface QueueRepository {
 
     boolean expireIfAdmitted(QueueEntry expiredEntry, Instant now);
 
+    QueueReservationBindResult bindReservationFlow(UUID eventSessionId, long userId, UUID reservationId);
+
+    QueueReservationCompleteResult complete(
+            UUID eventSessionId,
+            long userId,
+            UUID reservationId,
+            Instant completedAt
+    );
+
     void removeWaitingUser(UUID sessionId, long userId);
 
     void removeActiveUser(UUID sessionId, long userId);
