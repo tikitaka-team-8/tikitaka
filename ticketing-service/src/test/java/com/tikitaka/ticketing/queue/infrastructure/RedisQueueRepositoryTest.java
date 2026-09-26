@@ -10,6 +10,7 @@ import com.tikitaka.ticketing.queue.domain.AdmissionTokenStatus;
 import com.tikitaka.ticketing.queue.domain.QueueEntry;
 import com.tikitaka.ticketing.queue.domain.QueueStatus;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.data.redis.DataRedisTest;
 import org.springframework.context.annotation.Import;
@@ -30,8 +31,40 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @DataRedisTest
 @Import(RedisQueueRepository.class)
+@Tag("integration")
 @Testcontainers(disabledWithoutDocker = true)
 class RedisQueueRepositoryTest {
+    @Test
+    void concurrentCreationAndEmptyRegistryCleanupKeepOneEntryDiscoverable() throws Exception {
+        UUID session = UUID.randomUUID();
+        Instant now = Instant.now();
+        var start = new java.util.concurrent.CountDownLatch(1);
+        try (var executor = java.util.concurrent.Executors.newFixedThreadPool(16)) {
+            var futures = new java.util.ArrayList<java.util.concurrent.Future<Boolean>>();
+            for (int i = 0; i < 16; i++) {
+                boolean create = i % 2 == 0;
+                futures.add(executor.submit(() -> {
+                    start.await();
+                    if (create) {
+                        return queueRepository.createWaitingEntryIfAbsent(session, 100L, now,
+                                now.plus(SESSION_TTL), SESSION_TTL).isPresent();
+                    }
+                    queueRepository.removeWaitingSessionIfEmpty(session);
+                    return false;
+                }));
+            }
+            start.countDown();
+            int created = 0;
+            for (var future : futures) {
+                if (future.get(15, TimeUnit.SECONDS)) created++;
+            }
+            assertThat(created).isEqualTo(1);
+        }
+        assertThat(queueRepository.countWaitingUsers(session)).isEqualTo(1);
+        assertThat(queueRepository.findEntry(session, 100L).orElseThrow().sequence()).isEqualTo(1);
+        assertThat(queueRepository.findWaitingSessionIds()).contains(session);
+    }
+
     @Test
     void exhaustedQuotaKeepsWaitingAndDoesNotIssueTokenWhileOtherSessionCanAdmit() {
         UUID session = UUID.randomUUID();
@@ -155,6 +188,7 @@ class RedisQueueRepositoryTest {
 
         assertThat(createdEntry.sequence()).isEqualTo(1L);
         assertThat(createdAgain).isFalse();
+        assertThat(queueRepository.findWaitingSessionIds()).contains(sessionId);
         assertThat(queueRepository.findEntry(sessionId, userId)).contains(createdEntry);
         assertThat(redisTemplate.getExpire("queue:waiting:{" + sessionId + "}")).isPositive();
         assertThat(redisTemplate.getExpire("queue:sequence:{" + sessionId + "}")).isPositive();
@@ -168,8 +202,6 @@ class RedisQueueRepositoryTest {
         UUID sessionId = UUID.randomUUID();
         QueueEntry first = createWaitingEntry(sessionId, 100L);
         QueueEntry second = createWaitingEntry(sessionId, 200L);
-        queueRepository.registerWaitingSession(sessionId);
-
         assertThat(queueRepository.findWaitingSessionIds()).contains(sessionId);
         assertThat(queueRepository.findWaitingEntries(sessionId, 1)).containsExactly(first);
         assertThat(queueRepository.findWaitingPosition(sessionId, second.userId())).contains(2L);

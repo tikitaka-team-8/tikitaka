@@ -7,6 +7,10 @@ allprojects {
     group = 'com.tikitaka'
     version = '0.0.1-SNAPSHOT'
 
+    ext {
+        springdocOpenApiVersion = '2.9.0'
+    }
+
     repositories {
         mavenCentral()
     }
@@ -29,7 +33,30 @@ subprojects {
         }
     }
 
-    tasks.withType(Test).configureEach {
-        useJUnitPlatform()
+    // 외부 테스트 인프라가 필요하지 않은 테스트만 실행
+    tasks.named('test', Test) {
+        useJUnitPlatform {
+            excludeTags 'integration'
+        }
+    }
+
+    // PostgreSQL·Redis 등 외부 테스트 인프라가 필요한 통합 테스트만 실행
+    tasks.register('integrationTest', Test) {
+        description = 'Runs Docker and external infrastructure integration tests.'
+        group = 'verification'
+
+        testClassesDirs = sourceSets.test.output.classesDirs
+        classpath = sourceSets.test.runtimeClasspath
+
+        useJUnitPlatform {
+            includeTags 'integration'
+        }
+
+        shouldRunAfter tasks.named('test')
+    }
+
+    // build 시 일반 테스트와 통합 테스트를 모두 실행
+    tasks.named('check') {
+        dependsOn tasks.named('integrationTest')
     }
 }

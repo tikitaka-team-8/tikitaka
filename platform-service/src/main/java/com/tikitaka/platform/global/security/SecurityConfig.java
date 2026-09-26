@@ -49,6 +49,8 @@ public class SecurityConfig {
                                 "/actuator/health/**",
                                 "/actuator/prometheus"
                         ).permitAll()
+                        // local, docker 프로파일에서만 활성화되는 공개 OpenAPI JSON
+                        .requestMatchers("/v3/api-docs/**").permitAll()
                         // 내부 API - 서비스 키 필터를 통과한 요청만 접근 허용
                         .requestMatchers("/api/v1/internal/**").permitAll()
                         // 그 외 API - 인증된 사용자만 접근 허용

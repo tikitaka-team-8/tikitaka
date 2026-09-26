@@ -1,0 +1,118 @@
+name: Deploy Staging Data
+
+# 데이터 EC2의 Compose 변경은 필요할 때 develop에서 수동 실행
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    concurrency:
+      group: staging-data-deploy
+      cancel-in-progress: false
+    env:
+      AWS_REGION: ap-northeast-2
+      STAGING_DATA_STACK_NAME: tikitaka-staging-data
+      DEPLOY_SHA: ${{ github.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Check deployer role configuration
+        env:
+          DEPLOYER_ROLE_ARN: ${{ vars.STAGING_DATA_DEPLOYER_ROLE_ARN }}
+        run: |
+          test -n "$DEPLOYER_ROLE_ARN" || { echo 'Set the STAGING_DATA_DEPLOYER_ROLE_ARN repository variable.' >&2; exit 1; }
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.STAGING_DATA_DEPLOYER_ROLE_ARN }}
+          role-session-name: staging-data-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # 버전별 파일 게시 후 Systems Manager로 EC2의 Compose 실행
+      - name: Deploy data containers
+        run: |
+          set -Eeuo pipefail
+
+          [[ "${DEPLOY_SHA}" =~ ^[0-9a-f]{40}$ ]] || { echo '배포 커밋 SHA 형식이 올바르지 않습니다.' >&2; exit 1; }
+
+          stack_outputs="$(aws cloudformation describe-stacks \
+            --stack-name "${STAGING_DATA_STACK_NAME}" \
+            --query 'Stacks[0].Outputs' --output json)"
+          output_value() {
+            jq -er --arg key "$1" '.[] | select(.OutputKey == $key) | .OutputValue' <<<"${stack_outputs}"
+          }
+
+          instance_id="$(output_value DataInstanceId)"
+          bucket="$(output_value StagingArtifactBucketName)"
+          [[ "${instance_id}" =~ ^i-[0-9a-f]+$ ]] || { echo 'DataInstanceId 형식이 올바르지 않습니다.' >&2; exit 1; }
+          [[ "${bucket}" =~ ^[a-z0-9.-]+$ ]] || { echo 'S3 버킷 이름 형식이 올바르지 않습니다.' >&2; exit 1; }
+
+          s3_prefix="s3://${bucket}/staging-data/releases/${DEPLOY_SHA}"
+          aws s3 cp docker-compose.staging-data.yml "${s3_prefix}/docker-compose.staging-data.yml"
+          aws s3 cp scripts/deployment/staging-data/deploy.sh "${s3_prefix}/deploy.sh"
+
+          # 커밋별 디렉터리에서 실행해 배포 파일과 실행 기록을 구분
+          remote_dir="/opt/tikitaka/staging-data/releases/${DEPLOY_SHA}"
+          command_json="$(jq -nc \
+            --arg prefix "${s3_prefix}" \
+            --arg directory "${remote_dir}" \
+            '{commands:[
+              "set -Eeuo pipefail",
+              "install -d -m 0700 " + $directory,
+              "aws s3 cp " + $prefix + "/docker-compose.staging-data.yml " + $directory + "/",
+              "aws s3 cp " + $prefix + "/deploy.sh " + $directory + "/",
+              "bash " + $directory + "/deploy.sh"
+            ]}')"
+
+          command_id="$(aws ssm send-command \
+            --instance-ids "${instance_id}" \
+            --document-name AWS-RunShellScript \
+            --comment "Staging data deployment ${DEPLOY_SHA}" \
+            --parameters "${command_json}" \
+            --timeout-seconds 600 \
+            --query 'Command.CommandId' --output text)"
+          echo "SSM command: ${command_id}"
+
+          # SSM의 전파 지연과 실행 상태를 함께 처리
+          error_file="$(mktemp)"
+          trap 'rm -f "${error_file}"' EXIT
+          for ((attempt=1; attempt<=180; attempt++)); do
+            invocation="$(aws ssm get-command-invocation \
+              --command-id "${command_id}" --instance-id "${instance_id}" \
+              --output json 2>"${error_file}")" || {
+                if ! grep -q 'InvocationDoesNotExist' "${error_file}"; then
+                  cat "${error_file}" >&2
+                  exit 1
+                fi
+                sleep 10
+                continue
+              }
+            status="$(jq -r '.Status' <<<"${invocation}")"
+            case "${status}" in
+              Success)
+                jq -r '.StandardOutputContent' <<<"${invocation}"
+                echo "스테이징 데이터 배포 완료: ${DEPLOY_SHA}"
+                exit 0
+                ;;
+              Pending|InProgress|Delayed)
+                sleep 10
+                ;;
+              *)
+                jq -r '.StandardOutputContent, .StandardErrorContent' <<<"${invocation}" >&2
+                echo "SSM 배포 실패: ${status}" >&2
+                exit 1
+                ;;
+            esac
+          done
+
+          echo "SSM 배포 결과 확인 시간이 초과됐습니다. Command ID: ${command_id}" >&2
+          exit 1

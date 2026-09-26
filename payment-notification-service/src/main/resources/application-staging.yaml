@@ -1,0 +1,20 @@
+spring:
+  config:
+    activate:
+      on-profile: staging
+  datasource:
+    url: jdbc:postgresql://${STAGING_DATA_PRIVATE_IP}:5435/${PAYMENT_DB_NAME}
+    username: ${PAYMENT_DB_USERNAME}
+    password: ${PAYMENT_DB_PASSWORD}
+  kafka:
+    bootstrap-servers: ${STAGING_DATA_PRIVATE_IP}:9092
+
+clients:
+  ticketing-service:
+    url: ${TICKETING_SERVICE_URL}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

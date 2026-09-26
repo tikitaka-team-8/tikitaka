@@ -6,6 +6,9 @@ import com.tikitaka.platform.event.presentation.dto.SessionSectionPricesResponse
 import com.tikitaka.platform.event.presentation.dto.organizer.request.SessionSectionPricesCreateRequest;
 import com.tikitaka.platform.global.response.ApiResponse;
 import jakarta.validation.Valid;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,11 +20,14 @@ import java.util.UUID;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/organizers/me/events/{eventId}/sessions/{sessionId}/section-prices")
+@Tag(name = "Session Section Price", description = "공연 회차 구역별 가격 API")
+@SecurityRequirement(name = "bearerAuth")
 public class SessionSectionPriceController {
 
   private final SessionSectionPriceService sessionSectionPriceService;
 
   @PutMapping
+  @Operation(summary = "회차 구역별 가격 설정")
   public ResponseEntity<ApiResponse<SessionSectionPricesResponse>> createSectionPrice(
       @AuthenticationPrincipal AuthenticatedUser user,
       @PathVariable UUID eventId,
@@ -46,6 +52,7 @@ public class SessionSectionPriceController {
   }
 
   @GetMapping
+  @Operation(summary = "회차 구역별 가격 조회")
   public ResponseEntity<ApiResponse<SessionSectionPricesResponse>> getSectionPrices(
       @AuthenticationPrincipal AuthenticatedUser user,
       @PathVariable UUID eventId,

@@ -1,6 +1,13 @@
 server:
   port: 8082
 
+springdoc:
+  paths-to-exclude: /api/v1/internal/**
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
 spring:
   application:
     name: ticketing-service
@@ -40,6 +47,14 @@ queue:
   expiration-batch-size: 50
   waiting-heartbeat-timeout: PT2M
   admission-interval: PT1S
+
+# 좌석 목록 조회 캐시 - 테스트 조건에 따라 바뀌는 값이라 환경변수로 오버라이드한다.
+# (SEAT_LIST_CACHE_ENABLED / SEAT_LIST_CACHE_TTL_SECONDS, docker-compose.test.yml 참고)
+seat:
+  list:
+    cache:
+      enabled: ${SEAT_LIST_CACHE_ENABLED:true}
+      ttl-seconds: ${SEAT_LIST_CACHE_TTL_SECONDS:2}
 
 management:
   endpoints:

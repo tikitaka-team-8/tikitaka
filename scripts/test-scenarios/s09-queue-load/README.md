@@ -82,3 +82,19 @@ runner는 실행 회차의 Redis 키와 registry 항목을 정리하고 임시 J
 
 세부 버전 보존, 데이터 조건과 제한 사항은
 [재현 문서](../../../docs/test-results/S09-queue-load/reproduction.md)를 참고한다.
+
+
+## Queue API 직접 호출
+
+이미 기동한 공통 테스트 환경에서 실제 Platform 판매 상태 조회를 포함한 Queue 등록 API를 호출한다.
+실행기는 서비스 이미지·연결 설정·Platform 주소를 변경하거나 컨테이너를 재생성하지 않는다.
+기본 부하는 1,000 VU, 요청 timeout 5초다. 테스트 fixture를 생성하고 종료 시 해당 데이터만 정리한다.
+
+```powershell
+.\scripts\test-scenarios\s09-queue-load\run-ticketing-direct-spike.ps1
+```
+
+모니터링 설정은 `docker-compose.test.yml`에서 관리한다. 필요한 공통 환경은 별도로 기동한다.
+Platform stub·장애 주입·Feign 계측·진단 이미지 생성 추가 기능은 제출 범위에서 제거했다.
+과거 실험 조건과 수치는 [직접 호출 결과](../../../docs/test-results/S09-queue-load/direct-result.md)에 남긴다.
+이번 직접 호출 결과를 과거의 계측 실험과 동일한 빌드로 측정한 결과로 간주하지 않는다.

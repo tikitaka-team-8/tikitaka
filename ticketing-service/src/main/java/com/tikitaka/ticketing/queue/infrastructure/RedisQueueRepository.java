@@ -55,6 +55,7 @@ public class RedisQueueRepository implements QueueRepository {
                     redis.call('PEXPIRE', KEYS[3], ARGV[4])
                     redis.call('ZADD', KEYS[4], ARGV[5], ARGV[1])
                     redis.call('PEXPIRE', KEYS[4], ARGV[4])
+                    redis.call('SADD', KEYS[5], ARGV[6])
                     return sequence
                     """,
             Long.class
@@ -575,12 +576,14 @@ public class RedisQueueRepository implements QueueRepository {
     ) {
         Long sequence = redisTemplate.execute(
                 CREATE_WAITING_ENTRY_SCRIPT,
-                List.of(entryKey(sessionId, userId), waitingKey(sessionId), sequenceKey(sessionId), waitingHeartbeatKey(sessionId)),
+                List.of(entryKey(sessionId, userId), waitingKey(sessionId), sequenceKey(sessionId),
+                        waitingHeartbeatKey(sessionId), waitingSessionRegistryKey()),
                 String.valueOf(userId),
                 joinedAt.toString(),
                 expiresAt.toString(),
                 String.valueOf(sessionTtl.toMillis()),
-                String.valueOf(joinedAt.toEpochMilli())
+                String.valueOf(joinedAt.toEpochMilli()),
+                sessionId.toString()
         );
         if (sequence == null || sequence == 0L) {
             return Optional.empty();

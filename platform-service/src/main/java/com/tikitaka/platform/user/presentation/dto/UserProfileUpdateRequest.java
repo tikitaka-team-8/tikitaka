@@ -1,9 +1,11 @@
 package com.tikitaka.platform.user.presentation.dto;
 
 import com.tikitaka.platform.user.presentation.validation.ValidUserProfileUpdateRequest;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Size;
 
 @ValidUserProfileUpdateRequest
+@Schema(description = "내 정보 수정 요청")
 public class UserProfileUpdateRequest {
 
     @Size(min = 1, max = 50, message = "이름은 1자 이상 50자 이하여야 합니다.")

@@ -93,6 +93,7 @@ class QueueServiceTest {
         QueueEntry result = queueService.enterQueue(SESSION_ID, USER_ID);
 
         assertThat(result).isEqualTo(createdEntry);
+        verify(queueRepository, never()).registerWaitingSession(SESSION_ID);
     }
 
     @Test
