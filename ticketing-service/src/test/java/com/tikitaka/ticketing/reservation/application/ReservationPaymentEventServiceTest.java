@@ -4,6 +4,7 @@ import com.tikitaka.ticketing.global.exception.BusinessException;
 import com.tikitaka.ticketing.global.exception.CommonErrorCode;
 import com.tikitaka.ticketing.reservation.application.command.PaymentFailedCommand;
 import com.tikitaka.ticketing.reservation.application.command.PaymentSucceededCommand;
+import com.tikitaka.ticketing.reservation.application.result.ReservationPaymentEventResult;
 import com.tikitaka.ticketing.reservation.domain.entity.Reservation;
 import com.tikitaka.ticketing.reservation.domain.entity.ReservationInbox;
 import com.tikitaka.ticketing.reservation.domain.enums.ReservationFailureReason;
@@ -64,14 +65,15 @@ class ReservationPaymentEventServiceTest {
         Reservation reservation = createPaymentProcessingReservation();
         PaymentSucceededCommand command = createPaymentSucceededCommand(EVENT_ID, AMOUNT);
 
-        given(reservationInboxRepositoryPort.existsByEventId(EVENT_ID)).willReturn(false);
         given(reservationRepositoryPort.findById(RESERVATION_ID)).willReturn(Optional.of(reservation));
 
         // when
-        boolean statusChanged = reservationPaymentEventService.processPaymentSucceeded(command);
+        ReservationPaymentEventResult result = reservationPaymentEventService.processPaymentSucceeded(command);
 
         // then
-        assertThat(statusChanged).isTrue();
+        assertThat(result.statusChanged()).isTrue();
+        assertThat(result.eventSessionId()).isEqualTo(EVENT_SESSION_ID);
+        assertThat(result.userId()).isEqualTo(USER_ID);
         assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.CONFIRMED);
         assertThat(reservation.getPaymentCompletedAt()).isEqualTo(APPROVED_AT);
         assertThat(reservation.getUpdatedBy()).isZero();
@@ -95,10 +97,12 @@ class ReservationPaymentEventServiceTest {
         given(reservationRepositoryPort.findById(RESERVATION_ID)).willReturn(Optional.of(reservation));
 
         // when
-        boolean statusChanged = reservationPaymentEventService.processPaymentFailed(command);
+        ReservationPaymentEventResult result = reservationPaymentEventService.processPaymentFailed(command);
 
         // then
-        assertThat(statusChanged).isTrue();
+        assertThat(result.statusChanged()).isTrue();
+        assertThat(result.eventSessionId()).isEqualTo(EVENT_SESSION_ID);
+        assertThat(result.userId()).isEqualTo(USER_ID);
         assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.FAILED);
         assertThat(reservation.getFailureReason()).isEqualTo(ReservationFailureReason.PAYMENT_FAILED);
         assertThat(reservation.getUpdatedBy()).isZero();
@@ -111,17 +115,20 @@ class ReservationPaymentEventServiceTest {
     }
 
     @Test
-    void 이미_처리한_eventId이면_예매를_조회하거나_다시_처리하지_않는다() {
+    void 이미_처리한_eventId이면_상태는_변경하지_않고_Queue_완료_문맥을_반환한다() {
         // given
+        Reservation reservation = createPaymentProcessingReservation();
         PaymentSucceededCommand command = createPaymentSucceededCommand(EVENT_ID, AMOUNT);
+        given(reservationRepositoryPort.findById(RESERVATION_ID)).willReturn(Optional.of(reservation));
         given(reservationInboxRepositoryPort.existsByEventId(EVENT_ID)).willReturn(true);
 
         // when
-        boolean statusChanged = reservationPaymentEventService.processPaymentSucceeded(command);
+        ReservationPaymentEventResult result = reservationPaymentEventService.processPaymentSucceeded(command);
 
         // then
-        assertThat(statusChanged).isFalse();
-        verifyNoInteractions(reservationRepositoryPort);
+        assertThat(result.statusChanged()).isFalse();
+        assertThat(result.reservationId()).isEqualTo(RESERVATION_ID);
+        assertThat(result.eventSessionId()).isEqualTo(EVENT_SESSION_ID);
         verifyNoInteractions(reservationOutboxService);
         verify(reservationInboxRepositoryPort, never()).save(any());
     }
@@ -137,10 +144,10 @@ class ReservationPaymentEventServiceTest {
         given(reservationRepositoryPort.findById(RESERVATION_ID)).willReturn(Optional.of(reservation));
 
         // when
-        boolean statusChanged = reservationPaymentEventService.processPaymentFailed(command);
+        ReservationPaymentEventResult result = reservationPaymentEventService.processPaymentFailed(command);
 
         // then
-        assertThat(statusChanged).isFalse();
+        assertThat(result.statusChanged()).isFalse();
         assertThat(reservation.getReservationStatus()).isEqualTo(ReservationStatus.CONFIRMED);
         assertThat(reservation.getFailureReason()).isNull();
         verifyNoInteractions(reservationOutboxService);
@@ -153,7 +160,6 @@ class ReservationPaymentEventServiceTest {
         Reservation reservation = createPaymentProcessingReservation();
         PaymentSucceededCommand command = createPaymentSucceededCommand(EVENT_ID, AMOUNT + 1_000L);
 
-        given(reservationInboxRepositoryPort.existsByEventId(EVENT_ID)).willReturn(false);
         given(reservationRepositoryPort.findById(RESERVATION_ID)).willReturn(Optional.of(reservation));
 
         // when

@@ -9,6 +9,7 @@ import com.tikitaka.ticketing.reservation.domain.model.PaymentCreationInfo;
 import com.tikitaka.ticketing.reservation.domain.model.ReservationEventSessionInfo;
 import com.tikitaka.ticketing.reservation.domain.port.EventSessionQueryPort;
 import com.tikitaka.ticketing.reservation.domain.port.PaymentCreationPort;
+import com.tikitaka.ticketing.reservation.domain.port.ReservationQueueFlowPort;
 import com.tikitaka.ticketing.testsupport.PostgresIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -54,6 +55,9 @@ class ReservationResponseLossRecoveryIntegrationTest {
 
     @MockitoBean
     private PaymentCreationPort paymentCreationPort;
+
+    @MockitoBean
+    private ReservationQueueFlowPort reservationQueueFlowPort;
 
     @BeforeEach
     void setUp() {

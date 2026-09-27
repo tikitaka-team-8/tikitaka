@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tikitaka.ticketing.global.exception.BusinessException;
 import com.tikitaka.ticketing.global.exception.CommonErrorCode;
-import com.tikitaka.ticketing.reservation.application.ReservationPaymentEventService;
+import com.tikitaka.ticketing.reservation.application.ReservationPaymentFlowService;
 import com.tikitaka.ticketing.reservation.application.command.PaymentFailedCommand;
 import com.tikitaka.ticketing.reservation.application.command.PaymentSucceededCommand;
 import com.tikitaka.ticketing.reservation.infrastructure.kafka.KafkaTopics;
@@ -22,11 +22,11 @@ public class PaymentEventConsumer {
     private static final String PAYMENT_FAILED = "PAYMENT_FAILED";
 
     private final ObjectMapper objectMapper;
-    private final ReservationPaymentEventService reservationPaymentEventService;
+    private final ReservationPaymentFlowService reservationPaymentFlowService;
 
-    public PaymentEventConsumer(ObjectMapper objectMapper, ReservationPaymentEventService reservationPaymentEventService) {
+    public PaymentEventConsumer(ObjectMapper objectMapper, ReservationPaymentFlowService reservationPaymentFlowService) {
         this.objectMapper = objectMapper;
-        this.reservationPaymentEventService = reservationPaymentEventService;
+        this.reservationPaymentFlowService = reservationPaymentFlowService;
     }
 
     @KafkaListener(
@@ -51,7 +51,7 @@ public class PaymentEventConsumer {
     private void processPaymentSucceeded(JsonNode eventJson) throws JsonProcessingException {
         PaymentSucceededEvent event = objectMapper.treeToValue(eventJson, PaymentSucceededEvent.class);
 
-        boolean statusChanged = reservationPaymentEventService.processPaymentSucceeded(
+        boolean statusChanged = reservationPaymentFlowService.processPaymentSucceeded(
                 new PaymentSucceededCommand(
                         event.eventId(), event.paymentId(), event.reservationId(), event.userId(), event.amount(),
                         event.approvedAt() == null ? null : event.approvedAt().toInstant()
@@ -64,7 +64,7 @@ public class PaymentEventConsumer {
 
     private void processPaymentFailed(JsonNode eventJson) throws JsonProcessingException {
         PaymentFailedEvent event = objectMapper.treeToValue(eventJson, PaymentFailedEvent.class);
-        boolean statusChanged = reservationPaymentEventService.processPaymentFailed(
+        boolean statusChanged = reservationPaymentFlowService.processPaymentFailed(
                 new PaymentFailedCommand(
                         event.eventId(), event.paymentId(), event.reservationId(), event.userId(), event.amount()
                 )

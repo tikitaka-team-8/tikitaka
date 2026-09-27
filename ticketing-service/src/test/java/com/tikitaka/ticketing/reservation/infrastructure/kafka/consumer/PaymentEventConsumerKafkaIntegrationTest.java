@@ -19,6 +19,7 @@ import com.tikitaka.ticketing.global.exception.BusinessException;
 import com.tikitaka.ticketing.reservation.infrastructure.kafka.KafkaTopics;
 import com.tikitaka.ticketing.reservation.infrastructure.kafka.event.PaymentFailedEvent;
 import com.tikitaka.ticketing.reservation.infrastructure.kafka.event.PaymentSucceededEvent;
+import com.tikitaka.ticketing.reservation.domain.port.ReservationQueueFlowPort;
 import com.tikitaka.ticketing.testsupport.PostgresIntegrationTest;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -39,6 +40,7 @@ import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @PostgresIntegrationTest
 @EmbeddedKafka(
@@ -68,6 +70,9 @@ class PaymentEventConsumerKafkaIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @MockitoBean
+    private ReservationQueueFlowPort reservationQueueFlowPort;
 
     @Value("${spring.kafka.bootstrap-servers}")
     private String bootstrapServers;

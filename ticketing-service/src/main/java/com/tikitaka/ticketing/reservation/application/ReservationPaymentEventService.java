@@ -4,6 +4,7 @@ import com.tikitaka.ticketing.global.exception.BusinessException;
 import com.tikitaka.ticketing.global.exception.CommonErrorCode;
 import com.tikitaka.ticketing.reservation.application.command.PaymentFailedCommand;
 import com.tikitaka.ticketing.reservation.application.command.PaymentSucceededCommand;
+import com.tikitaka.ticketing.reservation.application.result.ReservationPaymentEventResult;
 import com.tikitaka.ticketing.reservation.domain.entity.Reservation;
 import com.tikitaka.ticketing.reservation.domain.entity.ReservationInbox;
 import com.tikitaka.ticketing.reservation.domain.enums.ReservationFailureReason;
@@ -40,21 +41,21 @@ public class ReservationPaymentEventService {
         this.seatHoldReservationValidator = seatHoldReservationValidator;
     }
 
-    public boolean processPaymentSucceeded(PaymentSucceededCommand command) {
+    public ReservationPaymentEventResult processPaymentSucceeded(PaymentSucceededCommand command) {
 
         validateEventId(command.getEventId());
 
-        // 이미 처리한 이벤트이면 상태 변경 생략
-        if (reservationInboxRepositoryPort.existsByEventId(command.getEventId())) {
-            return false;
-        }
-
-        // 결제 성공 이벤트와 예매 정보의 정합성 검증
+        // Queue 완료 재시도에도 동일한 예매 문맥을 반환할 수 있도록 이벤트와 예매 정합성을 먼저 검증
         Reservation reservation = findAndValidateReservation(
                 command.getReservationId(), command.getPaymentId(), command.getUserId(), command.getAmount()
         );
         if (command.getApprovedAt() == null) {
             throw new BusinessException(CommonErrorCode.INVALID_INPUT);
+        }
+
+        // 이미 처리한 이벤트이면 상태 변경 생략
+        if (reservationInboxRepositoryPort.existsByEventId(command.getEventId())) {
+            return ReservationPaymentEventResult.from(reservation, false);
         }
 
         // 결제 성공 결과를 예매 상태에 반영
@@ -71,22 +72,22 @@ public class ReservationPaymentEventService {
         reservationInboxRepositoryPort.save(
                 ReservationInbox.create(command.getEventId(), command.getReservationId(), PAYMENT_SUCCEEDED)
         );
-        return statusChanged;
+        return ReservationPaymentEventResult.from(reservation, statusChanged);
     }
 
-    public boolean processPaymentFailed(PaymentFailedCommand command) {
+    public ReservationPaymentEventResult processPaymentFailed(PaymentFailedCommand command) {
 
         validateEventId(command.getEventId());
 
-        // 이미 처리한 이벤트이면 상태 변경 생략
-        if (reservationInboxRepositoryPort.existsByEventId(command.getEventId())) {
-            return false;
-        }
-
-        // 결제 실패 이벤트와 예매 정보의 정합성 검증
+        // Queue 완료 재시도에도 동일한 예매 문맥을 반환할 수 있도록 이벤트와 예매 정합성을 먼저 검증
         Reservation reservation = findAndValidateReservation(
                 command.getReservationId(), command.getPaymentId(), command.getUserId(), command.getAmount()
         );
+
+        // 이미 처리한 이벤트이면 상태 변경 생략
+        if (reservationInboxRepositoryPort.existsByEventId(command.getEventId())) {
+            return ReservationPaymentEventResult.from(reservation, false);
+        }
 
         // 결제 실패 결과를 예매에 반영
         boolean statusChanged = reservation.applyPaymentFailed(ReservationFailureReason.PAYMENT_FAILED, SYSTEM_USER_ID);
@@ -104,7 +105,7 @@ public class ReservationPaymentEventService {
         reservationInboxRepositoryPort.save(
                 ReservationInbox.create(command.getEventId(), command.getReservationId(), PAYMENT_FAILED)
         );
-        return statusChanged;
+        return ReservationPaymentEventResult.from(reservation, statusChanged);
     }
 
     private void validateEventId(UUID eventId) {

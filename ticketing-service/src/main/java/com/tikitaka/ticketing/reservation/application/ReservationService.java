@@ -17,6 +17,7 @@ import com.tikitaka.ticketing.reservation.domain.model.PaymentCreationInfo;
 import com.tikitaka.ticketing.reservation.domain.model.ReservationSeatInfo;
 import com.tikitaka.ticketing.reservation.domain.model.SeatHoldValidationInfo;
 import com.tikitaka.ticketing.reservation.domain.port.PaymentCreationPort;
+import com.tikitaka.ticketing.reservation.domain.port.ReservationQueueFlowPort;
 import com.tikitaka.ticketing.reservation.domain.port.ReservationRepositoryPort;
 import com.tikitaka.ticketing.reservation.domain.port.SeatHoldQueryPort;
 import com.tikitaka.ticketing.reservation.exception.ReservationErrorCode;
@@ -46,16 +47,19 @@ public class ReservationService {
     private final ReservationRepositoryPort reservationRepositoryPort;
     private final SeatHoldQueryPort seatHoldQueryPort;
     private final PaymentCreationPort paymentCreationPort;
+    private final ReservationQueueFlowPort reservationQueueFlowPort;
     private final ReservationCreationTransactionService reservationCreationTransactionService;
 
     public ReservationService(ReservationRepositoryPort reservationRepositoryPort,
             SeatHoldQueryPort seatHoldQueryPort, PaymentCreationPort paymentCreationPort,
-            ReservationCreationTransactionService reservationCreationTransactionService) {
+            ReservationCreationTransactionService reservationCreationTransactionService,
+            ReservationQueueFlowPort reservationQueueFlowPort) {
 
         this.reservationRepositoryPort = reservationRepositoryPort;
         this.seatHoldQueryPort = seatHoldQueryPort;
         this.paymentCreationPort = paymentCreationPort;
         this.reservationCreationTransactionService = reservationCreationTransactionService;
+        this.reservationQueueFlowPort = reservationQueueFlowPort;
     }
 
     @Transactional(readOnly = true)
@@ -117,6 +121,11 @@ public class ReservationService {
         if (!preparation.paymentCreationRequired()) {
             return preparation.reservationResult();
         }
+
+        // 현재 Queue 입장 흐름을 예매에 연결한 뒤에만 Payment 생성을 시작
+        reservationQueueFlowPort.bindReservationFlow(
+                preparation.eventSessionId(), preparation.userId(), preparation.reservationId()
+        );
 
         // DB 트랜잭션 밖에서 Payment를 호출해 외부 응답 지연이 예매 의도를 롤백하지 않도록 분리
         PaymentCreationInfo paymentCreationInfo = paymentCreationPort.createPayment(

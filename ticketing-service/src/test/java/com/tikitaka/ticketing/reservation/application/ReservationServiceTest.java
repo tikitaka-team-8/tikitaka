@@ -2,6 +2,7 @@ package com.tikitaka.ticketing.reservation.application;
 
 import com.tikitaka.ticketing.global.exception.BusinessException;
 import com.tikitaka.ticketing.global.exception.CommonErrorCode;
+import com.tikitaka.ticketing.queue.exception.QueueErrorCode;
 import com.tikitaka.ticketing.reservation.application.command.CreateReservationCommand;
 import com.tikitaka.ticketing.reservation.application.command.GetReservationCommand;
 import com.tikitaka.ticketing.reservation.application.command.PaymentValidationCommand;
@@ -20,6 +21,7 @@ import com.tikitaka.ticketing.reservation.domain.model.ReservationSeatInfo;
 import com.tikitaka.ticketing.reservation.domain.model.SeatHoldValidationInfo;
 import com.tikitaka.ticketing.reservation.domain.port.EventSessionQueryPort;
 import com.tikitaka.ticketing.reservation.domain.port.PaymentCreationPort;
+import com.tikitaka.ticketing.reservation.domain.port.ReservationQueueFlowPort;
 import com.tikitaka.ticketing.reservation.domain.port.ReservationRepositoryPort;
 import com.tikitaka.ticketing.reservation.domain.port.SeatHoldQueryPort;
 import com.tikitaka.ticketing.reservation.exception.ReservationErrorCode;
@@ -86,6 +88,9 @@ class ReservationServiceTest {
     @Mock
     private PaymentCreationPort paymentCreationPort;
 
+    @Mock
+    private ReservationQueueFlowPort reservationQueueFlowPort;
+
     private ReservationService reservationService;
 
     @BeforeEach
@@ -93,7 +98,8 @@ class ReservationServiceTest {
         ReservationCreationTransactionService transactionService = new ReservationCreationTransactionService(
                 reservationRepositoryPort, seatHoldQueryPort, eventSessionQueryPort, seatHoldReservationValidator);
         reservationService = new ReservationService(
-                reservationRepositoryPort, seatHoldQueryPort, paymentCreationPort, transactionService);
+                reservationRepositoryPort, seatHoldQueryPort, paymentCreationPort, transactionService,
+                reservationQueueFlowPort);
     }
 
     @Test
@@ -368,6 +374,7 @@ class ReservationServiceTest {
             assertThat(reservationSeat.getPrice()).isEqualTo(50_000L);
         });
         verify(seatHoldReservationValidator).validateAndExtend(SEAT_HOLD_ID);
+        verify(reservationQueueFlowPort).bindReservationFlow(EVENT_SESSION_ID, OWNER_ID, RESERVATION_ID);
         verify(paymentCreationPort).createPayment(RESERVATION_ID, OWNER_ID, 50_000L, IDEMPOTENCY_KEY);
     }
 
@@ -387,6 +394,7 @@ class ReservationServiceTest {
         assertThat(result.isCreated()).isFalse();
         assertThat(result.getReservationId()).isEqualTo(RESERVATION_ID);
         verify(reservationRepositoryPort, never()).save(any(Reservation.class));
+        verifyNoInteractions(reservationQueueFlowPort);
         verifyNoInteractions(seatHoldQueryPort, eventSessionQueryPort, seatHoldReservationValidator, paymentCreationPort);
     }
 
@@ -415,6 +423,7 @@ class ReservationServiceTest {
         assertThat(result.getReservationId()).isEqualTo(RESERVATION_ID);
         assertThat(result.getPaymentId()).isEqualTo(PAYMENT_ID);
         assertThat(result.getReservationStatus()).isEqualTo(ReservationStatus.PAYMENT_PROCESSING);
+        verify(reservationQueueFlowPort).bindReservationFlow(EVENT_SESSION_ID, OWNER_ID, RESERVATION_ID);
         verify(paymentCreationPort).createPayment(RESERVATION_ID, OWNER_ID, 50_000L, IDEMPOTENCY_KEY);
         verify(reservationRepositoryPort, never()).save(any(Reservation.class));
         verifyNoInteractions(seatHoldQueryPort, eventSessionQueryPort, seatHoldReservationValidator);
@@ -452,7 +461,40 @@ class ReservationServiceTest {
         verify(reservationRepositoryPort).save(reservationCaptor.capture());
         assertThat(reservationCaptor.getValue().getPaymentId()).isNull();
         assertThat(reservationCaptor.getValue().getReservationStatus()).isEqualTo(ReservationStatus.PAYMENT_PENDING);
+        verify(reservationQueueFlowPort).bindReservationFlow(EVENT_SESSION_ID, OWNER_ID, RESERVATION_ID);
         verify(reservationRepositoryPort, never()).findById(RESERVATION_ID);
+    }
+
+    @Test
+    void Queue_예매_흐름_연결에_실패하면_Payment를_호출하지_않는다() {
+        // given
+        CreateReservationCommand command = new CreateReservationCommand(
+                OWNER_ID, "USER", IDEMPOTENCY_KEY, List.of(SEAT_HOLD_ID));
+        ReservationEventSessionInfo eventSessionInfo = new ReservationEventSessionInfo(
+                EVENT_SESSION_ID, EVENT_ID, "테스트 공연", OffsetDateTime.parse("2026-09-01T19:00:00+09:00"));
+
+        given(reservationRepositoryPort.findByUserIdAndIdempotencyKey(OWNER_ID, IDEMPOTENCY_KEY))
+                .willReturn(Optional.empty());
+        given(seatHoldQueryPort.findCreationInfosBySeatHoldIds(List.of(SEAT_HOLD_ID)))
+                .willReturn(List.of(createCreationSeatInfo()));
+        given(reservationRepositoryPort.findUsedSeatHoldIds(List.of(SEAT_HOLD_ID))).willReturn(List.of());
+        given(eventSessionQueryPort.getReservationInfo(EVENT_SESSION_ID)).willReturn(eventSessionInfo);
+        given(reservationRepositoryPort.save(any(Reservation.class))).willAnswer(invocation -> {
+            Reservation reservation = invocation.getArgument(0);
+            ReflectionTestUtils.setField(reservation, "reservationId", RESERVATION_ID);
+            return reservation;
+        });
+        willThrow(new BusinessException(QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE))
+                .given(reservationQueueFlowPort)
+                .bindReservationFlow(EVENT_SESSION_ID, OWNER_ID, RESERVATION_ID);
+
+        // when
+        BusinessException exception = catchThrowableOfType(
+                () -> reservationService.createReservation(command), BusinessException.class);
+
+        // then
+        assertThat(exception.getErrorCode()).isEqualTo(QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE);
+        verify(paymentCreationPort, never()).createPayment(any(), any(), any(), any());
     }
 
     @Test

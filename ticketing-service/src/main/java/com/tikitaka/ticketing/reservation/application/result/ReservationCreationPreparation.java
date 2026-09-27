@@ -4,6 +4,7 @@ import java.util.UUID;
 
 public record ReservationCreationPreparation(
         UUID reservationId,
+        UUID eventSessionId,
         Long userId,
         Long totalAmount,
         String idempotencyKey,

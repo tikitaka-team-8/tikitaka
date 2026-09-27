@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.tikitaka.ticketing.global.exception.BusinessException;
 import com.tikitaka.ticketing.global.exception.CommonErrorCode;
-import com.tikitaka.ticketing.reservation.application.ReservationPaymentEventService;
+import com.tikitaka.ticketing.reservation.application.ReservationPaymentFlowService;
 import com.tikitaka.ticketing.reservation.application.command.PaymentFailedCommand;
 import com.tikitaka.ticketing.reservation.application.command.PaymentSucceededCommand;
 import com.tikitaka.ticketing.reservation.infrastructure.kafka.consumer.PaymentEventConsumer;
@@ -35,14 +35,14 @@ class PaymentEventConsumerTest {
     private static final Long AMOUNT = 50_000L;
 
     @Mock
-    private ReservationPaymentEventService reservationPaymentEventService;
+    private ReservationPaymentFlowService reservationPaymentFlowService;
 
     private PaymentEventConsumer paymentEventConsumer;
 
     @BeforeEach
     void setUp() {
         ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
-        paymentEventConsumer = new PaymentEventConsumer(objectMapper, reservationPaymentEventService);
+        paymentEventConsumer = new PaymentEventConsumer(objectMapper, reservationPaymentFlowService);
     }
 
     @Test
@@ -62,14 +62,14 @@ class PaymentEventConsumerTest {
                   "approvedAt": "2026-09-06T19:00:00+09:00"
                 }
                 """.formatted(EVENT_ID, RESERVATION_ID, PAYMENT_ID, RESERVATION_ID);
-        given(reservationPaymentEventService.processPaymentSucceeded(any(PaymentSucceededCommand.class))).willReturn(true);
+        given(reservationPaymentFlowService.processPaymentSucceeded(any(PaymentSucceededCommand.class))).willReturn(true);
 
         // when
         paymentEventConsumer.consume(payload);
 
         // then
         ArgumentCaptor<PaymentSucceededCommand> commandCaptor = ArgumentCaptor.forClass(PaymentSucceededCommand.class);
-        verify(reservationPaymentEventService).processPaymentSucceeded(commandCaptor.capture());
+        verify(reservationPaymentFlowService).processPaymentSucceeded(commandCaptor.capture());
         PaymentSucceededCommand command = commandCaptor.getValue();
         assertThat(command.getEventId()).isEqualTo(EVENT_ID);
         assertThat(command.getPaymentId()).isEqualTo(PAYMENT_ID);
@@ -77,7 +77,7 @@ class PaymentEventConsumerTest {
         assertThat(command.getUserId()).isEqualTo(USER_ID);
         assertThat(command.getAmount()).isEqualTo(AMOUNT);
         assertThat(command.getApprovedAt()).isEqualTo(Instant.parse("2026-09-06T10:00:00Z"));
-        verify(reservationPaymentEventService, never()).processPaymentFailed(any(PaymentFailedCommand.class));
+        verify(reservationPaymentFlowService, never()).processPaymentFailed(any(PaymentFailedCommand.class));
     }
 
     @Test
@@ -98,21 +98,21 @@ class PaymentEventConsumerTest {
                   "failedAt": "2026-09-06T19:00:00+09:00"
                 }
                 """.formatted(EVENT_ID, RESERVATION_ID, PAYMENT_ID, RESERVATION_ID);
-        given(reservationPaymentEventService.processPaymentFailed(any(PaymentFailedCommand.class))).willReturn(true);
+        given(reservationPaymentFlowService.processPaymentFailed(any(PaymentFailedCommand.class))).willReturn(true);
 
         // when
         paymentEventConsumer.consume(payload);
 
         // then
         ArgumentCaptor<PaymentFailedCommand> commandCaptor = ArgumentCaptor.forClass(PaymentFailedCommand.class);
-        verify(reservationPaymentEventService).processPaymentFailed(commandCaptor.capture());
+        verify(reservationPaymentFlowService).processPaymentFailed(commandCaptor.capture());
         PaymentFailedCommand command = commandCaptor.getValue();
         assertThat(command.getEventId()).isEqualTo(EVENT_ID);
         assertThat(command.getPaymentId()).isEqualTo(PAYMENT_ID);
         assertThat(command.getReservationId()).isEqualTo(RESERVATION_ID);
         assertThat(command.getUserId()).isEqualTo(USER_ID);
         assertThat(command.getAmount()).isEqualTo(AMOUNT);
-        verify(reservationPaymentEventService, never()).processPaymentSucceeded(any(PaymentSucceededCommand.class));
+        verify(reservationPaymentFlowService, never()).processPaymentSucceeded(any(PaymentSucceededCommand.class));
     }
 
     @Test
@@ -133,7 +133,7 @@ class PaymentEventConsumerTest {
 
         // then
         assertThat(exception.getErrorCode()).isEqualTo(CommonErrorCode.UNSUPPORTED_REQUEST);
-        verify(reservationPaymentEventService, never()).processPaymentSucceeded(any(PaymentSucceededCommand.class));
-        verify(reservationPaymentEventService, never()).processPaymentFailed(any(PaymentFailedCommand.class));
+        verify(reservationPaymentFlowService, never()).processPaymentSucceeded(any(PaymentSucceededCommand.class));
+        verify(reservationPaymentFlowService, never()).processPaymentFailed(any(PaymentFailedCommand.class));
     }
 }
