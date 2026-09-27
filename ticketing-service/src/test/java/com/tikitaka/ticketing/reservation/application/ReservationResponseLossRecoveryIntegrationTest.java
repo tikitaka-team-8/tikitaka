@@ -4,6 +4,7 @@ import com.tikitaka.ticketing.global.exception.BusinessException;
 import com.tikitaka.ticketing.global.exception.CommonErrorCode;
 import com.tikitaka.ticketing.reservation.application.command.CreateReservationCommand;
 import com.tikitaka.ticketing.reservation.application.result.CreateReservationResult;
+import com.tikitaka.ticketing.reservation.application.service.ReservationService;
 import com.tikitaka.ticketing.reservation.domain.enums.ReservationStatus;
 import com.tikitaka.ticketing.reservation.domain.model.PaymentCreationInfo;
 import com.tikitaka.ticketing.reservation.domain.model.ReservationEventSessionInfo;

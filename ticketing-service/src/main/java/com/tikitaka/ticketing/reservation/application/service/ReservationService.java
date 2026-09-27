@@ -1,4 +1,4 @@
-package com.tikitaka.ticketing.reservation.application;
+package com.tikitaka.ticketing.reservation.application.service;
 
 import com.tikitaka.ticketing.global.exception.BusinessException;
 import com.tikitaka.ticketing.global.exception.CommonErrorCode;
@@ -29,7 +29,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;

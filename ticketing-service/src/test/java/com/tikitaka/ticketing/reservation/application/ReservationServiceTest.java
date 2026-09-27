@@ -11,6 +11,8 @@ import com.tikitaka.ticketing.reservation.application.result.CreateReservationRe
 import com.tikitaka.ticketing.reservation.application.result.PaymentValidationResult;
 import com.tikitaka.ticketing.reservation.application.result.ReservationResult;
 import com.tikitaka.ticketing.reservation.application.result.ReservationSearchResult;
+import com.tikitaka.ticketing.reservation.application.service.ReservationCreationTransactionService;
+import com.tikitaka.ticketing.reservation.application.service.ReservationService;
 import com.tikitaka.ticketing.reservation.domain.entity.Reservation;
 import com.tikitaka.ticketing.reservation.domain.enums.ReservationStatus;
 import com.tikitaka.ticketing.reservation.domain.model.PaymentCreationInfo;

@@ -1,4 +1,4 @@
-package com.tikitaka.ticketing.reservation.application;
+package com.tikitaka.ticketing.reservation.application.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;

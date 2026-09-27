@@ -2,6 +2,7 @@ package com.tikitaka.ticketing.reservation.application;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.tikitaka.ticketing.reservation.application.service.ReservationOutboxService;
 import com.tikitaka.ticketing.reservation.domain.entity.Reservation;
 import com.tikitaka.ticketing.reservation.domain.entity.ReservationOutbox;
 import com.tikitaka.ticketing.reservation.domain.enums.ReservationFailureReason;

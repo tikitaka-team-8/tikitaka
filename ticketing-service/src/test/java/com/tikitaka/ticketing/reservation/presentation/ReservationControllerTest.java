@@ -1,6 +1,6 @@
 package com.tikitaka.ticketing.reservation.presentation;
 
-import com.tikitaka.ticketing.reservation.application.ReservationService;
+import com.tikitaka.ticketing.reservation.application.service.ReservationService;
 import com.tikitaka.ticketing.reservation.application.command.CreateReservationCommand;
 import com.tikitaka.ticketing.reservation.application.command.SearchReservationsCommand;
 import com.tikitaka.ticketing.reservation.application.result.CreateReservationResult;

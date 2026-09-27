@@ -1,4 +1,4 @@
-package com.tikitaka.ticketing.reservation.application;
+package com.tikitaka.ticketing.reservation.application.service;
 
 import com.tikitaka.ticketing.global.exception.BusinessException;
 import com.tikitaka.ticketing.global.exception.CommonErrorCode;

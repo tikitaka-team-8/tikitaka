@@ -2,7 +2,7 @@ package com.tikitaka.ticketing.reservation.presentation.controller;
 
 import com.tikitaka.ticketing.global.response.ApiResponse;
 import com.tikitaka.ticketing.global.response.PageMeta;
-import com.tikitaka.ticketing.reservation.application.ReservationService;
+import com.tikitaka.ticketing.reservation.application.service.ReservationService;
 import com.tikitaka.ticketing.reservation.application.command.CreateReservationCommand;
 import com.tikitaka.ticketing.reservation.application.command.GetReservationCommand;
 import com.tikitaka.ticketing.reservation.application.command.SearchReservationsCommand;
@@ -23,7 +23,6 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
-import jakarta.validation.constraints.Size;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;

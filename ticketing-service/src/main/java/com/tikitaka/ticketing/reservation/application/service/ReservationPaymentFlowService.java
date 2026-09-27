@@ -1,4 +1,4 @@
-package com.tikitaka.ticketing.reservation.application;
+package com.tikitaka.ticketing.reservation.application.service;
 
 import com.tikitaka.ticketing.reservation.application.command.PaymentFailedCommand;
 import com.tikitaka.ticketing.reservation.application.command.PaymentSucceededCommand;

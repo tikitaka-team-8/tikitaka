@@ -5,6 +5,8 @@ import com.tikitaka.ticketing.global.exception.CommonErrorCode;
 import com.tikitaka.ticketing.reservation.application.command.PaymentFailedCommand;
 import com.tikitaka.ticketing.reservation.application.command.PaymentSucceededCommand;
 import com.tikitaka.ticketing.reservation.application.result.ReservationPaymentEventResult;
+import com.tikitaka.ticketing.reservation.application.service.ReservationOutboxService;
+import com.tikitaka.ticketing.reservation.application.service.ReservationPaymentEventService;
 import com.tikitaka.ticketing.reservation.domain.entity.Reservation;
 import com.tikitaka.ticketing.reservation.domain.entity.ReservationInbox;
 import com.tikitaka.ticketing.reservation.domain.enums.ReservationFailureReason;

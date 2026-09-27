@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.tikitaka.ticketing.global.exception.BusinessException;
 import com.tikitaka.ticketing.global.exception.CommonErrorCode;
-import com.tikitaka.ticketing.reservation.application.ReservationPaymentFlowService;
+import com.tikitaka.ticketing.reservation.application.service.ReservationPaymentFlowService;
 import com.tikitaka.ticketing.reservation.application.command.PaymentFailedCommand;
 import com.tikitaka.ticketing.reservation.application.command.PaymentSucceededCommand;
 import com.tikitaka.ticketing.reservation.infrastructure.kafka.consumer.PaymentEventConsumer;

@@ -1,6 +1,6 @@
 package com.tikitaka.ticketing.reservation.presentation.controller;
 
-import com.tikitaka.ticketing.reservation.application.ReservationService;
+import com.tikitaka.ticketing.reservation.application.service.ReservationService;
 import com.tikitaka.ticketing.reservation.application.command.PaymentValidationCommand;
 import com.tikitaka.ticketing.reservation.application.result.PaymentValidationResult;
 import com.tikitaka.ticketing.reservation.presentation.dto.request.PaymentValidationReqDto;
