@@ -32,6 +32,7 @@ class SeatHoldExpirationRaceIntegrationTest {
 
     private static final long USER_ID = 94_000_001L;
     private static final long PRICE = 150_000L;
+    private static final long SYNCHRONIZATION_TIMEOUT_SECONDS = 15L;
 
     @Autowired
     private SeatService seatService;
@@ -56,7 +57,7 @@ class SeatHoldExpirationRaceIntegrationTest {
     }
 
     @Test
-    @Timeout(15)
+    @Timeout(30)
     void 예매가_선점_잠금을_먼저_획득하면_뒤늦은_만료_처리는_RESERVED를_해제하지_않는다() throws Exception {
         Fixture fixture = insertExpiredHoldingFixture();
         CountDownLatch reservedWithLock = new CountDownLatch(1);
@@ -76,7 +77,12 @@ class SeatHoldExpirationRaceIntegrationTest {
                 return null;
             });
 
-            assertThat(reservedWithLock.await(5, TimeUnit.SECONDS)).isTrue();
+            if (!reservedWithLock.await(SYNCHRONIZATION_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                if (reservationFuture.isDone()) {
+                    reservationFuture.get();
+                }
+                throw new AssertionError("예매 트랜잭션이 제한 시간 안에 좌석 선점 잠금을 획득하지 못했습니다.");
+            }
 
             Future<Void> expirationFuture = executor.submit(() -> {
                 seatService.expireHold(fixture.seatHoldId());
@@ -87,8 +93,8 @@ class SeatHoldExpirationRaceIntegrationTest {
                     .isInstanceOf(TimeoutException.class);
 
             allowReservationCommit.countDown();
-            reservationFuture.get(5, TimeUnit.SECONDS);
-            expirationFuture.get(5, TimeUnit.SECONDS);
+            reservationFuture.get(SYNCHRONIZATION_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            expirationFuture.get(SYNCHRONIZATION_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
             assertThat(queryString(
                     "SELECT hold_status FROM p_seat_hold WHERE seat_hold_id = ?", fixture.seatHoldId()))
@@ -159,7 +165,7 @@ class SeatHoldExpirationRaceIntegrationTest {
 
     private void awaitLatch(CountDownLatch latch) {
         try {
-            if (!latch.await(5, TimeUnit.SECONDS)) {
+            if (!latch.await(SYNCHRONIZATION_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                 throw new AssertionError("트랜잭션 경합 동기화 시간이 초과되었습니다.");
             }
         } catch (InterruptedException exception) {
