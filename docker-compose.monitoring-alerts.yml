@@ -1,0 +1,7 @@
+services:
+  grafana:
+    environment:
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:?Set the Slack incoming webhook URL}
+      SLACK_RECIPIENT: ${SLACK_RECIPIENT:?Set the Slack channel or recipient}
+    volumes:
+      - ./infra/grafana/alerting:/etc/grafana/provisioning/alerting:ro

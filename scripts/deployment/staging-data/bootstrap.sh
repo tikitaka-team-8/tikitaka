@@ -22,21 +22,32 @@ if ! command -v curl >/dev/null 2>&1; then
   exit 1
 fi
 
-dnf install -y docker
+if ! command -v docker >/dev/null 2>&1; then
+  dnf install -y docker
+fi
 systemctl enable --now docker
 
 # 서버 재구성 시 동일 환경 재현을 위한 Docker Compose 플러그인 버전 고정
 compose_version='v5.5.0'
+compose_sha256='c57ab918abd5b05ca7e7d0f275875dd1330a695074f309dc9eab1b49efafcd4b'
 plugin_dir='/usr/local/lib/docker/cli-plugins'
 plugin_path="${plugin_dir}/docker-compose"
-download_path="$(mktemp)"
-trap 'rm -f "${download_path}"' EXIT
 
 install -d -m 0755 "${plugin_dir}"
-curl --fail --location --silent --show-error \
-  "https://github.com/docker/compose/releases/download/${compose_version}/docker-compose-linux-x86_64" \
-  --output "${download_path}"
-install -m 0755 "${download_path}" "${plugin_path}"
+installed_sha256=''
+if [[ -f "${plugin_path}" ]]; then
+  installed_sha256="$(sha256sum "${plugin_path}" | awk '{print $1}')"
+fi
+
+if [[ "${installed_sha256}" != "${compose_sha256}" ]]; then
+  download_path="$(mktemp)"
+  trap 'rm -f "${download_path}"' EXIT
+  curl --fail --location --silent --show-error \
+    "https://github.com/docker/compose/releases/download/${compose_version}/docker-compose-linux-x86_64" \
+    --output "${download_path}"
+  echo "${compose_sha256}  ${download_path}" | sha256sum --check --status
+  install -m 0755 "${download_path}" "${plugin_path}"
+fi
 
 docker --version
 docker compose version

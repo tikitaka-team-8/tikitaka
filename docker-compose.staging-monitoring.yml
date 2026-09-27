@@ -1,0 +1,65 @@
+name: tikitaka-staging-monitoring
+
+# 스테이징 모니터링 서버 전용 Compose 구성
+# Prometheus와 Grafana는 EC2 로컬호스트에서만 접근 허용
+# 메트릭과 Grafana 데이터는 별도의 Monitoring EBS에 저장
+services:
+  # Cloud Map 사설 DNS를 통한 ECS 애플리케이션 메트릭 수집
+  # 보존 기간 15일 및 최대 사용량 20GB 제한
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    container_name: tikitaka-staging-prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --storage.tsdb.retention.size=20GB
+    volumes:
+      - ./infra/prometheus/prometheus-staging.yml:/etc/prometheus/prometheus.yml:ro
+      - /opt/tikitaka/staging-monitoring/data/prometheus:/prometheus
+    healthcheck:
+      test: [CMD-SHELL, "wget --spider --quiet http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - staging-monitoring-network
+
+  # Prometheus 데이터소스와 기존 대시보드 자동 등록
+  # SSM 포트 포워딩을 통한 관리 화면 접근
+  grafana:
+    image: grafana/grafana:12.1.0
+    container_name: tikitaka-staging-grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USERNAME:?Set the Grafana administrator username}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set the Grafana administrator password}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:?Set the Slack incoming webhook URL}
+      SLACK_RECIPIENT: ${SLACK_RECIPIENT:?Set the Slack channel or recipient}
+    volumes:
+      - /opt/tikitaka/staging-monitoring/data/grafana:/var/lib/grafana
+      - ./infra/grafana/staging-provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./infra/grafana/staging-provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./infra/grafana/alerting:/etc/grafana/provisioning/alerting:ro
+      - ./infra/grafana/provisioning/dashboards/json:/var/lib/grafana/dashboards:ro
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD-SHELL, "wget --spider --quiet http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - staging-monitoring-network
+
+networks:
+  staging-monitoring-network:
