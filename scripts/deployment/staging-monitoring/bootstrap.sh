@@ -95,7 +95,7 @@ fi
 
 filesystem_type="$(blkid -s TYPE -o value "${data_device}" 2>/dev/null || true)"
 if [[ -z "${filesystem_type}" ]]; then
-  mkfs.xfs -L tikitaka-monitoring "${data_device}"
+  mkfs.xfs -L tikitaka-mon "${data_device}"
   filesystem_type='xfs'
 elif [[ "${filesystem_type}" != 'xfs' ]]; then
   echo "지원하지 않는 Monitoring EBS 파일시스템입니다: ${filesystem_type}" >&2
