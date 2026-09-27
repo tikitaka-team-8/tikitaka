@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.ArgumentMatchers.eq;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tikitaka.ticketing.queue.application.QueueService;
@@ -21,6 +23,9 @@ import com.tikitaka.ticketing.reservation.domain.model.PaymentCreationInfo;
 import com.tikitaka.ticketing.reservation.domain.model.ReservationEventSessionInfo;
 import com.tikitaka.ticketing.reservation.domain.port.EventSessionQueryPort;
 import com.tikitaka.ticketing.reservation.domain.port.PaymentCreationPort;
+import com.tikitaka.ticketing.reservation.domain.port.ReservationQueueFlowPort;
+import com.tikitaka.ticketing.global.exception.BusinessException;
+import com.tikitaka.ticketing.queue.exception.QueueErrorCode;
 import com.tikitaka.ticketing.reservation.infrastructure.kafka.KafkaTopics;
 import com.tikitaka.ticketing.reservation.infrastructure.kafka.event.PaymentSucceededEvent;
 import com.tikitaka.ticketing.reservation.infrastructure.kafka.event.PaymentFailedEvent;
@@ -36,7 +41,7 @@ import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -48,6 +53,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.testcontainers.containers.GenericContainer;
 
 @PostgresIntegrationTest
@@ -84,10 +90,11 @@ class ReservationQueueKafkaIntegrationTest {
     @MockitoBean private PaymentCreationPort paymentCreationPort;
     @MockitoBean private PlatformSalesStatusClient platformSalesStatusClient;
     @MockitoBean private QueueAdmissionScheduler queueAdmissionScheduler;
+    @MockitoSpyBean private ReservationQueueFlowPort reservationQueueFlowPort;
 
-    @ParameterizedTest(name = "결제 성공 여부={0}")
-    @ValueSource(booleans = {true, false})
-    void 예매_생성부터_결제_이벤트와_Queue_종료_재진입까지_연결한다(boolean succeeded) throws Exception {
+    @ParameterizedTest(name = "결제 성공={0}, bind 실패={1}")
+    @CsvSource({"true,false", "false,false", "true,true", "false,true"})
+    void 예매_생성부터_결제_이벤트와_Queue_종료_정책을_검증한다(boolean succeeded, boolean bindFails) throws Exception {
         UUID sessionId = UUID.randomUUID();
         UUID seatId = UUID.randomUUID();
         UUID holdId = UUID.randomUUID();
@@ -96,6 +103,11 @@ class ReservationQueueKafkaIntegrationTest {
         given(platformSalesStatusClient.getSalesStatus(sessionId)).willReturn(new PlatformSalesStatus(
                 sessionId, "SCHEDULED", time.minusHours(1), time.plusHours(1), true));
         QueueEntry entered = enter(queueService.enterQueue(sessionId, USER_ID));
+        if (bindFails) {
+            // bind 호출에만 장애를 주입하며 이후 complete는 실제 Redis로 실행
+            doThrow(new BusinessException(QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE))
+                    .when(reservationQueueFlowPort).bindReservationFlow(eq(sessionId), eq(USER_ID), any());
+        }
         insertSeat(sessionId, seatId, holdId);
         given(eventSessionQueryPort.getReservationInfo(sessionId)).willReturn(new ReservationEventSessionInfo(
                 sessionId, UUID.randomUUID(), "Queue 연동 검증", time.plusDays(1)));
@@ -107,7 +119,9 @@ class ReservationQueueKafkaIntegrationTest {
                 USER_ID, "USER", "queue-test-" + UUID.randomUUID(), List.of(holdId)));
         UUID reservationId = reservation.getReservationId();
         assertThat(queueRepository.findEntry(sessionId, USER_ID).orElseThrow().reservationId())
-                .isEqualTo(reservationId);
+                .isEqualTo(bindFails ? null : reservationId);
+        assertThat(reservation.getPaymentId()).isEqualTo(paymentId);
+        assertThat(reservation.getReservationStatus().name()).isEqualTo("PAYMENT_PROCESSING");
 
         UUID eventId = UUID.randomUUID();
         Object event = succeeded
@@ -124,13 +138,21 @@ class ReservationQueueKafkaIntegrationTest {
                 String.class, holdId)).isEqualTo(succeeded ? "CONFIRMED" : "RELEASED");
         assertThat(jdbcTemplate.queryForObject("SELECT seat_status FROM p_schedule_seat WHERE schedule_seat_id = ?",
                 String.class, seatId)).isEqualTo(succeeded ? "SOLD" : "AVAILABLE");
-        assertThat(queueRepository.findEntry(sessionId, USER_ID).orElseThrow().status()).isEqualTo(QueueStatus.EXPIRED);
+        assertThat(queueRepository.findEntry(sessionId, USER_ID).orElseThrow().status())
+                .isEqualTo(bindFails ? QueueStatus.ENTERED : QueueStatus.EXPIRED);
 
         // 구매 종료 뒤 재등록은 새 WAITING이며, 이전 이벤트 재전달이 새 ENTERED를 종료하지 않음
         QueueEntry waiting = queueService.enterQueue(sessionId, USER_ID);
-        assertThat(waiting.status()).isEqualTo(QueueStatus.WAITING);
-        assertThat(waiting.sequence()).isGreaterThan(entered.sequence());
-        QueueEntry newEntered = enter(waiting);
+        QueueEntry newEntered;
+        if (bindFails) {
+            // 연결 누락 시 재대기가 생략되는 제한을 허용하며 자동 bind 복구는 하지 않음
+            assertThat(waiting).isEqualTo(entered);
+            newEntered = waiting;
+        } else {
+            assertThat(waiting.status()).isEqualTo(QueueStatus.WAITING);
+            assertThat(waiting.sequence()).isGreaterThan(entered.sequence());
+            newEntered = enter(waiting);
+        }
         publishAndWait(reservationId, payload);
         assertThat(queueRepository.findEntry(sessionId, USER_ID).orElseThrow()).isEqualTo(newEntered);
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM p_reservation_inbox WHERE event_id = ?",

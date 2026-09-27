@@ -468,7 +468,7 @@ class ReservationServiceTest {
     }
 
     @Test
-    void Queue_예매_흐름_연결에_실패하면_Payment를_호출하지_않는다() {
+    void Queue_예매_흐름_연결에_실패해도_Payment를_생성하고_연결한다() {
         // given
         CreateReservationCommand command = new CreateReservationCommand(
                 OWNER_ID, "USER", IDEMPOTENCY_KEY, List.of(SEAT_HOLD_ID));
@@ -484,19 +484,23 @@ class ReservationServiceTest {
         given(reservationRepositoryPort.save(any(Reservation.class))).willAnswer(invocation -> {
             Reservation reservation = invocation.getArgument(0);
             ReflectionTestUtils.setField(reservation, "reservationId", RESERVATION_ID);
+            given(reservationRepositoryPort.findById(RESERVATION_ID)).willReturn(Optional.of(reservation));
             return reservation;
         });
         willThrow(new BusinessException(QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE))
                 .given(reservationQueueFlowPort)
                 .bindReservationFlow(EVENT_SESSION_ID, OWNER_ID, RESERVATION_ID);
+        given(paymentCreationPort.createPayment(RESERVATION_ID, OWNER_ID, 50_000L, IDEMPOTENCY_KEY))
+                .willReturn(new PaymentCreationInfo(PAYMENT_ID, RESERVATION_ID, "PAY-001", 50_000L,
+                        "READY", OffsetDateTime.now()));
 
         // when
-        BusinessException exception = catchThrowableOfType(
-                () -> reservationService.createReservation(command), BusinessException.class);
+        CreateReservationResult result = reservationService.createReservation(command);
 
         // then
-        assertThat(exception.getErrorCode()).isEqualTo(QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE);
-        verify(paymentCreationPort, never()).createPayment(any(), any(), any(), any());
+        assertThat(result.getReservationStatus()).isEqualTo(ReservationStatus.PAYMENT_PROCESSING);
+        assertThat(result.getPaymentId()).isEqualTo(PAYMENT_ID);
+        verify(paymentCreationPort).createPayment(RESERVATION_ID, OWNER_ID, 50_000L, IDEMPOTENCY_KEY);
     }
 
     @Test

@@ -28,6 +28,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Objects;
@@ -37,6 +39,7 @@ import java.util.stream.Collectors;
 
 @Service
 public class ReservationService {
+    private static final Logger log = LoggerFactory.getLogger(ReservationService.class);
     private static final String USER_ROLE = "USER";
     private static final String ADMIN_ROLE = "ADMIN";
     private static final int DEFAULT_PAGE = 0;
@@ -121,10 +124,17 @@ public class ReservationService {
             return preparation.reservationResult();
         }
 
-        // 현재 Queue 입장 흐름을 예매에 연결한 뒤에만 Payment 생성을 시작
-        reservationQueueFlowPort.bindReservationFlow(
-                preparation.eventSessionId(), preparation.userId(), preparation.reservationId()
-        );
+        // Queue 연결은 예매 후 정리를 위한 부가 작업으로, 실패해도 결제 생성을 계속함
+        try {
+            reservationQueueFlowPort.bindReservationFlow(
+                    preparation.eventSessionId(), preparation.userId(), preparation.reservationId()
+            );
+        } catch (RuntimeException exception) {
+            String errorCode = exception instanceof BusinessException businessException
+                    ? businessException.getErrorCode().getCode() : exception.getClass().getSimpleName();
+            log.warn("Queue 예매 연결 실패: eventSessionId={}, userId={}, reservationId={}, errorCode={}",
+                    preparation.eventSessionId(), preparation.userId(), preparation.reservationId(), errorCode, exception);
+        }
 
         // DB 트랜잭션 밖에서 Payment를 호출해 외부 응답 지연이 예매 의도를 롤백하지 않도록 분리
         PaymentCreationInfo paymentCreationInfo = paymentCreationPort.createPayment(
