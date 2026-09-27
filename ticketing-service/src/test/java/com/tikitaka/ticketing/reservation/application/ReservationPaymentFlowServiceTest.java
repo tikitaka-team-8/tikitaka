@@ -12,7 +12,8 @@ import com.tikitaka.ticketing.reservation.application.result.ReservationPaymentE
 import com.tikitaka.ticketing.reservation.application.service.ReservationPaymentEventService;
 import com.tikitaka.ticketing.reservation.application.service.ReservationPaymentFlowService;
 import com.tikitaka.ticketing.reservation.domain.port.ReservationQueueFlowPort;
-import com.tikitaka.ticketing.reservation.exception.ReservationQueueFlowException;
+import com.tikitaka.ticketing.global.exception.BusinessException;
+import com.tikitaka.ticketing.queue.exception.QueueErrorCode;
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -76,12 +77,12 @@ class ReservationPaymentFlowServiceTest {
         PaymentSucceededCommand command = succeededCommand();
         given(reservationPaymentEventService.processPaymentSucceeded(command))
                 .willReturn(result(true));
-        willThrow(new ReservationQueueFlowException(new IllegalStateException("Redis unavailable")))
+        willThrow(new BusinessException(QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE))
                 .given(reservationQueueFlowPort)
                 .completeReservationFlow(EVENT_SESSION_ID, USER_ID, RESERVATION_ID);
 
         assertThatThrownBy(() -> reservationPaymentFlowService.processPaymentSucceeded(command))
-                .isInstanceOf(ReservationQueueFlowException.class);
+                .isInstanceOf(BusinessException.class);
     }
 
     private ReservationPaymentEventResult result(boolean statusChanged) {

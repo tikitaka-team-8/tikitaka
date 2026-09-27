@@ -2,6 +2,7 @@ package com.tikitaka.ticketing.reservation.infrastructure.kafka.config;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.tikitaka.ticketing.global.exception.BusinessException;
+import com.tikitaka.ticketing.queue.exception.QueueErrorCode;
 import com.tikitaka.ticketing.reservation.infrastructure.kafka.KafkaTopics;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -52,10 +53,23 @@ public class ReservationKafkaConsumerConfig {
     }
 
     DefaultErrorHandler createErrorHandler(ConsumerRecordRecoverer recoverer, BackOff backOff) {
-
         DefaultErrorHandler errorHandler = new DefaultErrorHandler(recoverer, backOff);
+
         // 재처리해도 복구되지 않는 비즈니스·이벤트 형식 오류는 즉시 DLT로 이동
-        errorHandler.addNotRetryableExceptions(BusinessException.class, JsonProcessingException.class);
+        errorHandler.addNotRetryableExceptions(JsonProcessingException.class);
+
+        // BusinessException은 원인 체인의 오류 코드로 구분하며 Queue 일시 장애만 재시도
+        errorHandler.setBackOffFunction((record, exception) -> {
+            Throwable cause = exception;
+            while (cause != null) {
+                if (cause instanceof BusinessException businessException) {
+                    return businessException.getErrorCode() == QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE
+                            ? backOff : new FixedBackOff(0L, 0L);
+                }
+                cause = cause.getCause();
+            }
+            return backOff;
+        });
 
         return errorHandler;
     }

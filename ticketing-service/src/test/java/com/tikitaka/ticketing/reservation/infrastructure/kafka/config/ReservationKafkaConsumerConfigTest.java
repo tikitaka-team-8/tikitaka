@@ -3,6 +3,8 @@ package com.tikitaka.ticketing.reservation.infrastructure.kafka.config;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.tikitaka.ticketing.global.exception.BusinessException;
 import com.tikitaka.ticketing.global.exception.CommonErrorCode;
+import com.tikitaka.ticketing.queue.exception.QueueErrorCode;
+import org.springframework.kafka.listener.ListenerExecutionFailedException;
 import com.tikitaka.ticketing.reservation.infrastructure.kafka.KafkaTopics;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -116,5 +118,27 @@ class ReservationKafkaConsumerConfigTest {
         // then
         assertThat(destination.topic()).isEqualTo(KafkaTopics.PAYMENT_EVENTS_DLT);
         assertThat(destination.partition()).isEqualTo(record.partition());
+    }
+
+    @Test
+    void 리스너가_감싼_Queue_일시_장애는_총_3회_처리한다() {
+        DefaultErrorHandler handler = config.createErrorHandler(recoverer, new FixedBackOff(0L, 2L));
+        Exception exception = new ListenerExecutionFailedException("listener failed",
+                new BusinessException(QueueErrorCode.QUEUE_SERVICE_UNAVAILABLE));
+
+        assertThat(handler.handleOne(exception, record, consumer, container)).isFalse();
+        assertThat(handler.handleOne(exception, record, consumer, container)).isFalse();
+        assertThat(handler.handleOne(exception, record, consumer, container)).isTrue();
+        verify(recoverer).accept(record, exception);
+    }
+
+    @Test
+    void 리스너가_감싼_Queue_상태_충돌은_즉시_복구_처리한다() {
+        DefaultErrorHandler handler = config.createErrorHandler(recoverer, new FixedBackOff(0L, 2L));
+        Exception exception = new ListenerExecutionFailedException("listener failed",
+                new BusinessException(QueueErrorCode.QUEUE_ENTRY_STATE_CONFLICT));
+
+        assertThat(handler.handleOne(exception, record, consumer, container)).isTrue();
+        verify(recoverer).accept(record, exception);
     }
 }
